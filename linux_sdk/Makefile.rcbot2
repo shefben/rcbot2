@@ -128,7 +128,7 @@ MAKE_MOD=Makefile.server
 MAKE_VCPM=Makefile.vcpm
 MAKE_PLUGIN=Makefile.plugin
 
-all: check vcpm server
+all: check server
 
 check:
 	if [ -z "$(CC)" ]; then echo "Compiler not defined."; exit; fi
@@ -138,7 +138,7 @@ check:
 vcpm:
 	$(MAKE) -f $(MAKE_VCPM) $(BASE_DEFINES)
 
-server: vcpm
+server:
 	# if [ ! -f "libtier0.so" ]; then ln -s $(GAME_DIR)/bin/libtier0.so .; fi
 	# if [ ! -f "libvstdlib.so" ]; then ln -s $(GAME_DIR)/bin/libvstdlib.so .; fi
 
