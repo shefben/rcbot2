@@ -2,6 +2,9 @@
 #include <Windows.h>
 #else
 
+#include <cstdint>
+#define byte uint8_t
+
 #include "shake.h" //bir3yk
 #include "elf.h"
 
