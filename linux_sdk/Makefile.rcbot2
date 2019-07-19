@@ -40,10 +40,10 @@ MOD_DIR=$(GAME_DIR)/
 #CC=/usr/bin/gcc
 #CPLUS=/usr/bin/g++
 #CLINK=/usr/bin/gcc
-CPP_LIB="/usr/lib/gcc/i586-linux-gnu/4.8/libstdc++.a /usr/lib/gcc/i586-linux-gnu/4.8/libgcc_eh.a"
-CC=/usr/bin/gcc-4.8
-CPLUS=/usr/bin/g++-4.8
-CLINK=/usr/bin/gcc-4.8
+CPP_LIB="/usr/lib/gcc/i686-linux-gnu/5.4.0/libstdc++.a /usr/lib/gcc/i686-linux-gnu/5.4.0/libgcc_eh.a"
+CC=/usr/bin/gcc-5
+CPLUS=/usr/bin/g++-5
+CLINK=/usr/bin/gcc-5
 #CPP_LIB="libstdc++.a libgcc_eh.a"
 
 # GCC 4.2.2 optimization flags, if you're using anything below, don't use these!
