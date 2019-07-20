@@ -1,4 +1,4 @@
-proj_name = 'rcbot2'
+proj_name = 'RCBot2Meta_i486'
 proj_srcs = [
   "utils/RCBot2_meta/bot.cpp",
   "utils/RCBot2_meta/bot_accessclient.cpp",
@@ -232,7 +232,7 @@ class MMSConfig(object):
       cxx.cflags += proj_c_flags
       cxx.cflags += [ # todo: what is the difference between cflags and cxxflags
         '-fPIC',
-        '-fno-exceptions',
+        # '-fno-exceptions', # RCBot2 uses try / catch, so disable this for now
         '-fno-rtti',
         '-msse',
         '-fno-strict-aliasing',
@@ -243,6 +243,48 @@ class MMSConfig(object):
           '-fvisibility=hidden',
           '-fvisibility-inlines-hidden',
           '-std=c++11',
+          '-w',
+          '-D__linux',
+        ]
+        
+        ## RCBot2: OPTFLAGS from Makefile.rcbot2
+        cxx.cflags += [
+          '-O1',
+          '-fomit-frame-pointer',
+          '-fforce-addr',
+          '-fthread-jumps',
+          '-fcrossjumping',
+          '-foptimize-sibling-calls',
+          '-fcse-follow-jumps',
+          '-fcse-skip-blocks',
+          '-fgcse',
+          '-fgcse-lm',
+          '-frerun-cse-after-loop',
+          '-fcaller-saves',
+          '-fpeephole2',
+          '-fschedule-insns2',
+          '-fsched-interblock',
+          '-fsched-spec',
+          '-fregmove',
+          '-fdelete-null-pointer-checks',
+          '-freorder-blocks',
+          '-freorder-functions',
+          '-falign-functions',
+          '-falign-jumps',
+          '-falign-loops',
+          '-falign-labels',
+          '-ftree-vrp',
+          '-ftree-pre',
+          '-finline-functions',
+          '-funswitch-loops',
+          '-fgcse-after-reload',
+          '-funsafe-math-optimizations',
+          '-fpermissive',
+        ]
+
+        ## RCBot2: BASE_CFLAGS from Makefile.rcbot2
+        cxx.cflags += [
+          '-Dstrcmpi=strcasecmp',
         ]
       # apple clang <-> llvm clang version correspondence is just a guess as there is no way to figure it out for real
       if (cxx.version >= 'gcc-4.7' or cxx.version >= 'clang-3.0' or cxx.version >= 'apple-clang-5.1'):
@@ -283,6 +325,9 @@ class MMSConfig(object):
       cxx.linkflags += ['-shared']
       if cxx.family == 'gcc':
         cxx.linkflags += ['-static-libgcc']
+
+      # catch link errors at compile time
+      cxx.linkflags += [ '-Wl,-no-undefined' ]
     elif builder.target.platform == 'mac':
       cxx.defines += [
         'POSIX',
@@ -312,6 +357,10 @@ class MMSConfig(object):
               ['public', 'vstdlib'],
               ['public', 'tier0'],
               ['public', 'tier1'],
+              ['game_shared'],
+              ['game', 'shared'],
+              ['game', 'server'],
+              ['public', 'game', 'server'],
             ]
 
     if not builder.options.mms_path:
@@ -412,6 +461,17 @@ class MMSConfig(object):
       if sdk.name == 'bms':
         compiler.postlink += [compiler.Dep(os.path.join(lib_folder, 'mathlib.a'))]
 
+      ## RCBot2: link other dependencies
+      compiler.postlink += [
+        compiler.Dep(os.path.join(lib_folder, 'mathlib_i486.a')),
+        compiler.Dep(os.path.join(lib_folder, 'tier2_i486.a')),
+        compiler.Dep(os.path.join(lib_folder, 'tier3_i486.a')),
+        'libvstdlib_srv.so',
+        '-lm',
+        '-ldl',
+        '-lpthread'
+      ]
+
     binary = self.LibraryBuilder(compiler, name, arch)
 
     dynamic_libs = [] # todo: this whole section is slightly different, but I imagine it is "more correct"
@@ -441,6 +501,12 @@ class MMSConfig(object):
         elif arch == 'x64':
           lib_path = os.path.join(sdk.path, 'lib', 'public', 'win64', lib) + '.lib'
         binary.compiler.linkflags.append(binary.Dep(lib_path))
+
+    ## RCBot2: additional link options, currently unneeded
+    # binary.compiler.linkflags.append('-Wl,-soname')
+    # binary.compiler.linkflags.append('-Wl,--no-as-needed')
+    # binary.compiler.linkflags.append('/usr/lib/gcc/i686-linux-gnu/5.4.0/libstdc++.a')
+    # binary.compiler.linkflags.append('/usr/lib/gcc/i686-linux-gnu/5.4.0/libgcc_eh.a')
 
     for library in dynamic_libs:
       source_path = os.path.join(lib_folder, library)
@@ -475,7 +541,8 @@ for sdk_name in MMS.sdks:
     if not arch in sdk.platformSpec[builder.target.platform]:
       continue
 
-    name = proj_name + sdk.ext
+    # name = proj_name + '.' + sdk.ext
+    name = proj_name
     binary = MMS.HL2Library(builder, name, sdk, arch)
 
     binary.sources += proj_srcs
