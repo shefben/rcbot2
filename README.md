@@ -20,6 +20,13 @@ you need support for this particular project.
 
 Proper install instructions for this fork coming soon.
 
+Things like the waypointing guide, hookinfo updater, and waypoints themselves are currently not
+available here.  You can download those from the [official release thread][].  Waypoints are
+also available at [this page][waypoints].
+
+[official release thread]: http://rcbot.bots-united.com/forums/index.php?showtopic=1994
+[waypoints]: http://rcbot.bots-united.com/waypoints.php
+
 ## Building
 
 ### Cloning from source
@@ -32,9 +39,11 @@ passing in `--depth 1` or a few to avoid retrieving the files that were removed 
 
 1. [Install the prerequisites for building SourceMod for your OS.][Building SourceMod]
 2. Create a `build/` subdirectory, then run `configure.py`.
-	- The project currently assumes GCC 5.4.0 (Ubuntu 16.04 LTS).  Windows binaries do build,
-	but may not work as expected.
-	- `python ../configure.py -s tf2 --mms_path ${MMS_PATH} --hl2sdk-root ${HL2SDK_ROOT}`
+	- The project currently assumes GCC 5.4.0 (Ubuntu 16.04 LTS) on Linux, and MSVC version
+	1900 (VC++2014.3 v14.00 last I checked).  Other compiler toolchains are not guaranteed to
+	work at this time.
+	- I use the following options:
+	`python ../configure.py -s tf2 --mms_path ${MMS_PATH} --hl2sdk-root ${HL2SDK_ROOT}`
 3. Run `ambuild`.  Extension is built.
 	- This will be under `build/RCBot2Meta_i486/RCBot2Meta_i486.so` for Linux and
 	`build/RCBot2Meta/RCBot2Meta.dll` for Windows.
