@@ -583,4 +583,9 @@ for sdk_name in MMS.sdks:
     nodes = builder.Add(binary)
     MMS.binaries += [nodes]
 
+if builder.backend == 'amb2':
+  BuildScripts += [
+    'PackageScript',
+  ]
+
 builder.Build(BuildScripts, { 'MMS': MMS })
