@@ -18,12 +18,18 @@ you need support for this particular project.
 
 ## Installation
 
-Proper install instructions for this fork coming soon.
+1. [Install MetaMod:Source][].
+2. Download or build the RCBot2 package.
+3. Extract the package into your game directory, similar to the process of installing MM:S.
+4. Start the server.
+5. To verify that the installation was successful, type `rcbotd` in your server console or RCON.
+You should see multiple lines starting with "[RCBot]".
 
 Things like the waypointing guide, hookinfo updater, and waypoints themselves are currently not
 available here.  You can download those from the [official release thread][].  Waypoints are
 also available at [this page][waypoints].
 
+[Install MetaMod:Source]: https://wiki.alliedmods.net/Installing_Metamod:Source
 [official release thread]: http://rcbot.bots-united.com/forums/index.php?showtopic=1994
 [waypoints]: http://rcbot.bots-united.com/waypoints.php
 
@@ -44,9 +50,7 @@ passing in `--depth 1` or a few to avoid retrieving the files that were removed 
 	work at this time.
 	- I use the following options:
 	`python ../configure.py -s tf2 --mms_path ${MMS_PATH} --hl2sdk-root ${HL2SDK_ROOT}`
-3. Run `ambuild`.  Extension is built.
-	- This will be under `build/RCBot2Meta_i486/RCBot2Meta_i486.so` for Linux and
-	`build/RCBot2Meta/RCBot2Meta.dll` for Windows.
-	- This may change in the future to support building against different SDKs.
+3. Run `ambuild`.  MetaMod:Source plugin is built and the base install files will be available
+in `build/package`.
 
 [Building SourceMod]: https://wiki.alliedmods.net/Building_SourceMod
