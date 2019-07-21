@@ -22,21 +22,22 @@ Proper install instructions for this fork coming soon.
 
 ## Building
 
-### Windows
+### Cloning from source
 
-Currently unsupported.  It should be the same as the instructions for building on Linux, except
-you will need to modify the `AMBuildScript` to support MSVC
-([please send in a pull request to the MM:S project if you do!][mms-repo]).
+RCBot2's repo history had all sorts of build artifacts / binaries at various points in time, so
+pulling the repository down normally takes an unusually long while.  I'd highly recommend
+passing in `--depth 1` or a few to avoid retrieving the files that were removed since then.
 
-[mms-repo]: https://github.com/alliedmodders/metamod-source
+### Compiling on Windows / Linux
 
-### Linux
-
-1. [Install the prerequisites for building SourceMod][Building SourceMod]
+1. [Install the prerequisites for building SourceMod for your OS.][Building SourceMod]
 2. Create a `build/` subdirectory, then run `configure.py`.
-	* The project currently assumes GCC 5.4.0 (Ubuntu 16.04 LTS)
-	* `python ../configure.py -s tf2 --mms_path ${MMS_PATH} --hl2sdk-root ${HL2SDK_ROOT}`
-3. Extension is built as `build/RCBot2Meta_i486/RCBot2Meta_i486.so`.
-	* This may change in the future to support building against different SDKs.
+	- The project currently assumes GCC 5.4.0 (Ubuntu 16.04 LTS).  Windows binaries do build,
+	but may not work as expected.
+	- `python ../configure.py -s tf2 --mms_path ${MMS_PATH} --hl2sdk-root ${HL2SDK_ROOT}`
+3. Run `ambuild`.  Extension is built.
+	- This will be under `build/RCBot2Meta_i486/RCBot2Meta_i486.so` for Linux and
+	`build/RCBot2Meta/RCBot2Meta.dll` for Windows.
+	- This may change in the future to support building against different SDKs.
 
 [Building SourceMod]: https://wiki.alliedmods.net/Building_SourceMod
