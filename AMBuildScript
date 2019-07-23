@@ -1,4 +1,4 @@
-proj_name = 'RCBot2Meta'
+proj_name = 'rcbot'
 proj_srcs = [
   "utils/RCBot2_meta/bot.cpp",
   "utils/RCBot2_meta/bot_accessclient.cpp",
@@ -170,6 +170,7 @@ class MMSConfig(object):
     self.binaries = []
     self.generated_headers = None
     self.archs = builder.target.arch.replace('x86_64', 'x64').split(',')
+    self.mms_root = builder.options.mms_path
 
   def detectProductVersion(self):
     builder.AddConfigureFile('product.version')
@@ -210,6 +211,9 @@ class MMSConfig(object):
     if len(self.sdks) < 1 and len(sdk_list):
       raise Exception('No SDKs were found that build on {0}-{1}, nothing to do.'.format(
         builder.target.platform, builder.target.arch))
+
+    if builder.options.mms_path:
+      self.mms_root = builder.options.mms_path
 
   def configure(self):
     if not set(self.archs).issubset(['x86', 'x64']):
@@ -454,6 +458,11 @@ class MMSConfig(object):
     self.AddVersioning(binary, arch)
     return binary
 
+  def Library(self, context, name, arch):
+    compiler = context.cxx.clone()
+    SetArchFlags(compiler, arch, builder.target.platform)
+    return self.LibraryBuilder(compiler, name, arch)
+
   def HL2Library(self, context, name, sdk, arch):
     compiler = self.HL2Compiler(context, sdk, arch)
 
@@ -558,7 +567,9 @@ MMS.detectProductVersion()
 MMS.detectSDKs()
 MMS.configure()
 
-BuildScripts = [] # add sub-modules here
+BuildScripts = [
+  'loader/AMBuilder'
+] # add sub-modules here
 if getattr(builder.options, 'enable_tests', False):
     BuildScripts += [] # add tests here
 
@@ -571,10 +582,7 @@ for sdk_name in MMS.sdks:
     if not arch in sdk.platformSpec[builder.target.platform]:
       continue
 
-    # name = proj_name + '.' + sdk.ext
-    name = proj_name
-    if builder.target.platform == 'linux':
-      name = proj_name + '_i486'
+    name = proj_name + '.' + sdk.ext
     binary = MMS.HL2Library(builder, name, sdk, arch)
 
     binary.sources += proj_srcs
