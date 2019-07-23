@@ -141,9 +141,6 @@ public:
 	const char *GetDate();
 	const char *GetLogTag();
 
-	static bool UTIL_TF2EquipHat(edict_t *pEdict, CTF2Loadout *pHat, void *vTable, void *vTableAttributes);
-	static CTF2Loadout *UTIL_TF2EquipRandomHat(edict_t *pEdict, void *vTable, void *vTableAttributes);
-
 private:
 	int m_iClientCommandIndex;
 
