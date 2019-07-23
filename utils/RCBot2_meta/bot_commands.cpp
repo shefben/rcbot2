@@ -1075,12 +1075,9 @@ eBotCommandResult CBotTaskCommand::execute ( CClient *pClient, const char *pcmd,
 					
 						if ( pWaypoint )
 						{
-							if ( CBotGlobals::isMod(MOD_TF2) )
-							{
+							#if SOURCE_ENGINE == SE_TF2
 								//if ( CClassInterface::getTF2Class() )
-							}
-							else
-							{
+							#else
 							CBotWeapon *pWeapon;
 							CBotWeapons *m_pWeapons;
 							CBotSchedule *snipe = new CBotSchedule();
@@ -1107,7 +1104,7 @@ eBotCommandResult CBotTaskCommand::execute ( CClient *pClient, const char *pcmd,
 							}
 							else
 								CBotGlobals::botMessage(NULL,0,"Bot is not a sniper");
-							}
+							#endif
 						}
 						else
 							CBotGlobals::botMessage(NULL,0,"Sniper waypoint not found");
@@ -1532,11 +1529,12 @@ eBotCommandResult CWaypointAreaSetToNearest::execute ( CClient *pClient, const c
 			if ( pWpt->isUsed() )
 			{
 
-				if ( CBotGlobals::isCurrentMod(MOD_TF2) )
+				#if SOURCE_ENGINE == SE_TF2
 					setarea = CTeamFortress2Mod::m_ObjectiveResource.NearestArea(pWpt->getOrigin());
-				else if (CBotGlobals::isCurrentMod(MOD_DOD) )
+				#elif SOURCE_ENGINE == SE_DODS
 					setarea = CDODMod::m_Flags.findNearestObjective(pWpt->getOrigin());
-				
+				#endif
+
 				if ( setarea > 0 )
 					pWpt->setArea(setarea);
 

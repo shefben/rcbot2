@@ -323,8 +323,7 @@ void CPlayerDeathEvent :: execute ( IBotEventInterface *pEvent )
 					else if ( pWeapon->isDeployable() )
 					{
 						// non OO hack here
-						if ( CBotGlobals::isCurrentMod(MOD_DOD) )
-						{
+						#if SOURCE_ENGINE == SE_DODS
 							edict_t *pentWeapon = CWeapons::findWeapon(pAttacker,pWeapon->getWeaponName());
 
 							if ( CClassInterface::isMachineGunDeployed(pentWeapon) )
@@ -339,7 +338,7 @@ void CPlayerDeathEvent :: execute ( IBotEventInterface *pEvent )
 									pClient->autoEventWaypoint(CWaypointTypes::W_FL_MACHINEGUN,100.0f);
 								}
 							}
-						}
+						#endif
 						//CClassInterface::isMachineGunDeployed(pWeapon->get)
 						//pWeapon->isDeployed()
 					}
@@ -414,14 +413,13 @@ void CPlayerSpawnEvent :: execute ( IBotEventInterface *pEvent )
 	if ( pBot )
 		pBot->spawnInit();
 
-	if ( CBotGlobals::isCurrentMod(MOD_TF2) )
-	{
+	#if SOURCE_ENGINE == SE_TF2
 		if ( pEvent->getInt("class") == TF_CLASS_MEDIC )
 		{
 			// find medigun
 			CTeamFortress2Mod::findMediGun(m_pActivator);
 		}
-	}
+	#endif
 }
 
 void CBulletImpactEvent :: execute ( IBotEventInterface *pEvent )

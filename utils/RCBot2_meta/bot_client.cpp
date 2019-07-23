@@ -266,8 +266,7 @@ void CClient :: think ()
 		m_pPlayerInfo = playerinfomanager->GetPlayerInfo(m_pPlayer);
 	}
 
-	if ( CBotGlobals::isMod(MOD_TF2) )
-	{
+	#if SOURCE_ENGINE == SE_TF2
 		if ( (m_fMonitorHighFiveTime < engine->Time()) && (m_pPlayer != NULL) && (m_pPlayerInfo != NULL) && m_pPlayerInfo->IsConnected() && 
 			!m_pPlayerInfo->IsDead() && m_pPlayerInfo->IsPlayer() && !m_pPlayerInfo->IsObserver() && 
 			CClassInterface::getTF2HighFiveReady(m_pPlayer) )
@@ -293,7 +292,7 @@ void CClient :: think ()
 				delete newFunc;
 			}
 		}
-	}
+	#endif
 
 	if ( m_szSoundToPlay[0] != 0 )
 	{

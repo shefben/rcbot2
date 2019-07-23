@@ -921,13 +921,14 @@ bool RCBotPluginMeta::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxle
 
 	if (CBots::controlBots())
 	{
-		if (pMod->getModId() == MOD_TF2)
+		#if SOURCE_ENGINE == SE_TF2
 			SH_MANUALHOOK_RECONFIGURE(MHook_PlayerRunCmd, rcbot_runplayercmd_tf2.GetInt(), 0, 0);
-		else if (pMod->getModId() == MOD_DOD)
+		#elif SOURCE_ENGINE == SE_DODS
 			SH_MANUALHOOK_RECONFIGURE(MHook_PlayerRunCmd, rcbot_runplayercmd_dods.GetInt(), 0, 0);
+		#endif
 	}
-	if (pMod->getModId() == MOD_TF2)
-	{
+
+	#if SOURCE_ENGINE == SE_TF2
 		if (rcbot_givenameditem_offset.GetInt() > 0)
 			SH_MANUALHOOK_RECONFIGURE(MHook_GiveNamedItem, rcbot_givenameditem_offset.GetInt(), 0, 0);
 
@@ -945,7 +946,8 @@ bool RCBotPluginMeta::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxle
 
 		if (rcbot_removewearable_offset.GetInt() > 0)
 			SH_MANUALHOOK_RECONFIGURE(MHook_RemoveWearable, rcbot_removewearable_offset.GetInt(), 0, 0);
-	}
+	#endif
+
 	ENGINE_CALL(LogPrint)("All hooks started!\n");
 
 
@@ -1265,8 +1267,7 @@ void RCBotPluginMeta::Hook_ClientPutInServer(edict_t *pEntity, char const *playe
 		if (CBots::controlBots())
 			SH_ADD_MANUALHOOK_MEMFUNC(MHook_PlayerRunCmd, pEnt, this, &RCBotPluginMeta::Hook_PlayerRunCmd, false);
 
-		if (pMod->getModId() == MOD_TF2)
-		{
+		#if SOURCE_ENGINE == SE_TF2
 			SH_ADD_MANUALHOOK_MEMFUNC(MHook_GiveNamedItem, pEnt, this, &RCBotPluginMeta::Hook_GiveNamedItem, false);
 
 			SH_ADD_MANUALHOOK_MEMFUNC(MHook_EquipWearable, pEnt, this, &RCBotPluginMeta::Hook_EquipWearable, false);
@@ -1277,7 +1278,7 @@ void RCBotPluginMeta::Hook_ClientPutInServer(edict_t *pEntity, char const *playe
 
 			SH_ADD_MANUALHOOK_MEMFUNC(MHook_GetPlayerWeaponSlot, pEnt, this, &RCBotPluginMeta::Hook_GetPlayerWeaponSlot, false);
 			SH_ADD_MANUALHOOK_MEMFUNC(MHook_RemoveWearable, pEnt, this, &RCBotPluginMeta::Hook_RemoveWearable, false);
-		}
+		#endif
 	}
 }
 
@@ -1292,8 +1293,7 @@ void RCBotPluginMeta::Hook_ClientDisconnect(edict_t *pEntity)
 		if (CBots::controlBots())
 			SH_REMOVE_MANUALHOOK_MEMFUNC(MHook_PlayerRunCmd, pEnt, this, &RCBotPluginMeta::Hook_PlayerRunCmd, false);
 
-		if (pMod->getModId() == MOD_TF2)
-		{
+		#if SOURCE_ENGINE == SE_TF2
 			SH_REMOVE_MANUALHOOK_MEMFUNC(MHook_GiveNamedItem, pEnt, this, &RCBotPluginMeta::Hook_GiveNamedItem, false);
 
 			SH_REMOVE_MANUALHOOK_MEMFUNC(MHook_EquipWearable, pEnt, this, &RCBotPluginMeta::Hook_EquipWearable, false);
@@ -1304,7 +1304,7 @@ void RCBotPluginMeta::Hook_ClientDisconnect(edict_t *pEntity)
 
 			SH_REMOVE_MANUALHOOK_MEMFUNC(MHook_GetPlayerWeaponSlot, pEnt, this, &RCBotPluginMeta::Hook_GetPlayerWeaponSlot, false);
 			SH_REMOVE_MANUALHOOK_MEMFUNC(MHook_RemoveWearable, pEnt, this, &RCBotPluginMeta::Hook_RemoveWearable, false);
-		}
+		#endif
 	}
 
 	CClients::clientDisconnected(pEntity);
