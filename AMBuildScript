@@ -251,40 +251,6 @@ class MMSConfig(object):
           '-D__linux',
         ]
         
-        ## RCBot2: OPTFLAGS from Makefile.rcbot2
-        cxx.cflags += [
-          '-O1',
-          '-fomit-frame-pointer',
-          '-fforce-addr',
-          '-fthread-jumps',
-          '-fcrossjumping',
-          '-foptimize-sibling-calls',
-          '-fcse-follow-jumps',
-          '-fcse-skip-blocks',
-          '-fgcse',
-          '-fgcse-lm',
-          '-frerun-cse-after-loop',
-          '-fcaller-saves',
-          '-fpeephole2',
-          '-fschedule-insns2',
-          '-fsched-interblock',
-          '-fsched-spec',
-          '-fregmove',
-          '-fdelete-null-pointer-checks',
-          '-freorder-blocks',
-          '-freorder-functions',
-          '-falign-functions',
-          '-falign-jumps',
-          '-falign-loops',
-          '-falign-labels',
-          '-ftree-vrp',
-          '-ftree-pre',
-          '-finline-functions',
-          '-funswitch-loops',
-          '-fgcse-after-reload',
-          '-funsafe-math-optimizations',
-        ]
-
         ## RCBot2: BASE_CFLAGS from Makefile.rcbot2
         cxx.cflags += [
           '-Dstrcmpi=strcasecmp',
