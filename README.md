@@ -4,10 +4,6 @@
 
 This is a fork of [the official RCBot2 plugin][rcbot2] written by Cheeseh.
 
-This repository was spun off of the source repository to use the same build tooling as
-MetaMod:Source and SourceMod do, removing the need for Valve's cross platform make conversion
-tool and keeping copies of Source SDK files.
-
 The [bots-united.com discord][] and [forums][bots-united forums] are the places to ask for
 general RCBot2 support. I'm not present in either of those; file an issue on this repository if
 you need support for this particular project. 
@@ -15,6 +11,22 @@ you need support for this particular project.
 [rcbot2]: http://rcbot.bots-united.com/
 [bots-united.com discord]: https://discord.gg/BbxR5wY
 [bots-united forums]: http://rcbot.bots-united.com/forums/index.php?showforum=18
+
+## Changes from upstream
+
+- Build process uses [AMBuild][] instead of `make` or Visual Studio.  This removes the need for
+Valve's cross platform make conversion tool and keeping copies of modified Source SDK files.
+	- The `ambuild-migrate` branch only contains modifications to get the project running on the
+	new build tooling.without issues.
+- The plugin has been split into SDK-specific builds to ensure proper compatibility, using the
+same loader shim SourceMod uses to load mod-specific builds.
+	- The shim is named `RCBot2Meta` to maintain compatibility with existing files; mod-specific
+	plugins are named `rcbot.2.${MOD}`.
+- The usage of the install directory has been dropped.  In particular, waypoints must be located
+under `rcbot2/waypoints/${MOD}` instead of nested under a folder matching the name of the
+steamdir.
+
+[AMBuild]: https://wiki.alliedmods.net/AMBuild
 
 ## Installation
 
@@ -48,8 +60,8 @@ passing in `--depth 1` or a few to avoid retrieving the files that were removed 
 	- The project currently assumes GCC 5.4.0 (Ubuntu 16.04 LTS) on Linux, and MSVC version
 	1900 (VC++2014.3 v14.00 last I checked).  Other compiler toolchains are not guaranteed to
 	work at this time.
-	- I use the following options:
-	`python ../configure.py -s tf2 --mms_path ${MMS_PATH} --hl2sdk-root ${HL2SDK_ROOT}`
+	- I use the following options (where `${MOD}` is only TF2):
+	`python ../configure.py -s ${MOD} --mms_path ${MMS_PATH} --hl2sdk-root ${HL2SDK_ROOT}`
 3. Run `ambuild`.  MetaMod:Source plugin is built and the base install files will be available
 in `build/package`.
 
