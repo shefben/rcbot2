@@ -40,6 +40,10 @@
 #ifndef __RCBOT2_H__
 #define __RCBOT2_H__
 
+#define swap V_swap
+#include "mathlib.h"
+#undef swap
+
 //#include "cbase.h"
 //#include "baseentity.h"
 #include "filesystem.h"

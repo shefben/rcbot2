@@ -44,6 +44,10 @@
 #ifndef __BOT_PLUGIN_META_H__
 #define __BOT_PLUGIN_META_H__
 
+#define swap V_swap
+#include "mathlib/mathlib.h"
+#undef swap
+
 #include <ISmmPlugin.h>
 #include <igameevents.h>
 #include <iplayerinfo.h>
