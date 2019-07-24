@@ -555,7 +555,7 @@ class CDODMod : public CBotMod
 public:
 	CDODMod()
 	{
-		setup("dod",MOD_DOD,BOTTYPE_DOD,"DOD");		
+		setup("dod",MOD_DOD,BOTTYPE_DOD,"DOD");
 
 		m_bBotCommand_NeedCheatsHack = false;
 	}
@@ -650,17 +650,6 @@ protected:
 	static float fAttackProbLookUp[MAX_DOD_FLAGS+1][MAX_DOD_FLAGS+1];
 };
 
-class CDODModDedicated : public CDODMod
-{
-public:
-	CDODModDedicated()
-	{
-		setup("dod", MOD_DOD, BOTTYPE_DOD, "DOD");
-	}
-protected:
-
-};
-
 class CCounterStrikeSourceMod : public CBotMod
 {
 public:
@@ -679,22 +668,6 @@ protected:
 	std::vector<edict_t*> m_pHostages;
 	std::vector<edict_t*> m_pBombPoints;
 	std::vector<edict_t*> m_pRescuePoints;
-};
-
-
-class CCounterStrikeSourceModDedicated : public CCounterStrikeSourceMod
-{
-public:
-	CCounterStrikeSourceModDedicated()
-	{
-		setup("cstrike",MOD_CSS,BOTTYPE_CSS,"CSS");
-	}
-
-	//void initMod ();
-
-	//void mapInit ();
-
-	//void entitySpawn ( edict_t *pEntity );
 };
 
 class CTimCoopMod : public CBotMod
@@ -733,17 +706,6 @@ public:
 	CFortressForeverMod()
 	{
 		setup("FortressForever", MOD_FF, BOTTYPE_FF, "FF");
-	}
-private:
-
-};
-
-class CFortressForeverModDedicated : public CBotMod
-{
-public:
-	CFortressForeverModDedicated()
-	{
-		setup("FortressForever",MOD_FF,BOTTYPE_FF,"FF");
 	}
 private:
 
@@ -1382,22 +1344,6 @@ private:
 
 };
 
-class CTeamFortress2ModDedicated : public CTeamFortress2Mod
-{
-public:
-	CTeamFortress2ModDedicated()
-	{
-#ifdef __linux__
-		setup("tf",MOD_TF2,BOTTYPE_TF2,"TF2");    //bir3yk
-#else
-		setup("tf",MOD_TF2, BOTTYPE_TF2, "TF2");
-#endif
-	}
-
-private:
-
-};
-
 class CHalfLifeDeathmatchMod : public CBotMod
 {
 public:
@@ -1428,22 +1374,6 @@ private:
 	static std::vector<edict_wpt_pair_t> m_LiftWaypoints;
 };
 
-class CHalfLifeDeathmatchModDedicated : public CHalfLifeDeathmatchMod
-{
-public:
-	CHalfLifeDeathmatchModDedicated()
-	{
-		setup("hl2mp", MOD_HLDM2, BOTTYPE_HL2DM, "HL2DM");
-	}
-
-	//void initMod ();
-
-	//void mapInit ();
-
-	//void entitySpawn ( edict_t *pEntity );
-protected:
-
-};
 /*
 class CNaturalSelection2Mod : public CBotMod
 {

@@ -308,26 +308,25 @@ void CBotMods :: createFile ()
 
 void CBotMods :: readMods()
 {
-	m_Mods.push_back(new CDODMod());
-	m_Mods.push_back(new CDODModDedicated());
+	// TODO improve game detection
+	#if SOURCE_ENGINE == SE_TF2
+		m_Mods.push_back(new CTeamFortress2Mod());
+	#elif SOURCE_ENGINE == SE_DODS
+		m_Mods.push_back(new CDODMod());
+	#elif SOURCE_ENGINE == SE_CSS
+		m_Mods.push_back(new CCounterStrikeSourceMod());
+	#elif SOURCE_ENGINE == SE_HL2DM
+		m_Mods.push_back(new CHalfLifeDeathmatchMod());
+	#else
 
-	m_Mods.push_back(new CCounterStrikeSourceMod());
-	m_Mods.push_back(new CHalfLifeDeathmatchMod());
+		m_Mods.push_back(new CFortressForeverMod());
 
-	m_Mods.push_back(new CCounterStrikeSourceModDedicated());
-	m_Mods.push_back(new CHalfLifeDeathmatchModDedicated());
+		m_Mods.push_back(new CHLDMSourceMod());
 
-	m_Mods.push_back(new CFortressForeverMod());
-	m_Mods.push_back(new CFortressForeverModDedicated());
+		// Look for extra MODs
 
-	m_Mods.push_back(new CTeamFortress2Mod());
-	m_Mods.push_back(new CTeamFortress2ModDedicated());
-
-	m_Mods.push_back(new CHLDMSourceMod());
-
-	// Look for extra MODs
-
-	parseFile();
+		parseFile();
+	#endif
 }
 
 //////////////////////////////////////////////////////////////////////////////
