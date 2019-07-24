@@ -921,9 +921,7 @@ bool RCBotPluginMeta::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxle
 
 	if (CBots::controlBots())
 	{
-		#if SOURCE_ENGINE == SE_TF2
-			SH_MANUALHOOK_RECONFIGURE(MHook_PlayerRunCmd, rcbot_runplayercmd_tf2.GetInt(), 0, 0);
-		#elif SOURCE_ENGINE == SE_DODS
+		#if SOURCE_ENGINE == SE_DODS
 			SH_MANUALHOOK_RECONFIGURE(MHook_PlayerRunCmd, rcbot_runplayercmd_dods.GetInt(), 0, 0);
 		#endif
 	}
