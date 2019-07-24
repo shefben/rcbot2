@@ -16,15 +16,18 @@ you need support for this particular project.
 
 - Build process uses [AMBuild][] instead of `make` or Visual Studio.  This removes the need for
 Valve's cross platform make conversion tool and keeping copies of modified Source SDK files.
-	- The `ambuild-migrate` branch only contains modifications to get the project running on the
-	new build tooling.without issues.
 - The plugin has been split into SDK-specific builds to ensure proper compatibility, using the
 same loader shim SourceMod uses to load mod-specific builds.
 	- The shim is named `RCBot2Meta` to maintain compatibility with existing files; mod-specific
 	plugins are named `rcbot.2.${MOD}`.
+	- The `sdk-split` branch only contains modifications to get the project running on the
+	new build tooling and SDK support without issues.  It should be fairly painless to merge
+	(though it does remove `using namespace std;` for sanity).
 - The usage of the install directory has been dropped.  In particular, waypoints must be located
 under `rcbot2/waypoints/${MOD}` instead of nested under a folder matching the name of the
 steamdir.
+- Removed custom loadout and attribute support from TF2.  Other server plugins are better-suited
+and maintained to handle that stuff; this plugin should only deal with bots themselves.
 
 [AMBuild]: https://wiki.alliedmods.net/AMBuild
 

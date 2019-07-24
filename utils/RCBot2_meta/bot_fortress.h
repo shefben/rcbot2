@@ -884,9 +884,6 @@ public:
 
 	void onInventoryApplication();
 
-	void giveWeapon ( int slot, int index );
-	void PostGiveNamedItem ( CEconItemView *cscript );
-
 	void MannVsMachineWaveComplete();
 	void MannVsMachineAlarmTriggered (Vector vLoc);
 
@@ -1060,8 +1057,6 @@ public:
 	void healedPlayer ( edict_t *pPlayer, float fAmount );
 
 	void teleportedPlayer ( void );
-
-	void upgradeWeapon(int iSlot);
 
 	inline bool isCarrying () { return m_bIsCarryingObj; }
 

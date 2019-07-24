@@ -115,16 +115,6 @@ public: //hooks
 	void Hook_WriteFloat(float val);
 	bool Hook_WriteString(const char *pStr);
 
-	static CBaseEntity *TF2_getPlayerWeaponSlot(edict_t *pPlayer, int iSlot);
-	static void TF2_removeWearable(edict_t *pPlayer, CBaseEntity *pWearable);
-	static void TF2_removePlayerItem(edict_t *pPlayer, CBaseEntity *pItem);
-	static void TF2_RemoveWeaponSlot(edict_t *pPlayer, int iSlot);
-	static void TF2_equipWeapon(edict_t *pPlayer, CBaseEntity *pWeapon);
-	static bool givePlayerLoadOut(edict_t *pPlayer, CTF2Loadout *pLoadout, int iSlot, void *pVTable, void *pVTable_Attributes);
-	static void giveRandomLoadout(edict_t *pPlayer, int iClass, int iSlot, void *pVTable, void *pVTable_Attributes);
-	static void TF2_equipWearable(edict_t *pPlayer, CBaseEntity *pWearable);
-	static bool TF2_ClearAttributeCache(edict_t *pEdict);
-
 	static void HudTextMessage(edict_t *pEntity, const char *szMessage);
 	static void BroadcastTextMessage(const char *szMessage);
 
