@@ -59,7 +59,6 @@ extern IServerGameEnts *servergameents;
 
 ///////////
 trace_t CBotGlobals :: m_TraceResult;
-char * CBotGlobals :: m_szGameFolder = NULL;
 char * CBotGlobals :: m_szModFolder = NULL;
 eModId CBotGlobals :: m_iCurrentMod = MOD_UNSUPPORTED;
 CBotMod *CBotGlobals :: m_pCurrentMod = NULL;
@@ -113,7 +112,6 @@ void CBotGlobals :: init ()
 {
 	m_iCurrentMod = MOD_UNSUPPORTED;
 	m_szModFolder[0] = 0;
-	m_szGameFolder[0] = 0;
 }
 
 bool CBotGlobals ::isAlivePlayer ( edict_t *pEntity )
@@ -514,31 +512,17 @@ bool CBotGlobals::initModFolder() {
 bool CBotGlobals :: gameStart ()
 {
 	char szGameFolder[512];
-	engine->GetGameDir(szGameFolder,512);	
-	char szSteamFolder[512];
+	engine->GetGameDir(szGameFolder,512);
 	/*
 	CFileSystemPassThru a;
 	a.InitPassThru(filesystem,true);
 	a.GetCurrentDirectoryA(szSteamFolder,512);
 */
-	V_GetCurrentDirectory(szSteamFolder,512);
 	//filesystem->GetCurrentDirectory(szSteamFolder,512);
 
-	int iLength = strlen(szSteamFolder);
+	size_t iLength = strlen(CStrings::getString(szGameFolder));
 
-	int pos = iLength-1;
-
-	while ( (pos > 0) && (szSteamFolder[pos] != '\\') && (szSteamFolder[pos] != '/') )
-	{
-		pos--;
-	}
-	pos++;
-
-	m_szGameFolder = CStrings::getString(&szSteamFolder[pos]);
-
-	iLength = strlen(CStrings::getString(szGameFolder));
-
-	pos = iLength-1;
+	size_t pos = iLength-1;
 
 	while ( (pos > 0) && (szGameFolder[pos] != '\\') && (szGameFolder[pos] != '/') )
 	{
@@ -550,7 +534,7 @@ bool CBotGlobals :: gameStart ()
 
 	CBotMods::readMods();
 	
-	m_pCurrentMod = CBotMods::getMod(m_szModFolder,m_szGameFolder);
+	m_pCurrentMod = CBotMods::getMod(m_szModFolder);
 
 	if ( m_pCurrentMod != NULL )
 	{
@@ -564,7 +548,7 @@ bool CBotGlobals :: gameStart ()
 	}
 	else
 	{
-		Msg("[BOT ERROR] Mod not found. Please edit the bot_mods.ini in the bot config folder\nsteamdir = %s\ngamedir = %s\n",m_szGameFolder,m_szModFolder);
+		Msg("[BOT ERROR] Mod not found. Please edit the bot_mods.ini in the bot config folder\n\ngamedir = %s\n",m_szModFolder);
 
 		return false;
 	}
@@ -1088,8 +1072,6 @@ void CBotGlobals :: buildFileName ( char *szOutput, const char *szFile, const ch
 
 	if ( bModDependent )
 	{
-		strcat(szOutput,CBotGlobals::gameFolder());
-		addDirectoryDelimiter(szOutput);
 		strcat(szOutput,CBotGlobals::modFolder());
 		addDirectoryDelimiter(szOutput);
 	}

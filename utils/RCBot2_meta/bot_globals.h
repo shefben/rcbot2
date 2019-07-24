@@ -189,8 +189,6 @@ public:
 
 	static inline bool isMod ( eModId iMod ) { 	return m_iCurrentMod == iMod; }
 
-	static inline char *gameFolder (){return m_szGameFolder;}
-
 	static inline char *modFolder (){return m_szModFolder;}
 
 	static inline int maxClients () {return m_iMaxClients;}
@@ -228,7 +226,6 @@ private:
 	static eModId m_iCurrentMod;
 	static CBotMod *m_pCurrentMod;
 	static char *m_szModFolder;
-	static char *m_szGameFolder;
 	static char m_szMapName[MAX_MAP_STRING_LEN];
 	static int m_iDebugLevels;
 	static bool m_bMapRunning;

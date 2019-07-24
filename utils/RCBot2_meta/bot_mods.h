@@ -125,13 +125,9 @@ public:
 		return true; // okay -- no teams!!
 	}
 // linux fix
-	void setup ( const char *szModFolder, const char *szSteamFolder, eModId iModId, eBotType iBotType, const char *szWeaponListName );
-
-	bool isSteamFolder ( char *szSteamFolder );
+	void setup ( const char *szModFolder, eModId iModId, eBotType iBotType, const char *szWeaponListName );
 
 	bool isModFolder ( char *szModFolder );
-
-	char *getSteamFolder ();
 
 	char *getModFolder ();
 
@@ -559,7 +555,7 @@ class CDODMod : public CBotMod
 public:
 	CDODMod()
 	{
-		setup("dod","day of defeat source",MOD_DOD,BOTTYPE_DOD,"DOD");		
+		setup("dod",MOD_DOD,BOTTYPE_DOD,"DOD");		
 
 		m_bBotCommand_NeedCheatsHack = false;
 	}
@@ -659,7 +655,7 @@ class CDODModDedicated : public CDODMod
 public:
 	CDODModDedicated()
 	{
-		setup("dod", "source dedicated server", MOD_DOD, BOTTYPE_DOD, "DOD");
+		setup("dod", MOD_DOD, BOTTYPE_DOD, "DOD");
 	}
 protected:
 
@@ -670,7 +666,7 @@ class CCounterStrikeSourceMod : public CBotMod
 public:
 	CCounterStrikeSourceMod()
 	{
-		setup("cstrike", "counter-strike source", MOD_CSS, BOTTYPE_CSS, "CSS");
+		setup("cstrike", MOD_CSS, BOTTYPE_CSS, "CSS");
 	}
 
 	//void initMod ();
@@ -691,7 +687,7 @@ class CCounterStrikeSourceModDedicated : public CCounterStrikeSourceMod
 public:
 	CCounterStrikeSourceModDedicated()
 	{
-		setup("cstrike","source dedicated server",MOD_CSS,BOTTYPE_CSS,"CSS");
+		setup("cstrike",MOD_CSS,BOTTYPE_CSS,"CSS");
 	}
 
 	//void initMod ();
@@ -706,7 +702,7 @@ class CTimCoopMod : public CBotMod
 public:
 	CTimCoopMod()
 	{
-		setup("SourceMods","timcoop",MOD_TIMCOOP,BOTTYPE_COOP,"HL2DM");
+		setup("SourceMods",MOD_TIMCOOP,BOTTYPE_COOP,"HL2DM");
 	}
 
 	//void initMod ();
@@ -721,7 +717,7 @@ class CSvenCoop2Mod : public CBotMod
 public:
 	CSvenCoop2Mod()
 	{
-		setup("SourceMods","svencoop2",MOD_SVENCOOP2,BOTTYPE_COOP,"SVENCOOP2");
+		setup("SourceMods",MOD_SVENCOOP2,BOTTYPE_COOP,"SVENCOOP2");
 	}
 
 	//void initMod ();
@@ -736,7 +732,7 @@ class CFortressForeverMod : public CBotMod
 public:
 	CFortressForeverMod()
 	{
-		setup("FortressForever", "SourceMods", MOD_FF, BOTTYPE_FF, "FF");
+		setup("FortressForever", MOD_FF, BOTTYPE_FF, "FF");
 	}
 private:
 
@@ -747,7 +743,7 @@ class CFortressForeverModDedicated : public CBotMod
 public:
 	CFortressForeverModDedicated()
 	{
-		setup("FortressForever","source dedicated server",MOD_FF,BOTTYPE_FF,"FF");
+		setup("FortressForever",MOD_FF,BOTTYPE_FF,"FF");
 	}
 private:
 
@@ -758,7 +754,7 @@ class CHLDMSourceMod : public CBotMod
 public:
 	CHLDMSourceMod()
 	{
-		setup("hl1mp","half-life deathmatch source",MOD_HL1DMSRC,BOTTYPE_HL1DM,"HLDMSRC");
+		setup("hl1mp",MOD_HL1DMSRC,BOTTYPE_HL1DM,"HLDMSRC");
 	}
 };
 
@@ -767,7 +763,7 @@ class CSynergyMod : public CBotMod
 public:
 	CSynergyMod()
 	{
-		setup("synergy","synergy",MOD_SYNERGY,BOTTYPE_COOP,"SYNERGY");
+		setup("synergy",MOD_SYNERGY,BOTTYPE_COOP,"SYNERGY");
 	}
 
 	//void initMod ();
@@ -876,7 +872,7 @@ class CTeamFortress2Mod : public CBotMod
 public:
 	CTeamFortress2Mod()
 	{
-		setup("tf","team fortress 2",MOD_TF2,BOTTYPE_TF2,"TF2");
+		setup("tf",MOD_TF2,BOTTYPE_TF2,"TF2");
 
 		m_pResourceEntity = NULL;
 		m_bBotCommand_NeedCheatsHack = true;
@@ -1392,9 +1388,9 @@ public:
 	CTeamFortress2ModDedicated()
 	{
 #ifdef __linux__
-		setup("tf","orangebox",MOD_TF2,BOTTYPE_TF2,"TF2");    //bir3yk
+		setup("tf",MOD_TF2,BOTTYPE_TF2,"TF2");    //bir3yk
 #else
-		setup("tf", "source dedicated server", MOD_TF2, BOTTYPE_TF2, "TF2");
+		setup("tf",MOD_TF2, BOTTYPE_TF2, "TF2");
 #endif
 	}
 
@@ -1407,7 +1403,7 @@ class CHalfLifeDeathmatchMod : public CBotMod
 public:
 	CHalfLifeDeathmatchMod()
 	{
-		setup("hl2mp", "half-life 2 deathmatch", MOD_HLDM2, BOTTYPE_HL2DM, "HL2DM");
+		setup("hl2mp", MOD_HLDM2, BOTTYPE_HL2DM, "HL2DM");
 	}
 
 	void initMod ();
@@ -1437,7 +1433,7 @@ class CHalfLifeDeathmatchModDedicated : public CHalfLifeDeathmatchMod
 public:
 	CHalfLifeDeathmatchModDedicated()
 	{
-		setup("hl2mp", "source dedicated server", MOD_HLDM2, BOTTYPE_HL2DM, "HL2DM");
+		setup("hl2mp", MOD_HLDM2, BOTTYPE_HL2DM, "HL2DM");
 	}
 
 	//void initMod ();
@@ -1454,7 +1450,7 @@ class CNaturalSelection2Mod : public CBotMod
 public:
 	CNaturalSelection2Mod() 
 	{
-		setup("ns2","natural selection 2",MOD_NS2,BOTTYPE_NS2);
+		setup("ns2",MOD_NS2,BOTTYPE_NS2);
 	}
 // linux fix
 
@@ -1502,7 +1498,7 @@ public:
 
 	static void freeMemory ();
 
-	static CBotMod *getMod ( char *szModFolder, char *szSteamFolder );
+	static CBotMod *getMod ( char *szModFolder );
 
 private:
 	static std::vector<CBotMod*> m_Mods;
