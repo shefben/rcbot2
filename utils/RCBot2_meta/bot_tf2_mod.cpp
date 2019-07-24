@@ -871,11 +871,11 @@ edict_t *CTeamFortress2Mod :: getTeleporterExit ( edict_t *pTele )
 				return pExit;
 			}
 
-			return false;
+			return nullptr;
 		}
 	}
 
-	return false;
+	return nullptr;
 }
 
 // check if the entity is a health kit
