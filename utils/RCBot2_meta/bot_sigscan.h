@@ -49,32 +49,6 @@ public:
 	void **getGameRules();
 };
 
-/*
-CEconItemAttribute *UTIL_AttributeList_GetAttributeByID ( CAttributeList *list, int id )
-{
-	void *pret = NULL;
-
-	if ( list && AttributeList_GetAttributeByID )
-	{
-#ifdef _WIN32
-		__asm
-	   {
-		  mov ecx, list;
-		  push id;
-		  call AttributeList_GetAttributeByID;
-		  mov pret, eax;
-	   };
-#else
-	   FUNC_ATTRIBLIST_GET_ATTRIB_BY_ID func = (FUNC_ATTRIBLIST_GET_ATTRIB_BY_ID)AttributeList_GetAttributeByID;
-
-	   pret = (void*)func(list,id);
-#endif
-	}
-
-	return (CEconItemAttribute*)pret;
-}
-*/
-
 extern CGameRulesObject *g_pGameRules_Obj;
 extern CCreateGameRulesObject *g_pGameRules_Create_Obj;
 

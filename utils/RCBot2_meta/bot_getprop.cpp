@@ -467,20 +467,14 @@ void CClassInterface:: init ()
 		//8484 : m_bCarryingObject
 		DEFINE_GETPROP(GETPROP_TF2_ISCARRYINGOBJ,"CTFPlayer","m_bCarryingObject",0);
 		DEFINE_GETPROP(GETPROP_TF2_GETCARRIEDOBJ,"CTFPlayer","m_hCarriedObject",0);
-		DEFINE_GETPROP(GETPROP_TF2_ATTRIBUTELIST,"CTFPlayer","m_AttributeList",0);
 
 		// Addon stuff for TF2
 		DEFINE_GETPROP(GETPROP_TF2_ITEMDEFINITIONINDEX,"CTFWeaponBase","m_iItemDefinitionIndex",0);
 		DEFINE_GETPROP(GETPROP_TF2_DISGUISEWEARABLE,"CTFWearable","m_bDisguiseWearable",0);
-		DEFINE_GETPROP(GETPROP_TF2_ENTITYLEVEL,"CBaseAttributableItem","m_iEntityLevel",0);
 		DEFINE_GETPROP(GETPROP_TF2_RAGEMETER,"CTFPlayer","m_flRageMeter",0);
 		DEFINE_GETPROP(GETPROP_TF2_RAGEDRAINING,"CTFPlayer","m_bRageDraining",0);
-		DEFINE_GETPROP(GETPROP_TF2_ENTITYQUALITY,"CBaseAttributableItem","m_iEntityQuality",0);
-		DEFINE_GETPROP(GETPROP_TF2_WEAPON_INITIALIZED,"CBaseAttributableItem","m_bInitialized",0);
 		DEFINE_GETPROP(GETPROP_SIMULATIONTIME,"CBaseEntity","m_flSimulationTime",0);
 		DEFINE_GETPROP(GETPROP_TF2_INUPGRADEZONE,"CTFPlayer","m_bInUpgradeZone",0);
-		DEFINE_GETPROP(GETPROP_TF2_EXTRAWEARABLE, "CTFWeaponBase", "m_hExtraWearable", 0);
-		DEFINE_GETPROP(GETPROP_TF2_EXTRAWEARABLEVIEWMODEL, "CTFWeaponBase", "m_hExtraWearableViewModel", 0); 
 		DEFINE_GETPROP(GETPROP_TF2_ENERGYDRINKMETER, "CTFPlayer", "m_flEnergyDrinkMeter", 0);
 		DEFINE_GETPROP(GETPROP_TF2_MEDIEVALMODE, "CTFGameRulesProxy", "m_bPlayingMedieval", 0);
 		DEFINE_GETPROP(GETPROP_TF2_ACTIVEWEAPON, "CTFPlayer", "m_hActiveWeapon", 0);

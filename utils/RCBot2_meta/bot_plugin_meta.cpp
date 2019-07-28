@@ -66,7 +66,6 @@ SH_DECL_HOOK2_void(IServerGameClients, ClientActive, SH_NOATTRIB, 0, edict_t *, 
 SH_DECL_HOOK1_void(IServerGameClients, ClientDisconnect, SH_NOATTRIB, 0, edict_t *);
 SH_DECL_HOOK2_void(IServerGameClients, ClientPutInServer, SH_NOATTRIB, 0, edict_t *, char const *);
 SH_DECL_HOOK1_void(IServerGameClients, SetCommandClient, SH_NOATTRIB, 0, int);
-SH_DECL_HOOK1_void(IServerGameClients, ClientSettingsChanged, SH_NOATTRIB, 0, edict_t *);
 SH_DECL_HOOK5(IServerGameClients, ClientConnect, SH_NOATTRIB, 0, bool, edict_t *, const char*, const char *, char *, int);
 SH_DECL_HOOK2(IGameEventManager2, FireEvent, SH_NOATTRIB, 0, bool, IGameEvent *, bool);
 
@@ -78,38 +77,6 @@ SH_DECL_HOOK1_void(IServerGameClients, ClientCommand, SH_NOATTRIB, 0, edict_t *)
 #endif
 
 SH_DECL_MANUALHOOK2_void(MHook_PlayerRunCmd, 0, 0, 0, CUserCmd*, IMoveHelper*); 
-SH_DECL_MANUALHOOK4(MHook_GiveNamedItem, 0, 0, 0,CBaseEntity*, const char *,int,CEconItemView*,bool); 
-
-SH_DECL_MANUALHOOK1_void(MHook_EquipWearable, 0, 0, 0, CEconWearable*);
-SH_DECL_MANUALHOOK1_void(MHook_EquipWeapon, 0, 0, 0, CBaseEntity*);
-
-SH_DECL_MANUALHOOK1_void(MHook_RemovePlayerItem, 0, 0, 0, CBaseEntity*);
-
-SH_DECL_MANUALHOOK1(MHook_GetPlayerWeaponSlot, 0, 0, 0, CBaseEntity*, int);
-SH_DECL_MANUALHOOK1_void(MHook_RemoveWearable, 0, 0, 0, CBaseEntity*);
-
-/*
-SH_DECL_HOOK1_void(bf_write, WriteChar, SH_NOATTRIB, 0, int);
-SH_DECL_HOOK1_void(bf_write, WriteShort, SH_NOATTRIB, 0, int);
-SH_DECL_HOOK1_void(bf_write, WriteByte, SH_NOATTRIB, 0, int);
-SH_DECL_HOOK1_void(bf_write, WriteFloat, SH_NOATTRIB, 0, float);
-SH_DECL_HOOK1(bf_write, WriteString, SH_NOATTRIB, 0, bool, const char *);
-
-SH_DECL_HOOK2(IVEngineServer, UserMessageBegin, SH_NOATTRIB, 0, bf_write*, IRecipientFilter*, int);
-SH_DECL_HOOK0_void(IVEngineServer, MessageEnd, SH_NOATTRIB, 0);
-
-bf_write *current_msg = NULL;
-
-#define BUF_SIZ 1024
-char current_msg_buffer[BUF_SIZ];
-*/
-
-CBaseEntity* (CBaseEntity::*TF2EquipWearable)(CBaseEntity*) = 0x0;
-CBaseEntity* (CBaseEntity::*TF2PlayerWeaponSlot)(int) = 0x0;
-void (CAttributeManager::*OnAttributeValuesChanged)(void) = 0x0;
-void (CBaseEntity::*TF2RemoveWearable)(CBaseEntity*) = 0x0;
-void (CBaseEntity::*TF2RemovePlayerItem)(CBaseEntity*) = 0x0;
-//void (CBaseEntity::*TF2WeaponEquip)(CBaseEntity*) = 0x0;
 
 IServerGameDLL *server = NULL;
 IGameEventManager2 *gameevents = NULL;
@@ -167,24 +134,6 @@ CON_COMMAND(rcbotd, "access the bot commands on a server")
 		CBotGlobals::botMessage(NULL, 0, "bot command returned an error");
 	}
 }
-
-/*
-bool RCBotPluginMeta :: ClearAttributeCache(edict_t *pedict)
-{
-	if (hSDKOnAttribValuesChanged == INVALID_HANDLE) return false;
-
-	if (pedict == NULL || pedict->IsFree() ) 
-		return false;
-
-	new offs = GetEntSendPropOffs(entity, "m_AttributeList", true);
-	if (offs <= 0) return false;
-	new Address:pAttribs = GetEntityAddress(entity);
-	if (pAttribs < Address_MinimumValid) return false;
-	pAttribs = Address:LoadFromAddress(pAttribs + Address:(offs + 24), NumberType_Int32);
-	if (pAttribs < Address_MinimumValid) return false;
-	SDKCall(hSDKOnAttribValuesChanged, pAttribs);
-	return true;
-}*/
 
 class CBotRecipientFilter : public IRecipientFilter
 {
@@ -366,33 +315,6 @@ void RCBotPluginMeta::Hook_PlayerRunCmd(CUserCmd *ucmd, IMoveHelper *moveHelper)
 RETURN_META(MRES_IGNORED); 
 }
 
-
-void RCBotPluginMeta::Hook_EquipWeapon(CBaseEntity *pWeapon)
-{
-	RETURN_META(MRES_IGNORED);
-}
-
-
-CBaseEntity *RCBotPluginMeta::Hook_GetPlayerWeaponSlot(int iSlot)
-{
-	RETURN_META_VALUE(MRES_IGNORED, NULL);
-}
-void RCBotPluginMeta::Hook_RemoveWearable(CBaseEntity *pWearable)
-{
-	RETURN_META(MRES_IGNORED);
-}
-
-
-void RCBotPluginMeta::Hook_RemovePlayerItem(CBaseEntity *pWeapon)
-{
-	RETURN_META(MRES_IGNORED);
-}
-
-void RCBotPluginMeta::Hook_EquipWearable(CEconWearable *pItem)
-{
-	RETURN_META(MRES_IGNORED);
-}
-
 /** 
  * Something like this is needed to register cvars/CON_COMMANDs.
  */
@@ -405,116 +327,6 @@ public:
 		return META_REGCVAR(pCommandBase);
 	}
 } s_BaseAccessor;
-
-// --- you're going to take over message begin
-bf_write *RCBotPluginMeta::Hook_MessageBegin(IRecipientFilter *filter, int msg_type)
-{
-	/*
-	bool bfound = false;
-
-	for (int i = 0; i < filter->GetRecipientCount(); i++)
-	{
-		if (filter->GetRecipientIndex(i) == 1)
-		{
-			bfound = true;
-			break;
-		}
-	}
-
-	if (bfound)
-	{
-		
-		int msgid = 0;
-		int imsgsize = 0;
-		char msgbuf[64];
-		bool bOK;
-
-		if (servergamedll->GetUserMessageInfo(msg_type, msgbuf, 63, imsgsize))
-		{
-			sprintf(current_msg_buffer, "MessageBegin() msg_type = %d name = %s\n", msg_type,msgbuf);
-		}
-
-	}
-	else
-		current_msg_buffer[0] = 0;
-	
-	current_msg = SH_CALL(engine, &IVEngineServer::UserMessageBegin)(filter, msg_type);
-
-	if (current_msg)
-	{
-		SH_ADD_HOOK_MEMFUNC(bf_write, WriteString, current_msg, this, &RCBotPluginMeta::Hook_WriteString, true);
-		SH_ADD_HOOK_MEMFUNC(bf_write, WriteByte, current_msg, this, &RCBotPluginMeta::Hook_WriteByte, true);
-		SH_ADD_HOOK_MEMFUNC(bf_write, WriteChar, current_msg, this, &RCBotPluginMeta::Hook_WriteChar, true);
-		SH_ADD_HOOK_MEMFUNC(bf_write, WriteShort, current_msg, this, &RCBotPluginMeta::Hook_WriteShort, true);
-		SH_ADD_HOOK_MEMFUNC(bf_write, WriteFloat, current_msg, this, &RCBotPluginMeta::Hook_WriteFloat, true);
-	}
-
-	//
-	RETURN_META_VALUE(MRES_SUPERCEDE, current_msg);*/
-
-	RETURN_META_VALUE(MRES_IGNORED, NULL);
-}
-
-void RCBotPluginMeta::Hook_WriteChar(int val)
-{
-	/*char tocat[64];
-
-	sprintf(tocat, "\nWriteChar(%c)", (char)val);
-	strcat(current_msg_buffer, tocat);*/
-}
-void RCBotPluginMeta::Hook_WriteShort(int val)
-{
-	/*char tocat[64];
-
-	sprintf(tocat, "\nWriteShort(%d)", val);
-	strcat(current_msg_buffer, tocat);*/
-}
-void RCBotPluginMeta::Hook_WriteByte(int val)
-{
-	/*char tocat[64];
-
-	sprintf(tocat, "\nWriteByte(%d)", val);
-	strcat(current_msg_buffer, tocat);*/
-}
-void RCBotPluginMeta::Hook_WriteFloat(float val)
-{
-	/*char tocat[64];
-
-	sprintf(tocat, "\nWriteFloat(%0.1f)", val);
-	strcat(current_msg_buffer, tocat);*/
-}
-
-bool RCBotPluginMeta::Hook_WriteString(const char *pStr)
-{
-	/*char *tocat = new char[strlen(pStr) + 16];
-	
-	sprintf(tocat, "\nWriteString(%s)", pStr);
-	strcat(current_msg_buffer, tocat);
-	
-	delete tocat;*/
-
-	RETURN_META_VALUE(MRES_IGNORED, false);
-}
-
-void RCBotPluginMeta::Hook_MessageEnd()
-{
-	// probe the current_msg m_pData
-	// deep copy the data because it might free itself later
-	//strncpy(current_msg_buffer, (char*)current_msg->m_pData, BUF_SIZ - 1);
-	//current_msg_buffer[BUF_SIZ - 1] = 0;
-	/*if (current_msg)
-	{
-		SH_REMOVE_HOOK_MEMFUNC(bf_write, WriteString, current_msg, this, &RCBotPluginMeta::Hook_WriteString, true);
-		SH_REMOVE_HOOK_MEMFUNC(bf_write, WriteByte, current_msg, this, &RCBotPluginMeta::Hook_WriteByte, true);
-		SH_REMOVE_HOOK_MEMFUNC(bf_write, WriteChar, current_msg, this, &RCBotPluginMeta::Hook_WriteChar, true);
-		SH_REMOVE_HOOK_MEMFUNC(bf_write, WriteShort, current_msg, this, &RCBotPluginMeta::Hook_WriteShort, true);
-		SH_REMOVE_HOOK_MEMFUNC(bf_write, WriteFloat, current_msg, this, &RCBotPluginMeta::Hook_WriteFloat, true);
-	}
-
-	current_msg_buffer[0] = 0;*/
-
-	RETURN_META(MRES_IGNORED);
-}
 
 bool RCBotPluginMeta::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool late)
 {
@@ -556,9 +368,6 @@ bool RCBotPluginMeta::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxle
 		ismm->EnableVSPListener();
 	}
 
-
-	/*SH_ADD_HOOK_MEMFUNC(IVEngineServer, UserMessageBegin, engine, this, &RCBotPluginMeta::Hook_MessageBegin, false);
-	SH_ADD_HOOK_MEMFUNC(IVEngineServer, MessageEnd, engine, this, &RCBotPluginMeta::Hook_MessageEnd, false);*/
 	
 	SH_ADD_HOOK_MEMFUNC(IServerGameDLL, LevelInit, server, this, &RCBotPluginMeta::Hook_LevelInit, true);
 	SH_ADD_HOOK_MEMFUNC(IServerGameDLL, ServerActivate, server, this, &RCBotPluginMeta::Hook_ServerActivate, true);
@@ -567,13 +376,10 @@ bool RCBotPluginMeta::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxle
 	SH_ADD_HOOK_MEMFUNC(IServerGameClients, ClientActive, gameclients, this, &RCBotPluginMeta::Hook_ClientActive, true);
 	SH_ADD_HOOK_MEMFUNC(IServerGameClients, ClientDisconnect, gameclients, this, &RCBotPluginMeta::Hook_ClientDisconnect, true);
 	SH_ADD_HOOK_MEMFUNC(IServerGameClients, ClientPutInServer, gameclients, this, &RCBotPluginMeta::Hook_ClientPutInServer, true);
-	SH_ADD_HOOK_MEMFUNC(IServerGameClients, SetCommandClient, gameclients, this, &RCBotPluginMeta::Hook_SetCommandClient, true);
-	SH_ADD_HOOK_MEMFUNC(IServerGameClients, ClientSettingsChanged, gameclients, this, &RCBotPluginMeta::Hook_ClientSettingsChanged, false);
 	SH_ADD_HOOK_MEMFUNC(IServerGameClients, ClientConnect, gameclients, this, &RCBotPluginMeta::Hook_ClientConnect, false);
 	SH_ADD_HOOK_MEMFUNC(IServerGameClients, ClientCommand, gameclients, this, &RCBotPluginMeta::Hook_ClientCommand, false);
 	//Hook FireEvent to our function - unstable for TF2? [APG]RoboCop[CL]
 	SH_ADD_HOOK_MEMFUNC(IGameEventManager2, FireEvent, gameevents, this, &RCBotPluginMeta::FireGameEvent, false);
-
 
 #if SOURCE_ENGINE >= SE_ORANGEBOX
 	g_pCVar = icvar;
@@ -581,7 +387,6 @@ bool RCBotPluginMeta::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxle
 #else
 	ConCommandBaseMgr::OneTimeInit(&s_BaseAccessor);
 #endif
-
 
 	// Read Signatures and Offsets
 	CBotGlobals::initModFolder();
@@ -641,8 +446,6 @@ bool RCBotPluginMeta::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxle
 	}
 
 	ENGINE_CALL(LogPrint)("All hooks started!\n");
-
-
 
 	//MathLib_Init( 2.2f, 2.2f, 0.0f, 2.0f );
 	//ConVar_Register( 0 );
@@ -743,12 +546,9 @@ bool RCBotPluginMeta::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxle
 
 bool RCBotPluginMeta::FireGameEvent(IGameEvent * pevent, bool bDontBroadcast)
 {
-	static char szKey[128];
-	static char szValue[128];
+	CBotEvents::executeEvent((void*)pevent,TYPE_IGAMEEVENT);
 
-	CBotEvents::executeEvent((void*)pevent,TYPE_IGAMEEVENT);	
-
-RETURN_META_VALUE(MRES_IGNORED, true);
+	RETURN_META_VALUE(MRES_IGNORED, true);
 }
 
 bool RCBotPluginMeta::Unload(char *error, size_t maxlen)
@@ -760,8 +560,6 @@ bool RCBotPluginMeta::Unload(char *error, size_t maxlen)
 	SH_REMOVE_HOOK_MEMFUNC(IServerGameClients, ClientActive, gameclients, this, &RCBotPluginMeta::Hook_ClientActive, true);
 	SH_REMOVE_HOOK_MEMFUNC(IServerGameClients, ClientDisconnect, gameclients, this, &RCBotPluginMeta::Hook_ClientDisconnect, true);
 	SH_REMOVE_HOOK_MEMFUNC(IServerGameClients, ClientPutInServer, gameclients, this, &RCBotPluginMeta::Hook_ClientPutInServer, true);
-	SH_REMOVE_HOOK_MEMFUNC(IServerGameClients, SetCommandClient, gameclients, this, &RCBotPluginMeta::Hook_SetCommandClient, true);
-	SH_REMOVE_HOOK_MEMFUNC(IServerGameClients, ClientSettingsChanged, gameclients, this, &RCBotPluginMeta::Hook_ClientSettingsChanged, false);
 	SH_REMOVE_HOOK_MEMFUNC(IServerGameClients, ClientConnect, gameclients, this, &RCBotPluginMeta::Hook_ClientConnect, false);
 	SH_REMOVE_HOOK_MEMFUNC(IServerGameClients, ClientCommand, gameclients, this, &RCBotPluginMeta::Hook_ClientCommand, false);
 	
@@ -782,7 +580,6 @@ bool RCBotPluginMeta::Unload(char *error, size_t maxlen)
 	CBotProfiles::deleteProfiles();
 	CWeapons::freeMemory();
 	CBotMenuList::freeMemory();
-	CAttributeLookup::freeMemory();
 	//unloadSignatures();
 
 	//UnhookPlayerRunCommand();
@@ -908,11 +705,6 @@ void RCBotPluginMeta::Hook_ClientCommand(edict_t *pEntity)
 	RETURN_META(MRES_IGNORED); 
 }
 
-void RCBotPluginMeta::Hook_ClientSettingsChanged(edict_t *pEdict)
-{
-
-}
-
 bool RCBotPluginMeta::Hook_ClientConnect(edict_t *pEntity,
 									const char *pszName,
 									const char *pszAddress,
@@ -943,7 +735,7 @@ void RCBotPluginMeta::Hook_ClientPutInServer(edict_t *pEntity, char const *playe
 			if ( CClients::noListenServerClient() )
 			{
 				// give listenserver client all access to bot commands
-				CClients::setListenServerClient(pClient);		
+				CClients::setListenServerClient(pClient);
 				pClient->setAccessLevel(CMD_ACCESS_ALL);
 				pClient->resetMenuCommands();
 			}
@@ -1180,11 +972,6 @@ void RCBotPluginMeta::Hook_LevelShutdown()
 
 	CBotGlobals::setMapRunning(false);
 	CBotEvents::freeMemory();
-}
-
-void RCBotPluginMeta::Hook_SetCommandClient(int index)
-{
-	META_LOG(g_PLAPI, "Hook_SetCommandClient(%d)", index);
 }
 
 bool RCBotPluginMeta::Pause(char *error, size_t maxlen)
