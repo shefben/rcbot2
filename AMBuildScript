@@ -33,7 +33,6 @@ proj_srcs = [
   "utils/RCBot2_meta/bot_strings.cpp",
   "utils/RCBot2_meta/bot_task.cpp",
   "utils/RCBot2_meta/bot_tf2_mod.cpp",
-  "utils/RCBot2_meta/bot_usercmd.cpp",
   "utils/RCBot2_meta/bot_utility.cpp",
   "utils/RCBot2_meta/bot_visibles.cpp",
   "utils/RCBot2_meta/bot_waypoint.cpp",

@@ -1307,7 +1307,6 @@ typedef IServerTools IServerTools001;
 
 void DrawLine ( const Vector &origin, const Vector &target, int r, int g, int b, bool noDepthTest, float duration );
 
-void WriteUsercmd( bf_write *buf, CUserCmd *cmd );
 // useful helper funcs...
 //int RANDOM_INT(int min, int max);
 // Misc useful
