@@ -97,14 +97,6 @@ public: //hooks
 		const char *pszAddress,
 		char *reject,
 		int maxrejectlen);
-	bf_write *Hook_MessageBegin(IRecipientFilter *filter, int msg_type);
-	void Hook_MessageEnd();
-
-	void Hook_WriteChar(int val);
-	void Hook_WriteShort(int val);
-	void Hook_WriteByte(int val);
-	void Hook_WriteFloat(float val);
-	bool Hook_WriteString(const char *pStr);
 
 	static void HudTextMessage(edict_t *pEntity, const char *szMessage);
 	static void BroadcastTextMessage(const char *szMessage);
