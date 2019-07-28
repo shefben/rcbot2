@@ -790,8 +790,6 @@ public:
 
 	static void roundStart ();
 
-	void freeMemory ();
-
 	static int getTeam ( edict_t *pEntity );
 
 	static TF_Class getSpyDisguise ( edict_t *pPlayer );

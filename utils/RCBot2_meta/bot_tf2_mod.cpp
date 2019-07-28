@@ -1469,8 +1469,3 @@ bool CTeamFortress2Mod::isCapping ( edict_t *pPlayer )//, int iCapIndex = -1 )
 
 	return false;
 }
-
-void CTeamFortress2Mod::freeMemory()
-{
-	
-}
