@@ -1537,6 +1537,12 @@ void CBotFortress :: selectClass ()
 	else
 		_class = (TF_Class)m_iDesiredClass;
 
+	// only request class change if it doesn't match what the game is expecting
+	if ( CClassInterface::getTF2DesiredClass(m_pEdict) == m_iDesiredClass )
+	{
+		return;
+	}
+	
 	m_iClass = _class;
 	if (_class == TF_CLASS_SCOUT)
 	{
