@@ -78,15 +78,6 @@ SH_DECL_HOOK1_void(IServerGameClients, ClientCommand, SH_NOATTRIB, 0, edict_t *)
 #endif
 
 SH_DECL_MANUALHOOK2_void(MHook_PlayerRunCmd, 0, 0, 0, CUserCmd*, IMoveHelper*); 
-SH_DECL_MANUALHOOK4(MHook_GiveNamedItem, 0, 0, 0,CBaseEntity*, const char *,int,CEconItemView*,bool); 
-
-SH_DECL_MANUALHOOK1_void(MHook_EquipWearable, 0, 0, 0, CEconWearable*);
-SH_DECL_MANUALHOOK1_void(MHook_EquipWeapon, 0, 0, 0, CBaseEntity*);
-
-SH_DECL_MANUALHOOK1_void(MHook_RemovePlayerItem, 0, 0, 0, CBaseEntity*);
-
-SH_DECL_MANUALHOOK1(MHook_GetPlayerWeaponSlot, 0, 0, 0, CBaseEntity*, int);
-SH_DECL_MANUALHOOK1_void(MHook_RemoveWearable, 0, 0, 0, CBaseEntity*);
 
 /*
 SH_DECL_HOOK1_void(bf_write, WriteChar, SH_NOATTRIB, 0, int);
@@ -106,7 +97,6 @@ char current_msg_buffer[BUF_SIZ];
 
 CBaseEntity* (CBaseEntity::*TF2EquipWearable)(CBaseEntity*) = 0x0;
 CBaseEntity* (CBaseEntity::*TF2PlayerWeaponSlot)(int) = 0x0;
-void (CAttributeManager::*OnAttributeValuesChanged)(void) = 0x0;
 void (CBaseEntity::*TF2RemoveWearable)(CBaseEntity*) = 0x0;
 void (CBaseEntity::*TF2RemovePlayerItem)(CBaseEntity*) = 0x0;
 //void (CBaseEntity::*TF2WeaponEquip)(CBaseEntity*) = 0x0;
@@ -167,24 +157,6 @@ CON_COMMAND(rcbotd, "access the bot commands on a server")
 		CBotGlobals::botMessage(NULL, 0, "bot command returned an error");
 	}
 }
-
-/*
-bool RCBotPluginMeta :: ClearAttributeCache(edict_t *pedict)
-{
-	if (hSDKOnAttribValuesChanged == INVALID_HANDLE) return false;
-
-	if (pedict == NULL || pedict->IsFree() ) 
-		return false;
-
-	new offs = GetEntSendPropOffs(entity, "m_AttributeList", true);
-	if (offs <= 0) return false;
-	new Address:pAttribs = GetEntityAddress(entity);
-	if (pAttribs < Address_MinimumValid) return false;
-	pAttribs = Address:LoadFromAddress(pAttribs + Address:(offs + 24), NumberType_Int32);
-	if (pAttribs < Address_MinimumValid) return false;
-	SDKCall(hSDKOnAttribValuesChanged, pAttribs);
-	return true;
-}*/
 
 class CBotRecipientFilter : public IRecipientFilter
 {
@@ -364,33 +336,6 @@ void RCBotPluginMeta::Hook_PlayerRunCmd(CUserCmd *ucmd, IMoveHelper *moveHelper)
 //g_pSM->LogMessage(NULL, "H %i %i %f %f %f %f %i", ucmd->command_number, ucmd->tick_count, ucmd->viewangles.x, ucmd->viewangles.y, ucmd->viewangles.z, ucmd->forwardmove, ucmd->buttons); 
 
 RETURN_META(MRES_IGNORED); 
-}
-
-
-void RCBotPluginMeta::Hook_EquipWeapon(CBaseEntity *pWeapon)
-{
-	RETURN_META(MRES_IGNORED);
-}
-
-
-CBaseEntity *RCBotPluginMeta::Hook_GetPlayerWeaponSlot(int iSlot)
-{
-	RETURN_META_VALUE(MRES_IGNORED, NULL);
-}
-void RCBotPluginMeta::Hook_RemoveWearable(CBaseEntity *pWearable)
-{
-	RETURN_META(MRES_IGNORED);
-}
-
-
-void RCBotPluginMeta::Hook_RemovePlayerItem(CBaseEntity *pWeapon)
-{
-	RETURN_META(MRES_IGNORED);
-}
-
-void RCBotPluginMeta::Hook_EquipWearable(CEconWearable *pItem)
-{
-	RETURN_META(MRES_IGNORED);
 }
 
 /** 
@@ -782,7 +727,6 @@ bool RCBotPluginMeta::Unload(char *error, size_t maxlen)
 	CBotProfiles::deleteProfiles();
 	CWeapons::freeMemory();
 	CBotMenuList::freeMemory();
-	CAttributeLookup::freeMemory();
 	//unloadSignatures();
 
 	//UnhookPlayerRunCommand();

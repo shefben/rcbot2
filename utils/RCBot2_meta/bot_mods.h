@@ -79,32 +79,6 @@ typedef enum
 	BOTTYPE_MAX
 }eBotType;
 
-
-// tf2
-class CAttributeID
-{
-public:
-	CAttributeID(int id, const char *attrib)
-	{
-		m_id = id;
-		m_attribute = attrib;
-	}
-
-	int m_id;
-	const char *m_attribute;
-};
-
-class CAttributeLookup
-{
-public:
-	static void addAttribute(const char *szAttrib, int id);
-	static int findAttributeID(const char *szAttrib);
-	static void freeMemory();
-private:
-	static std::vector<CAttributeID*> attributes;
-};
-
-
 class CBotMod
 {
 public:
@@ -786,49 +760,6 @@ class CTeamControlPointMaster;
 class CTeamControlPoint;
 class CTeamRoundTimer;
 
-class CAttribute 
-{
-public:
-	CAttribute ( const char *name, float fval );
-
-	void applyAttribute ( edict_t *pEdict );
-
-	const char *m_name;
-	float m_fval;
-};
-
-class CTF2Loadout
-{
-public:
-	CTF2Loadout ( const char *pszClassname, int iIndex, int iQuality, int iMinLevel, int iMaxLevel );
-
-	//const char *getScript ( CEconItemView *script );
-	//CEconItemView *getScript ( CEconItemView *other );
-	void getScript ( CEconItemView *cscript );
-
-	void addAttribute ( int id, float fval );
-
-	unsigned int copyAttributesIntoArray ( CEconItemAttribute *pArray, void *pVTable = NULL );
-	//void addAttribute ( CAttribute *attrib );
-
-	//void applyAttributes ( edict_t *pEdict );
-	void applyAttributes ( CEconItemView *cscript );
-	void applyAttributes  ( CBaseEntity *pEnt );
-
-	void freeMemory ();
-
-	int m_iIndex;
-//	int m_iSlot;
-	int m_iQuality;
-	bool m_bCanBeUsedInMedieval;
-	int m_iMinLevel;
-	int m_iMaxLevel;
-	const char *m_pszClassname;
-	//vector<CAttribute*> m_Attributes;
-	std::vector<CEconItemAttribute*> m_Attributes;
-	//CEconItemView m_ItemView;
-};
-
 class CTeamFortress2Mod : public CBotMod
 {
 public:
@@ -1262,10 +1193,6 @@ public:
 
 	static bool isMedievalMode();
 
-	static CTF2Loadout *findRandomWeaponLoadOutInSlot(int iclass, int islot );
-	static CTF2Loadout *findRandomWeaponLoadOut ( int iclass, const char *classname );
-	static CTF2Loadout *getRandomHat ( int iClass );
-
 private:
 
 
@@ -1332,15 +1259,9 @@ private:
 	static int m_iCapturePointWptID;
 	static int m_iFlagPointWptID;
 
-	static void setupLoadOutWeapons ( void );
-
 	static MyEHandle m_pNearestTankBoss;
 	static float m_fNearestTankDistance;
 	static Vector m_vNearestTankLocation;
-	// slots X nine classes
-	static std::vector<CTF2Loadout*> m_pLoadoutWeapons[TF2_SLOT_MAX][9];
-	//static vector<CTF2Loadout*> m_pHats;
-	//static CTF2Loadout *m_StockWeapons[3][9]; //stock weapons
 
 };
 

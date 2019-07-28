@@ -57,9 +57,6 @@
 
 class CUserCmd;
 class IMoveHelper;
-class CEconItemView;
-class CTF2Loadout;
-class CEconWearable;
 
 #if defined WIN32 && !defined snprintf
 #define snprintf _snprintf
@@ -94,13 +91,7 @@ public: //hooks
 	//Called for a game event.  Same definition as server plugins???
 	bool FireGameEvent( IGameEvent *pevent, bool bDontBroadcast );
 	void Hook_PlayerRunCmd(CUserCmd *ucmd, IMoveHelper *moveHelper);
-	CBaseEntity *Hook_GiveNamedItem(const char *name, int subtype, CEconItemView *cscript, bool b);
-	void Hook_EquipWearable(CEconWearable *pItem);
-	void Hook_EquipWeapon(CBaseEntity *pWeapon);
-	void Hook_RemovePlayerItem(CBaseEntity *pWeapon);
-
-	CBaseEntity *Hook_GetPlayerWeaponSlot(int iSlot);
-	void Hook_RemoveWearable(CBaseEntity *pWearable);
+	
 	bool Hook_ClientConnect(edict_t *pEntity, 
 		const char *pszName,
 		const char *pszAddress,

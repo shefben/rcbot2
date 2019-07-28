@@ -136,18 +136,12 @@ typedef enum
 	GETPROP_SENTRYGUN_PLACING,
 	GETPROP_TF2_ISCARRYINGOBJ,
 	GETPROP_TF2_GETCARRIEDOBJ,
-	GETPROP_TF2_ATTRIBUTELIST,
 	GETPROP_TF2_ITEMDEFINITIONINDEX,
 	GETPROP_TF2_DISGUISEWEARABLE,
-	GETPROP_TF2_ENTITYLEVEL,
 	GETPROP_TF2_RAGEMETER,
 	GETPROP_TF2_RAGEDRAINING,
-	GETPROP_TF2_ENTITYQUALITY,
 	GETPROP_SIMULATIONTIME,
-	GETPROP_TF2_WEAPON_INITIALIZED,
 	GETPROP_TF2_INUPGRADEZONE,
-	GETPROP_TF2_EXTRAWEARABLE,
-	GETPROP_TF2_EXTRAWEARABLEVIEWMODEL,
 	GETPROP_TF2_ENERGYDRINKMETER,
 	GETPROP_TF2_MEDIEVALMODE,
 	GETPROP_TF2_ACTIVEWEAPON,
@@ -348,7 +342,6 @@ private:
 extern CClassInterfaceValue g_GetProps[GET_PROPDATA_MAX];
 class CTFObjectiveResource;
 class CTeamRoundTimer;
-class CAttributeList;
 #define DEFINE_GETPROP(id,classname,value,preoffs)\
  g_GetProps[id] = CClassInterfaceValue( CClassInterfaceValue ( classname, value, preoffs ) )
 
@@ -376,15 +369,7 @@ public:
 	inline static int getTF2Conditions ( edict_t *edict ) { return g_GetProps[GETPROP_TF2_CONDITIONS].getInt(edict,0); }
 	inline static bool getVelocity ( edict_t *edict, Vector *v ) {return g_GetProps[GETPROP_VELOCITY].getVector(edict,v); }
 	inline static int getTF2Class ( edict_t *edict ) { return g_GetProps[GETPROP_TF2CLASS].getInt(edict,0); }
-	inline static edict_t *getExtraWearable(edict_t *edict) { return g_GetProps[GETPROP_TF2_EXTRAWEARABLE].getEntity(edict); }
-	inline static edict_t *getExtraWearableViewModel(edict_t *edict) { return g_GetProps[GETPROP_TF2_EXTRAWEARABLEVIEWMODEL].getEntity(edict); }
 	inline static float TF2_getEnergyDrinkMeter(edict_t * edict) { return g_GetProps[GETPROP_TF2_ENERGYDRINKMETER].getFloat(edict, 0); }
-	inline static void setInitialized ( edict_t *edict ) 
-	{
-		bool *m_bInitialized = g_GetProps[GETPROP_TF2_WEAPON_INITIALIZED].getBoolPointer(edict);
-
-		*m_bInitialized = true;
-	}
 	inline static edict_t *TF2_getActiveWeapon(edict_t *edict) { return g_GetProps[GETPROP_TF2_ACTIVEWEAPON].getEntity(edict); }
 	// set weapon
 	static bool TF2_setActiveWeapon(edict_t *edict, edict_t *pWeapon)
@@ -453,28 +438,7 @@ public:
 	{
 		return g_GetProps[GETPROP_TF2_ITEMDEFINITIONINDEX].getInt(edict, 0);
 	}
-	inline static void setEntityIndex_Level_Quality( edict_t *edict, int iIndex, int iLevel = 0, int iQuality = 0 )
-	{
-		int *pdata = g_GetProps[GETPROP_TF2_ITEMDEFINITIONINDEX].getIntPointer(edict);
-
-		if ( pdata )
-			*pdata = iIndex;
-
-		if ( iLevel )
-		{
-			int *pdata = g_GetProps[GETPROP_TF2_ENTITYLEVEL].getIntPointer(edict);
-
-			if ( pdata )
-				*pdata = iLevel;
-		}
-		if ( iQuality )
-		{
-			int *pdata = g_GetProps[GETPROP_TF2_ENTITYQUALITY].getIntPointer(edict);
-
-			if ( pdata )
-				*pdata = iQuality;
-		}
-	}
+	
 	inline static bool isCarryingObj ( edict_t *edict ) { return g_GetProps[GETPROP_TF2_ISCARRYINGOBJ].getBool(edict,false); }
 	inline static edict_t *getCarriedObj ( edict_t *edict ) { return g_GetProps[GETPROP_TF2_GETCARRIEDOBJ].getEntity(edict); }
 	inline static bool getMedigunHealing ( edict_t *edict ) { return g_GetProps[GETPROP_TF2MEDIGUN_HEALING].getBool(edict,false); }
@@ -521,7 +485,6 @@ public:
 	inline static int getDODBombTeam ( edict_t *pBombTarget ) { return g_GetProps[GETPROP_DOD_BOMB_TEAM].getInt(pBombTarget,0); }
 	inline static int *getWeaponClip1Pointer ( edict_t *pgun ) { return g_GetProps[GETPROP_WEAPONCLIP1].getIntPointer(pgun); }
 	inline static int *getWeaponClip2Pointer ( edict_t *pgun ) { return g_GetProps[GETPROP_WEAPONCLIP2].getIntPointer(pgun); }
-	inline static CAttributeList *getAttributeList ( edict_t *player ) { return (CAttributeList*)g_GetProps[GETPROP_TF2_ATTRIBUTELIST].getVoidPointer(player); }
 	inline static int getOffset(int id) { return g_GetProps[id].getOffset(); }
 	inline static void getWeaponClip ( edict_t *pgun, int *iClip1, int *iClip2 ) { *iClip1 = g_GetProps[GETPROP_WEAPONCLIP1].getInt(pgun,0); *iClip2 = g_GetProps[GETPROP_WEAPONCLIP2].getInt(pgun,0); }
 	inline static void getAmmoTypes ( edict_t *pgun, int *iAmmoType1, int *iAmmoType2 ) { *iAmmoType1 = g_GetProps[GETPROP_WEAPON_AMMOTYPE1].getInt(pgun,-1); *iAmmoType2 = g_GetProps[GETPROP_WEAPON_AMMOTYPE2].getInt(pgun,-1);} 

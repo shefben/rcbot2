@@ -1750,11 +1750,6 @@ void CBotTF2 :: spawnInit()
 	CBotFortress::spawnInit();
 
 	m_iDesiredResistType = 0;
-	m_pMelee = NULL;
-	m_pPrimary = NULL;
-	m_pSecondary = NULL;
-	m_pHat = NULL;
-	m_pMisc = NULL;
 	m_fUseBuffItemTime = 0.0f;
 	//m_bHatEquipped = false;
 	m_iTrapCPIndex = -1;
@@ -2781,14 +2776,8 @@ void CBotFortress::updateConditions()
 
 void CBotTF2 :: onInventoryApplication ()
 {
-	m_fEquipHatTime = engine->Time() + 0.1f;
+	
 }
-/*
-void CBotTF2 :: addLoadoutWeapon ( CTF2Loadout *weap )
-{
-	m_LoadoutsApplyAttributes.Push(weap);
-}
-*/
 
 bool m_classWasForced = false;
 
@@ -2798,50 +2787,8 @@ void CBotTF2::modThink()
 	static bool bNeedAmmo;
 	static bool bIsCloaked;
 
-	extern ConVar rcbot_customloadouts;
-
 	// FIX: MUST Update class
 	m_iClass = (TF_Class)CClassInterface::getTF2Class(m_pEdict);
-
-	/*
-	if ( rcbot_customloadouts.GetBool() )
-	{
-	if ( !m_bMeleeAttempt && (m_pWeapons->getCurrentWeaponInSlot(TF2_SLOT_MELEE) == NULL) )
-	{
-	m_bMeleeAttempt = true;
-	UTIL_TF2EquipStockWeapon(m_pEdict,TF2_SLOT_MELEE,m_pVTable,m_pVTable_Attributes);
-	}
-	else if ( !m_bPrimaryAttempt && (m_pWeapons->getCurrentWeaponInSlot(TF2_SLOT_PRMRY) == NULL) )
-	{
-	m_bPrimaryAttempt = true;
-	UTIL_TF2EquipStockWeapon(m_pEdict,TF2_SLOT_PRMRY,m_pVTable,m_pVTable_Attributes);
-	}
-	else if ( !m_bSecondaryAttempt && (m_pWeapons->getCurrentWeaponInSlot(TF2_SLOT_SCNDR) == NULL) )
-	{
-	m_bSecondaryAttempt = true;
-	UTIL_TF2EquipStockWeapon(m_pEdict,TF2_SLOT_SCNDR,m_pVTable,m_pVTable_Attributes);
-	}
-	}*/
-
-	/*
-
-	if ( m_toApply.size() > 0 )
-	{
-	CTF2LoadoutAdded *p = m_toApply.top();
-
-	p->m_loadout->applyAttributes(p->m_pEnt);
-
-	m_toApply.pop();
-
-	delete p;
-	}
-	*/
-	/*	if ( !m_LoadoutsApplyAttributes.IsEmpty() )
-		{
-		CTF2Loadout
-		}*/
-
-
 
 	if (CTeamFortress2Mod::isLosingTeam(m_iTeam))
 		wantToShoot(false);
@@ -7776,14 +7723,7 @@ CBotTF2::CBotTF2()
 { 
 		CBotFortress(); 
 		m_iDesiredResistType = 0;
-		m_pHat = NULL;
-		m_pMisc = NULL;
-		m_pSecondary = NULL;
-		m_pPrimary = NULL;
-		m_pMelee = NULL;
-		m_pVTable = m_pVTable_Attributes = NULL;
-		m_bHatEquipped = false;
-		m_fEquipHatTime = 0.0f;
+		m_pVTable = NULL;
 		m_fDispenserPlaceTime = 0.0f;
 		m_fDispenserHealAmount = 0.0f;
 	 m_fTeleporterEntPlacedTime = 0;
@@ -7865,11 +7805,6 @@ bool CBotFortress :: getIgnoreBox ( Vector *vLoc, float *fSize )
 	return false;
 }
 
-CAttribute :: CAttribute ( const char *name, float fval )
-{
-	m_name = CStrings::getString(name);
-	m_fval = fval;
-}
 
 CBotWeapon *CBotTF2::getCurrentWeapon()
 {
