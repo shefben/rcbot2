@@ -123,6 +123,7 @@ class MMSConfig(object):
     self.generated_headers = None
     self.archs = builder.target.arch.replace('x86_64', 'x64').split(',')
     self.mms_root = builder.options.mms_path
+    self.sm_path = builder.options.sm_path or None
 
   def detectProductVersion(self):
     builder.AddConfigureFile('product.version')

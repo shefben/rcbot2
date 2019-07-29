@@ -55,6 +55,10 @@
 #include "engine_wrappers.h"
 #include <shareddefs.h>
 
+#if defined SM_EXT
+#include <bot_sm_ext.h>
+#endif
+
 class CUserCmd;
 class IMoveHelper;
 
@@ -106,6 +110,11 @@ public: //hooks
 	void Hook_ClientCommand(edict_t *pEntity);
 #endif
 
+public: // SourceMod
+#if defined SM_EXT
+	void *OnMetamodQuery(const char* iface, int *ret);
+#endif
+
 public:
 
 	const char *GetAuthor();
@@ -118,6 +127,10 @@ public:
 	const char *GetLogTag();
 
 private:
+#if defined SM_EXT
+	void BindToSourcemod();
+#endif
+
 	int m_iClientCommandIndex;
 
 	// Bot Quota

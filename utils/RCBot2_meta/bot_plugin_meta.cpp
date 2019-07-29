@@ -362,9 +362,9 @@ bool RCBotPluginMeta::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxle
 	META_LOG(g_PLAPI, "Starting plugin.");
 
 	/* Load the VSP listener.  This is usually needed for IServerPluginHelpers. */
+	ismm->AddListener(this, this);
 	if ((vsp_callbacks = ismm->GetVSPInfo(NULL)) == NULL)
 	{
-		ismm->AddListener(this, this);
 		ismm->EnableVSPListener();
 	}
 
@@ -553,6 +553,10 @@ bool RCBotPluginMeta::FireGameEvent(IGameEvent * pevent, bool bDontBroadcast)
 
 bool RCBotPluginMeta::Unload(char *error, size_t maxlen)
 {
+#if defined SM_EXT
+	SM_UnloadExtension();
+#endif
+	
 	SH_REMOVE_HOOK_MEMFUNC(IServerGameDLL, LevelInit, server, this, &RCBotPluginMeta::Hook_LevelInit, true);
 	SH_REMOVE_HOOK_MEMFUNC(IServerGameDLL, ServerActivate, server, this, &RCBotPluginMeta::Hook_ServerActivate, true);
 	SH_REMOVE_HOOK_MEMFUNC(IServerGameDLL, GameFrame, server, this, &RCBotPluginMeta::Hook_GameFrame, true);
@@ -625,7 +629,24 @@ void RCBotPluginMeta::AllPluginsLoaded()
 	/* This is where we'd do stuff that relies on the mod or other plugins 
 	 * being initialized (for example, cvars added and events registered).
 	 */
+#if defined SM_EXT
+	BindToSourcemod();
+#endif
 }
+
+#if defined SM_EXT
+void* RCBotPluginMeta::OnMetamodQuery(const char* iface, int *ret) {
+	if (strcmp(iface, SOURCEMOD_NOTICE_EXTENSIONS) == 0) {
+		BindToSourcemod();
+	}
+	
+	if (ret != NULL) {
+		*ret = IFACE_OK;
+	}
+	
+	return NULL;
+}
+#endif
 
 void RCBotPluginMeta::Hook_ClientActive(edict_t *pEntity, bool bLoadGame)
 {
@@ -1023,3 +1044,15 @@ const char *RCBotPluginMeta::GetURL()
 {
 	return "http://rcbot.bots-united.com/";
 }
+
+#if defined SM_EXT
+void RCBotPluginMeta::BindToSourcemod()
+{
+	char error[256];
+	if (!SM_LoadExtension(error, sizeof(error))) {
+		char message[512];
+		snprintf(message, sizeof(message), "Could not load as a SourceMod extension: %s\n", error);
+		engine->LogPrint(message);
+	}
+}
+#endif
