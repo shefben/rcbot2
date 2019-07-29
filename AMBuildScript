@@ -1,50 +1,3 @@
-proj_name = 'rcbot'
-proj_srcs = [
-  "utils/RCBot2_meta/bot.cpp",
-  "utils/RCBot2_meta/bot_accessclient.cpp",
-  "utils/RCBot2_meta/bot_buttons.cpp",
-  "utils/RCBot2_meta/bot_client.cpp",
-  "utils/RCBot2_meta/bot_commands.cpp",
-  "utils/RCBot2_meta/bot_configfile.cpp",
-  "utils/RCBot2_meta/bot_coop.cpp",
-  "utils/RCBot2_meta/bot_css_bot.cpp",
-  "utils/RCBot2_meta/bot_dod_bot.cpp",
-  "utils/RCBot2_meta/bot_dod_mod.cpp",
-  "utils/RCBot2_meta/bot_events.cpp",
-  "utils/RCBot2_meta/bot_fortress.cpp",
-  "utils/RCBot2_meta/bot_ga.cpp",
-  "utils/RCBot2_meta/bot_ga_ind.cpp",
-  "utils/RCBot2_meta/bot_getprop.cpp",
-  "utils/RCBot2_meta/bot_globals.cpp",
-  "utils/RCBot2_meta/bot_hl1dmsrc.cpp",
-  "utils/RCBot2_meta/bot_hldm_bot.cpp",
-  "utils/RCBot2_meta/bot_kv.cpp",
-  "utils/RCBot2_meta/bot_menu.cpp",
-  "utils/RCBot2_meta/bot_mods.cpp",
-  "utils/RCBot2_meta/bot_mtrand.cpp",
-  "utils/RCBot2_meta/bot_navmesh.cpp",
-  "utils/RCBot2_meta/bot_perceptron.cpp",
-  "utils/RCBot2_meta/bot_profile.cpp",
-  "utils/RCBot2_meta/bot_profiling.cpp",
-  "utils/RCBot2_meta/bot_schedule.cpp",
-  "utils/RCBot2_meta/bot_tf2_points.cpp",
-  "utils/RCBot2_meta/bot_som.cpp",
-  "utils/RCBot2_meta/bot_squads.cpp",
-  "utils/RCBot2_meta/bot_strings.cpp",
-  "utils/RCBot2_meta/bot_task.cpp",
-  "utils/RCBot2_meta/bot_tf2_mod.cpp",
-  "utils/RCBot2_meta/bot_utility.cpp",
-  "utils/RCBot2_meta/bot_visibles.cpp",
-  "utils/RCBot2_meta/bot_waypoint.cpp",
-  "utils/RCBot2_meta/bot_waypoint_locations.cpp",
-  "utils/RCBot2_meta/bot_waypoint_visibility.cpp",
-  "utils/RCBot2_meta/bot_weapons.cpp",
-  "utils/RCBot2_meta/bot_wpt_dist.cpp",
-  "utils/RCBot2_meta/bot_zombie.cpp",
-  "utils/RCBot2_meta/bot_sigscan.cpp",
-  "utils/RCBot2_meta/bot_cvars.cpp",
-  "utils/RCBot2_meta/bot_plugin_meta.cpp"
-]
 proj_c_flags = [
   '-Wall',
   '-Wno-non-virtual-dtor',
@@ -235,7 +188,7 @@ class MMSConfig(object):
       cxx.cflags += proj_c_flags
       cxx.cflags += [ # todo: what is the difference between cflags and cxxflags
         '-fPIC',
-        # '-fno-exceptions', # RCBot2 uses try / catch, so disable this for now
+        '-fno-exceptions',
         '-fno-rtti',
         '-msse',
         '-fno-strict-aliasing',
@@ -248,11 +201,6 @@ class MMSConfig(object):
           '-std=c++11',
           '-w',
           '-D__linux',
-        ]
-        
-        ## RCBot2: BASE_CFLAGS from Makefile.rcbot2
-        cxx.cflags += [
-          '-Dstrcmpi=strcasecmp',
         ]
       # apple clang <-> llvm clang version correspondence is just a guess as there is no way to figure it out for real
       if (cxx.version >= 'gcc-4.7' or cxx.version >= 'clang-3.0' or cxx.version >= 'apple-clang-5.1'):
@@ -310,7 +258,6 @@ class MMSConfig(object):
         cxx.linkflags += ['/NODEFAULTLIB:libcmt']
 
     # This needs to be after our optimization flags which could otherwise disable it.
-	# This needs to be after our optimization flags which could otherwise disable it.
     if cxx.family == 'msvc':
       cxx.cflags += ['/Oy-']
 
@@ -465,17 +412,6 @@ class MMSConfig(object):
       if sdk.name == 'bms':
         compiler.postlink += [compiler.Dep(os.path.join(lib_folder, 'mathlib.a'))]
 
-      ## RCBot2: link other dependencies
-      compiler.postlink += [
-        compiler.Dep(os.path.join(lib_folder, 'mathlib_i486.a')),
-        compiler.Dep(os.path.join(lib_folder, 'tier2_i486.a')),
-        compiler.Dep(os.path.join(lib_folder, 'tier3_i486.a')),
-        'libvstdlib_srv.so',
-        '-lm',
-        '-ldl',
-        '-lpthread'
-      ]
-
     binary = self.LibraryBuilder(compiler, name, arch)
 
     dynamic_libs = [] # todo: this whole section is slightly different, but I imagine it is "more correct"
@@ -506,12 +442,6 @@ class MMSConfig(object):
           lib_path = os.path.join(sdk.path, 'lib', 'public', 'win64', lib) + '.lib'
         binary.compiler.linkflags.append(binary.Dep(lib_path))
 
-    ## RCBot2: additional link options, currently unneeded
-    # binary.compiler.linkflags.append('-Wl,-soname')
-    # binary.compiler.linkflags.append('-Wl,--no-as-needed')
-    # binary.compiler.linkflags.append('/usr/lib/gcc/i686-linux-gnu/5.4.0/libstdc++.a')
-    # binary.compiler.linkflags.append('/usr/lib/gcc/i686-linux-gnu/5.4.0/libgcc_eh.a')
-
     for library in dynamic_libs:
       source_path = os.path.join(lib_folder, library)
       output_path = os.path.join(binary.localFolder, library)
@@ -533,27 +463,13 @@ MMS.detectSDKs()
 MMS.configure()
 
 BuildScripts = [
+  'AMBuilder',
   'loader/AMBuilder'
 ] # add sub-modules here
 if getattr(builder.options, 'enable_tests', False):
     BuildScripts += [] # add tests here
 
 import os
-
-for sdk_name in MMS.sdks:
-  for arch in MMS.archs:
-    sdk = MMS.sdks[sdk_name]
-
-    if not arch in sdk.platformSpec[builder.target.platform]:
-      continue
-
-    name = proj_name + '.' + sdk.ext
-    binary = MMS.HL2Library(builder, name, sdk, arch)
-
-    binary.sources += proj_srcs
-
-    nodes = builder.Add(binary)
-    MMS.binaries += [nodes]
 
 if builder.backend == 'amb2':
   BuildScripts += [
