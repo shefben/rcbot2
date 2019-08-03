@@ -10,6 +10,12 @@
 
 public void OnPluginStart() {
 	RegAdminCmd("sm_addrcbot", AddRCBot, ADMFLAG_ROOT);
+	RegAdminCmd("sm_rcbot_supported", TestRCBotSupport, ADMFLAG_ROOT);
+}
+
+public Action TestRCBotSupport(int client, int argc) {
+	ReplyToCommand(client, "RCBot waypoint available: %b", RCBot2_IsWaypointAvailable());
+	return Plugin_Handled;
 }
 
 public Action AddRCBot(int client, int argc) {

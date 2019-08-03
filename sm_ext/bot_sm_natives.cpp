@@ -3,6 +3,7 @@
 
 #include "bot.h"
 #include "bot_profile.h"
+#include "bot_waypoint.h"
 
 enum RCBotProfileVar {
 	RCBotProfile_iVisionTicks,
@@ -18,7 +19,7 @@ int* GetIntProperty(CBotProfile* profile, RCBotProfileVar profileVar);
 float* GetFloatProperty(CBotProfile* profile, RCBotProfileVar profileVar);
 
 cell_t sm_RCBotIsWaypointAvailable(IPluginContext *pContext, const cell_t *params) {
-	return false;
+	return CWaypoints::numWaypoints() > 0;
 }
 
 cell_t sm_RCBotCreate(IPluginContext *pContext, const cell_t *params) {
