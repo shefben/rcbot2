@@ -26,10 +26,16 @@ same loader shim SourceMod uses to load mod-specific builds.
 - The usage of the install directory has been dropped.  In particular, waypoints must be located
 under `rcbot2/waypoints/${MOD}` instead of nested under a folder matching the name of the
 steamdir.
-- Removed custom loadout and attribute support from TF2.  Other server plugins are better-suited
-and maintained to handle that stuff; this plugin should only deal with bots themselves.
+- Removed custom loadout and attribute support from the TF2 portion of the plugin. Other server
+plugins (namely [tf2attributes][] and [TF2Items][], where the implementation was ported from)
+are better-suited and maintained to handle that stuff; this plugin should only deal with bots
+themselves.
+- The Metamod:Source plugin can now optionally expose natives to SourceMod, adding some
+functionality to control the RCBot2 plugin from SourcePawn.
 
 [AMBuild]: https://wiki.alliedmods.net/AMBuild
+[tf2attributes]: https://github.com/FlaminSarge/tf2attributes
+[TF2Items]: https://github.com/asherkin/TF2Items
 
 ## Installation
 
@@ -65,6 +71,7 @@ passing in `--depth 1` or a few to avoid retrieving the files that were removed 
 	work at this time.
 	- I use the following options (where `${MOD}` is only TF2):
 	`python ../configure.py -s ${MOD} --mms_path ${MMS_PATH} --hl2sdk-root ${HL2SDK_ROOT}`
+	- Specifying an `--sm-path` argument enables linking to SourceMod.
 3. Run `ambuild`.  MetaMod:Source plugin is built and the base install files will be available
 in `build/package`.
 
