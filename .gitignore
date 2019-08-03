@@ -381,3 +381,6 @@ linux_sdk/vcpm
 linux_sdk/Makefile.HPB_bot2_*
 
 build/
+
+# SourceMod compiled plugins
+*.smx

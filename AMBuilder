@@ -68,6 +68,7 @@ if builder.options.sm_path:
   sourceFiles += [
     os.path.join(builder.currentSourcePath, 'sm_ext', 'smsdk_config.cpp'),
     os.path.join(builder.currentSourcePath, 'sm_ext', 'bot_sm_ext.cpp'),
+    os.path.join(builder.currentSourcePath, 'sm_ext', 'bot_sm_natives.cpp'),
   ]
   
   compiler_defines += [ 'SM_EXT', ]

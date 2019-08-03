@@ -1158,6 +1158,7 @@ public:
 	static void botThink ();
 
 	static CBot *getBotPointer ( edict_t *pEdict );
+	static CBot *getBot ( int slot );
 
 	static void freeMapMemory ();
 
@@ -1177,6 +1178,8 @@ public:
 	static bool controlBot ( const char *szOldName, const char *szName, const char *szTeam, const char *szClass );
 
 	static bool createBot (const char *szClass, const char *szTeam, const char *szName);
+
+	static int createDefaultBot(const char* szName);
 
 	static int numBots ();
 

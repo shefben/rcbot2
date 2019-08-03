@@ -3263,6 +3263,23 @@ bool CBots :: createBot (const char *szClass, const char *szTeam, const char *sz
 	}
 }
 
+int CBots::createDefaultBot(const char* name) {
+	edict_t* pEdict = g_pBotManager->CreateBot( name );
+
+	if (!pEdict) {
+		return -1;
+	}
+
+	// hack: there's no way to remove names / profiles here
+	CBotProfile* pBotProfile = new CBotProfile(*CBotProfiles::getDefaultProfile());
+	pBotProfile->m_szName = CStrings::getString(name);
+
+	int slot = slotOfEdict(pEdict);
+	m_Bots[slot]->createBotFromEdict(pEdict, pBotProfile);
+
+	return slot;
+}
+
 void CBots :: botFunction ( IBotFunction *function )
 {
 	for ( unsigned int i = 0; i < MAX_PLAYERS; i ++ )
@@ -3524,6 +3541,13 @@ CBot *CBots :: getBotPointer ( edict_t *pEdict )
 		return pBot;
 
 	return NULL;
+}
+
+CBot* CBots::getBot(int slot) {
+	CBot *pBot = m_Bots[slot];
+	if ( pBot->inUse() )
+		return pBot;
+	return nullptr;
 }
 
 void CBots :: freeMapMemory ()
