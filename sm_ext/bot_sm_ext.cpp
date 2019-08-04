@@ -14,6 +14,7 @@ bool RCBotSourceModExt::OnExtensionLoad(IExtension *me, IShareSys *sys,  char *e
 		return false;
 	}
 
+	sharesys->RegisterLibrary(myself, "RCBot2");
 	sharesys->AddNatives(myself, g_RCBotNatives);
 	return true;
 }

@@ -40,7 +40,8 @@ native bool RCBot2_IsWaypointAvailable();
 native int RCBot2_CreateBot(const char[] name);
 
 /**
- * Returns true if the client index is an RCBot2 bot.
+ * Returns true if the client index is an RCBot2 bot.  This does not currently true until after
+ * the bot is in the game.
  * 
  * @error Client not in game or invalid client index.
  */
