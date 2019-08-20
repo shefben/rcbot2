@@ -98,11 +98,9 @@ ConVar rcbot_show_welcome_msg("rcbot_show_welcome_msg", "1", 0, "Show welcome me
 ConVar rcbot_force_class("rcbot_force_class", "0", 0, "Force bots to choose specified class, kills alive bots on change (1 - 9, set to 0 for none)");
 
 ConVar *sv_gravity = NULL;
-ConVar *sv_cheats = NULL;//("sv_cheats");
 ConVar *mp_teamplay = NULL;
 ConVar *sv_tags = NULL;
 ConVar *mp_friendlyfire = NULL;
-ConCommandBase *puppet_bot_cmd = NULL;
 ConVar *mp_stalemate_enable = NULL;
 ConVar *mp_stalemate_meleeonly = NULL;
 
@@ -110,11 +108,9 @@ void RCBOT2_Cvar_setup (ICvar *cvar)
 {
 	mp_stalemate_enable = cvar->FindVar("mp_stalemate_enable");
 	mp_stalemate_meleeonly = cvar->FindVar("mp_stalemate_meleeonly");
-	sv_cheats = cvar->FindVar("sv_cheats");
 	sv_gravity = cvar->FindVar("sv_gravity");
 	mp_friendlyfire = cvar->FindVar("mp_friendlyfire");
 	sv_tags = cvar->FindVar("sv_tags");
-	puppet_bot_cmd = cvar->FindCommand("bot");
 	mp_teamplay = cvar->FindVar("mp_teamplay");
 
 	if ( sv_tags != NULL )

@@ -431,7 +431,6 @@ bool CHalfLifeDeathmatchMod :: playerSpawned ( edict_t *pPlayer )
 
 void CHalfLifeDeathmatchMod :: initMod ()
 {
-	CBots::controlBotSetup(false);
 
 	CWeapons::loadWeapons((m_szWeaponListName==NULL)?"HL2DM":m_szWeaponListName, HL2DMWeaps);
 	

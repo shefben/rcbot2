@@ -170,9 +170,6 @@ void CDODMod :: initMod ()
 	CBotGlobals::botMessage(NULL,0,"... done!");
 ///-------------------------------------------------
 
-
-	CBots::controlBotSetup(true);
-
 	CWeapons::loadWeapons((m_szWeaponListName == NULL) ? "DOD" : m_szWeaponListName, DODWeaps);
 	//CWeapons::loadWeapons("DOD", DODWeaps);
 	/*

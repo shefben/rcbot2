@@ -1168,11 +1168,6 @@ public:
 
 	static void init ();
 
-	static void controlBotSetup ( bool m_bSetting ) { m_bControlBotsOnly = m_bSetting; }
-
-	// If true, then a puppet bot must be added to be controlled
-	static bool controlBots () { return m_bControlBotsOnly; }
-
 	static bool controlBot ( edict_t *pEdict );
 
 	static bool controlBot ( const char *szOldName, const char *szName, const char *szTeam, const char *szClass );
@@ -1182,8 +1177,6 @@ public:
 	static int createDefaultBot(const char* szName);
 
 	static int numBots ();
-
-	static bool handlePlayerJoin ( edict_t *pEdict, const char *name );
 
 	static int slotOfEdict ( edict_t *pEdict );
 
@@ -1209,8 +1202,6 @@ public:
 
 	static void botFunction ( IBotFunction *function );
 
-	static void handleAutomaticControl ();
-
 	static void runPlayerMoveAll ();
 
 	static bool addBot ( const char *szClass, const char *szTeam, const char *szName );
@@ -1225,18 +1216,8 @@ private:
 	static int m_iMaxBots;
 	static int m_iMinBots;
 
-	// Workaround for add bot bug
-	//
-	static bool m_bControlBotsOnly;
-	static bool m_bControlNext;
-	static CBotProfile *m_pNextProfile;
-	static char m_szNextName[64];
-	// End - workaround
-
 	// add or kick bot time
 	static float m_flAddKickBotTime;
-
-	static std::queue<edict_t*> m_ControlQueue;
 
 	static std::queue<CAddbot> m_AddBotQueue;
 

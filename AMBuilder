@@ -73,6 +73,14 @@ if builder.options.sm_path:
   
   compiler_defines += [ 'SM_EXT', ]
 
+# List of SDK names that require hooks on runcmd
+mods_requiring_runcmd_overrides = [
+  # hack: DOD:S uses `Bot_Think`, which forces all `bot`-spawned entities to use Valve's
+  # default bot AI.  we'll hook into their RunPlayerMove for now, but for consistency across
+  # games it'd be better to supercede `Bot_Think` (or `Bot_RunAll` higher up the call stack)
+  'dods',
+]
+
 ###############
 # Make sure to edit PackageScript, which copies your files to their appropriate locations
 # Simple extensions do not need to modify past this point.
@@ -104,6 +112,9 @@ for sdk_name in MMS.sdks:
 
     cxx.cxxincludes += include_paths
     cxx.defines += compiler_defines
+
+    if sdk_name in mods_requiring_runcmd_overrides:
+      cxx.defines += [ 'OVERRIDE_RUNCMD' ]
 
     # RCBot:  Library requires exceptions
     if '-fno-exceptions' in cxx.cflags: cxx.cflags.remove('-fno-exceptions')

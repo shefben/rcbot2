@@ -438,12 +438,10 @@ bool RCBotPluginMeta::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxle
 
 	CBotMod *pMod = CBotGlobals::getCurrentMod();
 
-	if (CBots::controlBots())
-	{
-		#if SOURCE_ENGINE == SE_DODS
-			SH_MANUALHOOK_RECONFIGURE(MHook_PlayerRunCmd, rcbot_runplayercmd_dods.GetInt(), 0, 0);
-		#endif
-	}
+#ifdef OVERRIDE_RUNCMD
+	// TODO figure out a more robust gamedata fix instead of vtable
+	SH_MANUALHOOK_RECONFIGURE(MHook_PlayerRunCmd, rcbot_runplayercmd_dods.GetInt(), 0, 0);
+#endif
 
 	ENGINE_CALL(LogPrint)("All hooks started!\n");
 
@@ -594,17 +592,6 @@ bool RCBotPluginMeta::Unload(char *error, size_t maxlen)
 	//if ( gameevents )
 	//	gameevents->RemoveListener(this);
 
-	// Reset Cheat Flag
-	if ( puppet_bot_cmd != NULL )
-	{
-		if ( !puppet_bot_cmd->IsFlagSet(FCVAR_CHEAT) )
-		{
-			int *m_nFlags = (int*)((unsigned long)puppet_bot_cmd + BOT_CONVAR_FLAGS_OFFSET); // 20 is offset to flags
-			
-			*m_nFlags |= FCVAR_CHEAT;
-		}
-	}
-
 	ConVar_Unregister( );
 
 	return true;
@@ -746,11 +733,8 @@ void RCBotPluginMeta::Hook_ClientPutInServer(edict_t *pEntity, char const *playe
 
 	CClient *pClient = CClients::clientConnected(pEntity);
 
-	if ( CBots::controlBots() )
-		is_Rcbot = CBots::handlePlayerJoin(pEntity,playername);
-	
 	if ( !is_Rcbot && pClient )
-	{	
+	{
 		if ( !engine->IsDedicatedServer() )
 		{
 			if ( CClients::noListenServerClient() )
@@ -767,24 +751,24 @@ void RCBotPluginMeta::Hook_ClientPutInServer(edict_t *pEntity, char const *playe
 
 	pMod->playerSpawned(pEntity);
 
+#ifdef OVERRIDE_RUNCMD
 	if ( pEnt )
 	{
-		if (CBots::controlBots())
-			SH_ADD_MANUALHOOK_MEMFUNC(MHook_PlayerRunCmd, pEnt, this, &RCBotPluginMeta::Hook_PlayerRunCmd, false);
+		SH_ADD_MANUALHOOK_MEMFUNC(MHook_PlayerRunCmd, pEnt, this, &RCBotPluginMeta::Hook_PlayerRunCmd, false);
 	}
+#endif
 }
 
 void RCBotPluginMeta::Hook_ClientDisconnect(edict_t *pEntity)
 {
 	CBaseEntity *pEnt = servergameents->EdictToBaseEntity(pEntity);
 
+#ifdef OVERRIDE_RUNCMD
 	if ( pEnt )
 	{
-		CBotMod *pMod = CBotGlobals::getCurrentMod();
-
-		if (CBots::controlBots())
-			SH_REMOVE_MANUALHOOK_MEMFUNC(MHook_PlayerRunCmd, pEnt, this, &RCBotPluginMeta::Hook_PlayerRunCmd, false);
+		SH_REMOVE_MANUALHOOK_MEMFUNC(MHook_PlayerRunCmd, pEnt, this, &RCBotPluginMeta::Hook_PlayerRunCmd, false);
 	}
+#endif
 
 	CClients::clientDisconnected(pEntity);
 
@@ -805,9 +789,6 @@ void RCBotPluginMeta::Hook_GameFrame(bool simulating)
 	if ( simulating && CBotGlobals::IsMapRunning() )
 	{
 		CBots::botThink();
-		//if ( !CBots::controlBots() )
-			//gameclients->PostClientMessagesSent();
-		CBots::handleAutomaticControl();
 		CClients::clientThink();
 
 		if ( CWaypoints::getVisiblity()->needToWorkVisibility() )

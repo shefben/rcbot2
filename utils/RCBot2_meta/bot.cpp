@@ -113,12 +113,7 @@ const float CBot :: m_fAttackLowestHoldTime = 0.1f;
 const float CBot :: m_fAttackHighestHoldTime = 0.6f;
 const float CBot :: m_fAttackLowestLetGoTime = 0.1f;
 const float CBot :: m_fAttackHighestLetGoTime = 0.5f;
-bool CBots :: m_bControlBotsOnly = false;
-bool CBots :: m_bControlNext = false;
 std::queue<CAddbot> CBots::m_AddBotQueue;
-CBotProfile *CBots :: m_pNextProfile = NULL;
-std::queue<edict_t*> CBots :: m_ControlQueue;
-char CBots :: m_szNextName[64];
 
 int CBots :: m_iMaxBots = -1;
 int CBots :: m_iMinBots = -1;
@@ -248,10 +243,11 @@ void CBot :: runPlayerMove()
 			CClients::clientDebugMsg(BOT_DEBUG_BUTTONS,dbg,this);
 	}
 
-	// Controlling will be done in the PlayerRunCommand hook if controlling puppet bots
-	// see bot_main.cpp
-	if ( !CBots::controlBots() )
-		m_pController->RunPlayerMove(&cmd);
+#ifndef OVERRIDE_RUNCMD
+	// Controlling will be done in the RCBotPluginMeta::Hook_PlayerRunCmd hook if controlling puppet bots
+	// see bot_plugin_meta.cpp
+	m_pController->RunPlayerMove(&cmd);
+#endif
 }
 
 bool CBot :: startGame ()
@@ -3164,8 +3160,8 @@ bool CBots :: controlBot ( const char *szOldName, const char *szName, const char
 }
 
 bool CBots :: createBot (const char *szClass, const char *szTeam, const char *szName)
-{		
-	edict_t *pEdict;	
+{
+	edict_t *pEdict;
 	CBotProfile *pBotProfile;
 	CBotMod *pMod = CBotGlobals::getCurrentMod();
 	extern ConVar rcbot_addbottime;
@@ -3189,78 +3185,16 @@ bool CBots :: createBot (const char *szClass, const char *szTeam, const char *sz
 			return false;
 	}
 
-	m_pNextProfile = pBotProfile;
-
 	SET_PROFILE_DATA_INT(szClass,m_iClass);
 	SET_PROFILE_DATA_INT(szTeam,m_iTeam);
 	SET_PROFILE_STRING(szName,szOVName,m_szName);
 
-	strncpy(m_szNextName,szOVName,63);
-	m_szNextName[63] = 0;
+	pEdict = g_pBotManager->CreateBot( szOVName );
 
-	if ( CBots::controlBots() )
-	{
-		extern ConVar bot_sv_cheats_auto;
+	if ( pEdict == NULL )
+		return false;
 
-		char cmd[128];
-		memset(cmd, 0, sizeof(cmd));
-
-		extern ConCommandBase *puppet_bot_cmd;
-
-		// Attempt to make puppet bot command cheat free
-		if ( puppet_bot_cmd != NULL )
-		{
-			if ( /*bot_cmd_nocheats.GetBool() &&*/ puppet_bot_cmd->IsFlagSet(FCVAR_CHEAT) )
-			{
-				int *m_nFlags = (int*)((unsigned long)puppet_bot_cmd + BOT_CONVAR_FLAGS_OFFSET); // 20 is offset to flags
-				//nPrevFlags = *m_nFlags;
-				*m_nFlags &= ~FCVAR_CHEAT;
-				//bChangedFlags = true;
-			}
-		}
-
-		extern ConVar *sv_cheats;
-	
-		// const char *pparg[1];
-		// pparg[0] = cmd;
-
-		sprintf(cmd,"%s -name \"%s\"\n",BOT_ADD_PUPPET_COMMAND,szOVName);
-
-		// CCommand *com = new CCommand(1,pparg);
-
-		int *m_nFlags = (int*)((unsigned long)sv_cheats + BOT_CONVAR_FLAGS_OFFSET); // 20 is offset to flags
-
-		if ( sv_cheats->IsFlagSet(FCVAR_NOTIFY) )
-			*m_nFlags &= ~FCVAR_NOTIFY;
-
-		if ( pMod->needCheatsHack() )
-			sv_cheats->SetValue(1);
-
-		m_bControlNext = true;
-
-		engine->ServerCommand(cmd);
-		engine->ServerExecute();
-
-		// ((ConCommand*)puppet_bot_cmd)->Dispatch(*com);
-
-		if ( pMod->needCheatsHack() )
-			sv_cheats->SetValue(0);
-
-		*m_nFlags |= FCVAR_NOTIFY;
-
-		// delete com;
-
-		return true;
-	}
-	else
-	{
-		pEdict = g_pBotManager->CreateBot( szOVName );
-
-		if ( pEdict == NULL )
-			return false;
-
-		return ( m_Bots[slotOfEdict(pEdict)]->createBotFromEdict(pEdict,pBotProfile) );
-	}
+	return ( m_Bots[slotOfEdict(pEdict)]->createBotFromEdict(pEdict,pBotProfile) );
 }
 
 int CBots::createDefaultBot(const char* name) {
@@ -3683,53 +3617,6 @@ void CBots :: kickRandomBotOnTeam ( int team )
 	engine->ServerCommand(szCommand);
 }
 ////////////////////////
-
-bool CBots :: handlePlayerJoin ( edict_t *pEdict, const char *name )
-{
-	static int botnum;
-
-	if ( m_bControlNext && 
-		((strcmp(&name[strlen(name)-strlen(m_szNextName)],m_szNextName) == 0) || (sscanf(name,"Bot%d",&botnum) == 1)) )
-	{
-		m_ControlQueue.push(pEdict);
-		m_bControlNext = false;
-
-		return true;
-	}
-
-	return false;
-}
-
-void CBots :: handleAutomaticControl ()
-{
-	if ( !m_ControlQueue.empty() )
-	{
-		edict_t *pEdict = (edict_t*)m_ControlQueue.front();
-
-		IPlayerInfo *p = playerinfomanager->GetPlayerInfo(pEdict);
-
-		// wait until fake client flag is set
-		if ( p && p->IsFakeClient() )
-		{
-			// until it has an 'unknown' remove from queue and create bot
-			if ( pEdict->GetUnknown() )
-			{
-				//extern ConVar rcbot_runplayercmd;
-
-				m_ControlQueue.pop();
-
-				//HookPlayerRunCommand(pEdict);
-
-				//engine->SetFakeClientConVarValue( pEdict, "name",m_pNextProfile->getName() );
-
-				m_Bots[slotOfEdict(pEdict)]->createBotFromEdict(pEdict,m_pNextProfile);
-			}
-		}
-		
-	}
-}
-
-
 
 CBotLastSee :: CBotLastSee ( edict_t *pEdict )
 {

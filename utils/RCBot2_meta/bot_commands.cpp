@@ -1003,7 +1003,7 @@ eBotCommandResult CAddBotCommand :: execute ( CClient *pClient, const char *pcmd
 	//extern ConVar bot_sv_cheats_auto;
 	//extern ConVar bot_sv_cheat_warning;
 
-	//if ( !bot_sv_cheat_warning.GetBool() || bot_sv_cheats_auto.GetBool() || !CBots::controlBots() || (!sv_cheats || sv_cheats->GetBool()) )
+	//if ( !bot_sv_cheat_warning.GetBool() || bot_sv_cheats_auto.GetBool() || (!sv_cheats || sv_cheats->GetBool()) )
 	//{
 		//if ( !pcmd || !*pcmd )
 		//	bOkay = CBots::createBot();

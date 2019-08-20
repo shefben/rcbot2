@@ -91,7 +91,6 @@ public:
 		m_iBotType = BOTTYPE_GENERIC;
 		m_bPlayerHasSpawned = false;
 		m_bBotCommand_ResetCheatFlag = false;
-		m_bBotCommand_NeedCheatsHack = false;
 	}
 
 	virtual bool checkWaypointForTeam(CWaypoint *pWpt, int iTeam)
@@ -139,11 +138,6 @@ public:
 		*iOff = 0;
 	}
 
-	inline bool needCheatsHack ()
-	{
-		return m_bBotCommand_NeedCheatsHack;
-	}
-
 	inline bool needResetCheatFlag ()
 	{
 		return m_bBotCommand_ResetCheatFlag;
@@ -157,7 +151,6 @@ protected:
 	char *m_szWeaponListName;
 	bool m_bPlayerHasSpawned;
 	bool m_bBotCommand_ResetCheatFlag;
-	bool m_bBotCommand_NeedCheatsHack;
 };
 
 ///////////////////
@@ -530,8 +523,6 @@ public:
 	CDODMod()
 	{
 		setup("dod",MOD_DOD,BOTTYPE_DOD,"DOD");
-
-		m_bBotCommand_NeedCheatsHack = false;
 	}
 
 	static void roundStart ();
@@ -768,7 +759,6 @@ public:
 		setup("tf",MOD_TF2,BOTTYPE_TF2,"TF2");
 
 		m_pResourceEntity = NULL;
-		m_bBotCommand_NeedCheatsHack = true;
 	}
 
 	void mapInit ();
