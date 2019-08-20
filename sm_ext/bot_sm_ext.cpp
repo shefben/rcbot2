@@ -1,4 +1,5 @@
 #include "bot_sm_ext.h"
+#include "bot_sm_natives.h"
 
 using namespace SourceMod;
 
