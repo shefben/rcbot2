@@ -1167,7 +1167,7 @@ public:
 
 	static void roundStart ();
 
-	static void kickRandomBot ();
+	static void kickRandomBot (size_t count = 1);
 
 	static void kickRandomBotOnTeam ( int team );
 

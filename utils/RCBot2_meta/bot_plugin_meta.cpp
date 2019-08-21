@@ -832,7 +832,6 @@ void RCBotPluginMeta::BotQuotaCheck() {
 
 		// Target Bot Count
 		int bot_target = 0;
-		int bot_diff = 0;
 
 		// Change Notification
 		bool notify = false;
@@ -871,16 +870,11 @@ void RCBotPluginMeta::BotQuotaCheck() {
 		bot_target = m_iTargetBots[human_count];
 
 		// Change Bot Quota
-		if (bot_target < bot_count) {
-			bot_diff = bot_count - bot_target;
-
-			for (int i = 0; i < bot_diff; ++i) {
-				CBots::kickRandomBot();
-			}
-
+		if (bot_count > bot_target) {
+			CBots::kickRandomBot(bot_count - bot_target);
 			notify = true;
 		} else if (bot_target > bot_count) {
-			bot_diff = bot_target - bot_count;
+			int bot_diff = bot_target - bot_count;
 
 			for (int i = 0; i < bot_diff; ++i) {
 				CBots::createBot("", "", "");

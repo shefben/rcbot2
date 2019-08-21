@@ -97,6 +97,9 @@
 #include "bot_getprop.h"
 #include "bot_profiling.h"
 
+#include <vector>
+#include <algorithm>
+
 #define DEG_TO_RAD(x) (x)*0.0174533
 #define RAD_TO_DEG(x) (x)*57.29578
 
@@ -3496,35 +3499,39 @@ bool CBots :: needToKickBot ()
 	return false;
 }
 
-void CBots :: kickRandomBot ()
+void CBots :: kickRandomBot (size_t count)
 {
-	dataUnconstArray<int> list;
-	int index;
-	CBot *tokick;
+	std::vector<int> list;
 	char szCommand[512];
 	//gather list of bots
-	for ( short int i = 0; i < MAX_PLAYERS; i ++ )
+	for ( size_t i = 0; i < MAX_PLAYERS; i ++ )
 	{
 		if ( m_Bots[i]->inUse() )
-			list.Add(i);
+			list.push_back(i);
 	}
 
-	if ( list.IsEmpty() )
+	if ( list.empty() )
 	{
 		CBotGlobals::botMessage(NULL,0,"kickRandomBot() : No bots to kick");
 		return;
 	}
 
-	index = list.Random();
-	list.Clear();
-	
-	tokick = m_Bots[index];
-	
-	sprintf(szCommand,"kickid %d\n",tokick->getPlayerID());
+	std::random_shuffle ( list.begin(), list.end() );
+
+	size_t numBotsKicked = 0;
+	while (numBotsKicked < count && list.size()) {
+		size_t index = list.back();
+		list.pop_back();
+		
+		CBot *tokick = m_Bots[index];
+
+		sprintf(szCommand,"kickid %d\n",tokick->getPlayerID());
+
+		engine->ServerCommand(szCommand);
+		numBotsKicked++;
+	}
 
 	m_flAddKickBotTime = engine->Time() + 2.0f;
-
-	engine->ServerCommand(szCommand);
 }
 
 void CBots :: kickRandomBotOnTeam ( int team )
