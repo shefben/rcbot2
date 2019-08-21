@@ -818,7 +818,8 @@ void RCBotPluginMeta::Hook_GameFrame(bool simulating)
 }
 
 void RCBotPluginMeta::BotQuotaCheck() {
-	if (rcbot_bot_quota_interval.GetInt() < 0) {
+	// this is configured with config/bot_quota.ini
+	if (rcbot_bot_quota_interval.GetInt() <= 0) {
 		return;
 	}
 
