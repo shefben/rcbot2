@@ -100,10 +100,6 @@
 #define DEG_TO_RAD(x) (x)*0.0174533
 #define RAD_TO_DEG(x) (x)*57.29578
 
-// for critical sections
-CThreadMutex g_MutexAddBot;
-CThreadMutex g_MutexBotThink;
-
 //extern void HookPlayerRunCommand ( edict_t *edict );
 
 // instantiate bots -- make different for different mods
@@ -113,7 +109,6 @@ const float CBot :: m_fAttackLowestHoldTime = 0.1f;
 const float CBot :: m_fAttackHighestHoldTime = 0.6f;
 const float CBot :: m_fAttackLowestLetGoTime = 0.1f;
 const float CBot :: m_fAttackHighestLetGoTime = 0.5f;
-std::queue<CAddbot> CBots::m_AddBotQueue;
 
 int CBots :: m_iMaxBots = -1;
 int CBots :: m_iMinBots = -1;
@@ -3363,11 +3358,9 @@ void CBots :: botThink ()
 
 				#endif				
 
-				g_MutexBotThink.Lock();
 				pBot->setMoveLookPriority(MOVELOOK_THINK);
 				pBot->think();
 				pBot->setMoveLookPriority(MOVELOOK_EVENT);
-				g_MutexBotThink.Unlock();
 
 				#ifdef _DEBUG
 
@@ -3398,63 +3391,14 @@ void CBots :: botThink ()
 
 #endif
 
-	if ( (m_flAddKickBotTime < engine->Time()) && (needToAddBot () || (m_AddBotQueue.size()>0)) )
+	if ( (m_flAddKickBotTime < engine->Time()) && needToAddBot() )
 	{
-		// lock the critical section
-		g_MutexAddBot.Lock();
-
-		if ( m_AddBotQueue.size() > 0 ) {
-			CAddbot newbot = m_AddBotQueue.front();
-			m_AddBotQueue.pop();
-
-			CBotGlobals::botMessage(NULL,0,"adding bot %s %s %s",CHECK_STRING(newbot.m_szClass),CHECK_STRING(newbot.m_szTeam),CHECK_STRING(newbot.m_szBotName));
-			createBot(newbot.m_szClass,newbot.m_szTeam,newbot.m_szBotName);
-		} else {
-			createBot(NULL,NULL,NULL);
-		}
-
-		// unlock the critical section
-		g_MutexAddBot.Unlock();
+		createBot(NULL,NULL,NULL);
 	}
 	else if ( needToKickBot () )
 	{
 		kickRandomBot();
-
-		/*if ( m_iMaxBots >= 0 )
-		{
-			m_iMaxBots--;
-			CBotGlobals::botMessage(NULL,0,"max bots changed to %d",m_iMaxBots);
-		}*/
 	}
-}
-
-bool CBots :: addBot ( const char *szClass, const char *szTeam, const char *szName )
-{
-	// lock the critical section
-	g_MutexAddBot.Lock();
-
-	int numClients = CBotGlobals::numClients();
-	int botQueueSize = m_AddBotQueue.size();
-	int maxClients = gpGlobals->maxClients;
-
-	bool successful = false;
-
-	if ( (numClients + botQueueSize) < maxClients )
-	{
-		CAddbot newbot;
-
-		newbot.m_szClass = CStrings::getString(szClass);
-		newbot.m_szTeam = CStrings::getString(szTeam);
-		newbot.m_szBotName = CStrings::getString(szName);
-
-		m_AddBotQueue.push(newbot);
-		successful = true;
-	}
-
-	// unlock the critical section
-	g_MutexAddBot.Unlock();
-
-	return successful;
 }
 
 CBot *CBots :: getBotPointer ( edict_t *pEdict )

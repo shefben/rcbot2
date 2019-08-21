@@ -882,7 +882,7 @@ void RCBotPluginMeta::BotQuotaCheck() {
 			bot_diff = bot_target - bot_count;
 
 			for (int i = 0; i < bot_diff; ++i) {
-				CBots::addBot("", "", "");
+				CBots::createBot("", "", "");
 				break; // Bug-Fix, only add one bot at a time
 			}
 

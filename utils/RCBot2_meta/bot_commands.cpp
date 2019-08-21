@@ -1010,8 +1010,7 @@ eBotCommandResult CAddBotCommand :: execute ( CClient *pClient, const char *pcmd
 		//else
 		//bOkay = CBots::createBot();
 
-		///if ( CBots::createBot(pcmd,arg1,arg2) )
-		if ( CBots::addBot(pcmd,arg1,arg2) )
+		if ( CBots::createBot(pcmd,arg1,arg2) )
 			CBotGlobals::botMessage(pEntity,0,"bot adding...");
 		else
 			CBotGlobals::botMessage(pEntity,0,"error: couldn't create bot! (Check maxplayers)");

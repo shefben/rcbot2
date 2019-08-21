@@ -1137,21 +1137,6 @@ protected:
 	bool m_bWantToInvestigateSound;
 };
 
-class CAddbot
-{
-
-public:
-
-	CAddbot ()
-	{
-		memset(this,sizeof(CAddbot),0);
-	};
-
-	const char *m_szClass;
-	const char *m_szTeam;
-	const char *m_szBotName;
-};
-
 class CBots
 {
 public:
@@ -1204,8 +1189,6 @@ public:
 
 	static void runPlayerMoveAll ();
 
-	static bool addBot ( const char *szClass, const char *szTeam, const char *szName );
-
 	static CBot *get ( int iIndex ) { return m_Bots[iIndex]; }
 	static CBot *get ( edict_t *pPlayer ) { return m_Bots[slotOfEdict(pPlayer)]; }
 
@@ -1218,8 +1201,6 @@ private:
 
 	// add or kick bot time
 	static float m_flAddKickBotTime;
-
-	static std::queue<CAddbot> m_AddBotQueue;
 
 };
 
