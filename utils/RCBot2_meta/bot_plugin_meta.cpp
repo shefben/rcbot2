@@ -848,7 +848,7 @@ void RCBotPluginMeta::BotQuotaCheck() {
 			if (bot != NULL && bot->getEdict() != NULL && bot->inUse()) {
 				IPlayerInfo *p = playerinfomanager->GetPlayerInfo(bot->getEdict());
 
-				if (p->IsConnected() && p->IsFakeClient()) {
+				if (p->IsConnected() && p->IsFakeClient() && !p->IsHLTV()) {
 					bot_count++;
 				}
 			}
@@ -856,7 +856,7 @@ void RCBotPluginMeta::BotQuotaCheck() {
 			if (client != NULL && client->getPlayer() != NULL && client->isUsed()) {
 				IPlayerInfo *p = playerinfomanager->GetPlayerInfo(client->getPlayer());
 
-				if (p->IsConnected() && !p->IsFakeClient()) {
+				if (p->IsConnected() && !p->IsFakeClient() && !p->IsHLTV()) {
 					human_count++;
 				}
 			}
