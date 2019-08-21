@@ -55,9 +55,6 @@
 #include "bot_kv.h"
 #include "bot_sigscan.h"
 
-//#include "ndebugoverlay.h"
-CBotTF2 *g_pLastBot;
-
 SH_DECL_HOOK6(IServerGameDLL, LevelInit, SH_NOATTRIB, 0, bool, char const *, char const *, char const *, char const *, bool, bool);
 SH_DECL_HOOK3_void(IServerGameDLL, ServerActivate, SH_NOATTRIB, 0, edict_t *, int, int);
 SH_DECL_HOOK1_void(IServerGameDLL, GameFrame, SH_NOATTRIB, 0, bool);
@@ -306,13 +303,8 @@ void RCBotPluginMeta::Hook_PlayerRunCmd(CUserCmd *ucmd, IMoveHelper *moveHelper)
 		ucmd->weaponsubtype = cmd->weaponsubtype;
 		ucmd->tick_count = cmd->tick_count;
 		ucmd->command_number = cmd->command_number;
-
-		g_pLastBot = (CBotTF2*)pBot;
 	}
-
-//g_pSM->LogMessage(NULL, "H %i %i %f %f %f %f %i", ucmd->command_number, ucmd->tick_count, ucmd->viewangles.x, ucmd->viewangles.y, ucmd->viewangles.z, ucmd->forwardmove, ucmd->buttons); 
-
-RETURN_META(MRES_IGNORED); 
+	RETURN_META(MRES_IGNORED);
 }
 
 /** 
