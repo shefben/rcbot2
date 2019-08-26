@@ -55,6 +55,8 @@
 #include "bot_kv.h"
 #include "bot_sigscan.h"
 
+#include <build_info.h>
+
 SH_DECL_HOOK6(IServerGameDLL, LevelInit, SH_NOATTRIB, 0, bool, char const *, char const *, char const *, char const *, bool, bool);
 SH_DECL_HOOK3_void(IServerGameDLL, ServerActivate, SH_NOATTRIB, 0, edict_t *, int, int);
 SH_DECL_HOOK1_void(IServerGameDLL, GameFrame, SH_NOATTRIB, 0, bool);
@@ -99,7 +101,7 @@ RCBotPluginMeta g_RCBotPluginMeta;
 
 PLUGIN_EXPOSE(RCBotPluginMeta, g_RCBotPluginMeta);
 
-static ConVar rcbot2_ver_cvar(BOT_VER_CVAR, BOT_VER, FCVAR_REPLICATED, BOT_NAME_VER);
+static ConVar rcbot2_ver_cvar("rcbot_ver", build_info::long_version, FCVAR_REPLICATED, "RCbot version");
 
 CON_COMMAND(rcbotd, "access the bot commands on a server")
 {
@@ -980,12 +982,12 @@ const char *RCBotPluginMeta::GetLicense()
 
 const char *RCBotPluginMeta::GetVersion()
 {
-	return "1.01 (r487-apg-ch)";
+	return build_info::short_version;
 }
 
 const char *RCBotPluginMeta::GetDate()
 {
-	return __DATE__;
+	return build_info::date;
 }
 
 const char *RCBotPluginMeta::GetLogTag()
@@ -995,7 +997,7 @@ const char *RCBotPluginMeta::GetLogTag()
 
 const char *RCBotPluginMeta::GetAuthor()
 {
-	return "Cheeseh, RoboCop";
+	return build_info::authors;
 }
 
 const char *RCBotPluginMeta::GetDescription()
@@ -1010,7 +1012,7 @@ const char *RCBotPluginMeta::GetName()
 
 const char *RCBotPluginMeta::GetURL()
 {
-	return "http://rcbot.bots-united.com/";
+	return build_info::url;
 }
 
 #if defined SM_EXT

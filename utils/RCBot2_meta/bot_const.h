@@ -187,18 +187,7 @@ typedef enum
 
 #undef ENTINDEX
 #define ENTINDEX(pEdict) engine->IndexOfEdict(pEdict)
-/*
-#define BUILDNAME "TF2/HL2DM/DOD:S"
-#define BUILDVER "BETA"
-#define BUILDNUM "365"*/
-#define BOT_NAME "RCBot"
-#ifdef __linux__
-#define BOT_VER "TF2/HL2DM/DOD:S 1.04 META Linux 488-apg (merge) (BUILD " __DATE__ "-" __TIME__ ")" //bir3yk
-#else
-#define BOT_VER "TF2/HL2DM/DOD:S 1.04 META Win32 488-apg (merge) (BUILD " ## __DATE__ ## "-" ## __TIME__ ## ")"
-#endif
-#define BOT_NAME_VER "RCbot version"
-#define BOT_VER_CVAR "rcbot_ver"
+
 #define BOT_FOLDER "rcbot2"
 
 typedef enum
