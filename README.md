@@ -72,6 +72,8 @@ passing in `--depth 1` or a few to avoid retrieving the files that were removed 
 	- I use the following options (where `${MOD}` is only TF2):
 	`python ../configure.py -s ${MOD} --mms_path ${MMS_PATH} --hl2sdk-root ${HL2SDK_ROOT}`
 	- Specifying an `--sm-path` argument enables linking to SourceMod.
+	- Note that the automatic versioning system requires an installation of `git` and a
+	relatively modern version of Python 3.
 3. Run `ambuild`.  MetaMod:Source plugin is built and the base install files will be available
 in `build/package`.
 
