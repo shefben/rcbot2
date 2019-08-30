@@ -5143,9 +5143,7 @@ bool CBotTF2::lookAfterBuildings ( float *fTime )
 
 bool CBotTF2 :: select_CWeapon ( CWeapon *pWeapon )
 {
-	char cmd[128];
 	CBotWeapon *pBotWeapon;
-
 	pBotWeapon = m_pWeapons->getWeapon(pWeapon);
 
 	if ( pBotWeapon && !pBotWeapon->hasWeapon() )
@@ -5153,9 +5151,9 @@ bool CBotTF2 :: select_CWeapon ( CWeapon *pWeapon )
 	if ( pBotWeapon && !pBotWeapon->isMelee() && pBotWeapon->canAttack() && pBotWeapon->outOfAmmo(this) )
 		return false;
 
-	sprintf(cmd,"use %s",pWeapon->getWeaponName());
-
-	helpers->ClientCommand(m_pEdict,cmd);
+	edict_t* pDesiredWeapon = CWeapons::findWeapon(m_pEdict, pWeapon->getWeaponName());
+	if ( pDesiredWeapon )
+		m_iSelectWeapon = ENTINDEX(pDesiredWeapon);
 
 	return true;
 }
@@ -5166,14 +5164,14 @@ bool CBotTF2 :: selectBotWeapon ( CBotWeapon *pBotWeapon )
 
 	if ( pSelect )
 	{
-		//int id = pSelect->getWeaponIndex();
-		char cmd[128];
+		edict_t* pDesiredWeapon = CWeapons::findWeapon(m_pEdict, pSelect->getWeaponName());
+		if ( pDesiredWeapon )
+		{
+			m_iSelectWeapon = ENTINDEX(pDesiredWeapon);
+			return true;
+		}
 
-		sprintf(cmd,"use %s",pSelect->getWeaponName());
-
-		helpers->ClientCommand(m_pEdict,cmd);
-
-		return true;
+		return false;
 	}
 	else
 		failWeaponSelect();
