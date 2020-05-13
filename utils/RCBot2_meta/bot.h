@@ -79,11 +79,8 @@
 #define MIN_WPT_TOUCH_DIST 16.0f
 
 // Interfaces from the engine
-//using namespace VEngineServerV21;
-//using namespace ServerGameClientsV3;
 extern IVEngineServer *engine;  // helper functions (messaging clients, loading content, making entities, running commands, etc)
 extern IFileSystem *filesystem;  // file I/O 
-//extern IGameEventManager *gameeventmanager;  // game events interface
 extern IGameEventManager2 *gameeventmanager;
 extern IPlayerInfoManager *playerinfomanager;  // game dll interface to interact with players
 extern IServerPluginHelpers *helpers;  // special 3rd party plugin helpers from the engine
@@ -101,8 +98,15 @@ extern CGlobalVars *gpGlobals;
 
 class CBotSquad;
 
+// static function
 bool BotFunc_BreakableIsEnemy ( edict_t *pBreakable, edict_t *pEdict );
 
+// TODO: this is from game/server/util.h, remove once we can get it included
+// Misc useful
+inline bool FStrEq(const char *sz1, const char *sz2)
+{
+	return ( sz1 == sz2 || Q_stricmp(sz1, sz2) == 0 );
+}
 
 /////////// Voice commands
 
@@ -1096,31 +1100,5 @@ private:
 	static float m_flAddKickBotTime;
 
 };
-
-class IEntityFactoryDictionary;
-class IClientEntity;
-class CBaseAnimating;
-class ITempEntsSystem;
-class CTakeDamageInfo;
-
-void DrawLine ( const Vector &origin, const Vector &target, int r, int g, int b, bool noDepthTest, float duration );
-
-// useful helper funcs...
-//int RANDOM_INT(int min, int max);
-// Misc useful
-inline bool FStrEq(const char *sz1, const char *sz2)
-{
-	return ( sz1 == sz2 || Q_stricmp(sz1, sz2) == 0 );
-}
-//edict_t* INDEXENT( int iEdictNum );
-// get entity index
-//int ENTINDEX( edict_t *pEdict );
-float VectorDistance(Vector &vec);
-int Ceiling ( float fVal );
-bool FNullEnt(const edict_t* pent);
-// ??
-//#define SAFE_STRCPY (to,from,siz)\
-//	strncpy(to,from,siz-1);\
-//	to[siz-1] = 0;
 
 #endif // __RCBOT2_H__
