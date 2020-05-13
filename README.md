@@ -50,9 +50,13 @@ Things like the waypointing guide, hookinfo updater, and waypoints themselves ar
 available here.  You can download those from the [official release thread][].  Waypoints are
 also available at [this page][waypoints].
 
+If you are working with SourceMod interop, you will also need [SourceMod PR#1053].
+The pull request was merged in release 1.11.0.6466.
+
 [Install MetaMod:Source]: https://wiki.alliedmods.net/Installing_Metamod:Source
 [official release thread]: http://rcbot.bots-united.com/forums/index.php?showtopic=1994
 [waypoints]: http://rcbot.bots-united.com/waypoints.php
+[PR#1053]: https://github.com/alliedmodders/sourcemod/pull/1053
 
 ## Building
 
@@ -71,7 +75,8 @@ passing in `--depth 1` or a few to avoid retrieving the files that were removed 
 	work at this time.
 	- I use the following options (where `${MOD}` is only TF2):
 	`python ../configure.py -s ${MOD} --mms_path ${MMS_PATH} --hl2sdk-root ${HL2SDK_ROOT}`
-	- Specifying an `--sm-path` argument enables linking to SourceMod.
+	- Specifying an `--sm-path` argument enables linking to SourceMod.  This does not mean
+	SourceMod needs to be installed for RCBot2 to run.
 	- Note that the automatic versioning system requires an installation of `git` and a
 	relatively modern version of Python 3.
 3. Run `ambuild`.  MetaMod:Source plugin is built and the base install files will be available
