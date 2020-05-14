@@ -29,6 +29,7 @@
  *
  */
 #include "bot.h"
+#include "bot_cvars.h"
 #include "bot_client.h"
 #include "bot_strings.h"
 #include "bot_commands.h"
@@ -999,10 +1000,6 @@ eBotCommandResult CAddBotCommand :: execute ( CClient *pClient, const char *pcmd
 	if ( pClient )
 		pEntity = pClient->getPlayer();
 
-	//extern ConVar *sv_cheats;
-	//extern ConVar bot_sv_cheats_auto;
-	//extern ConVar bot_sv_cheat_warning;
-
 	//if ( !bot_sv_cheat_warning.GetBool() || bot_sv_cheats_auto.GetBool() || (!sv_cheats || sv_cheats->GetBool()) )
 	//{
 		//if ( !pcmd || !*pcmd )
@@ -1783,9 +1780,6 @@ eBotCommandResult CDebugMemoryCheckCommand:: execute ( CClient *pClient, const c
 		}
 		else if ( strcmp(pcmd,"team_control_point") == 0 )
 		{
-			extern ConVar rcbot_const_point_offset;
-			extern ConVar rcbot_const_point_data_offset;
-
 			CTeamControlPoint *p = (CTeamControlPoint*)((((unsigned long)pent) + rcbot_const_point_offset.GetInt())); //MAP_CLASS(CTeamControlPoint,(((unsigned long)pent) + offset),knownoffset);
 //			CTeamControlPointData *d = (CTeamControlPointData*)((((unsigned long)pent) + rcbot_const_point_data_offset.GetInt()));
 

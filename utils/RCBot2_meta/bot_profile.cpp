@@ -106,8 +106,6 @@ void CBotProfiles :: setupProfiles ()
 	char szId[4];
 	char filename[512];
 
-	extern ConVar bot_anglespeed;
-
 	// Setup Default profile
 	m_pDefaultProfile = new CBotProfile(
 		DEFAULT_BOT_NAME, // name

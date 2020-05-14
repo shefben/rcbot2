@@ -30,6 +30,7 @@
  */
 
 #include "bot.h"
+#include "bot_cvars.h"
 
 #include "bot_waypoint.h"
 #include "bot_waypoint_visibility.h"
@@ -233,7 +234,6 @@ void CWaypointLocations :: AutoPathInBucket ( edict_t *pPlayer, int i, int j, in
 	//dataStack <int> tempStack = m_iLocations[i][j][k];
 	int iWpt;
 	CWaypoint *pOtherWpt;
-	extern ConVar bot_waypointpathdist;
 
 	CWaypoint *pWpt = CWaypoints::getWaypoint(iWptFrom);
 	Vector vWptOrigin = pWpt->getOrigin();

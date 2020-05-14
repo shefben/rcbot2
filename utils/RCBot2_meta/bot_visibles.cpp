@@ -31,6 +31,7 @@
 #include "engine_wrappers.h"
 
 #include "bot.h"
+#include "bot_cvars.h"
 #include "bot_visibles.h"
 #include "bot_genclass.h"
 #include "bot_globals.h"
@@ -42,8 +43,6 @@
 #include "ndebugoverlay.h"
 
 extern IVDebugOverlay *debugoverlay;
-extern ConVar bot_visrevs;
-extern ConVar bot_visrevs_clients;
 ////////////////////////////////////////////
 
 byte CBotVisibles :: m_bPvs[MAX_MAP_CLUSTERS/8];
@@ -231,7 +230,6 @@ void CBotVisibles :: updateVisibles ()
 	static bool bVisible;
 	static edict_t *pEntity;
 	static edict_t *pGroundEntity;
-	extern ConVar rcbot_supermode;
 
 	static int iTicks;
 	static int iMaxTicks;  //m_pBot->getProfile()->getVisionTicks();

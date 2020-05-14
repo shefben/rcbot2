@@ -39,6 +39,7 @@
 #endif
 
 #include "bot.h"
+#include "bot_cvars.h"
 #include "bot_globals.h"
 #include "bot_strings.h"
 #include "bot_waypoint_locations.h"
@@ -222,7 +223,6 @@ void CBotGlobals::readRCBotFolder()
 float CBotGlobals :: grenadeWillLand ( Vector vOrigin, Vector vEnemy, float fProjSpeed, float fGrenadePrimeTime, float *fAngle )
 {
 	static float g;
-	extern ConVar *sv_gravity;
 	Vector v_comp = vEnemy-vOrigin;
 	float fDistance = v_comp.Length();
 
@@ -711,8 +711,7 @@ bool CBotGlobals :: setWaypointDisplayType ( int iType )
 }
 // work on this
 bool CBotGlobals :: walkableFromTo (edict_t *pPlayer, Vector v_src, Vector v_dest)
-{   
-	extern ConVar rcbot_wptplace_width;
+{
 	CTraceFilterVis filter = CTraceFilterVis(pPlayer);
 	float fDistance = sqrt((v_dest - v_src).LengthSqr());
 	CClient *pClient = CClients::get(pPlayer);

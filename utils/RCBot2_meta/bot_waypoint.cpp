@@ -35,10 +35,10 @@
 
 #include "iplayerinfo.h"
 
-#include "convar.h"
 #include "ndebugoverlay.h"
 
 #include "bot.h"
+#include "bot_cvars.h"
 
 #include "in_buttons.h"
 
@@ -70,8 +70,6 @@ char CWaypoints::m_szWelcomeMessage[128];
 const WptColor WptColor::white = WptColor(255,255,255,255) ;
 
 extern IVDebugOverlay *debugoverlay;
-
-extern ConVar bot_belief_fade;
 
 ///////////////////////////////////////////////////////////////
 // initialise
@@ -879,9 +877,6 @@ bool CWaypointNavigator :: workRoute ( Vector vFrom,
 									  int iGoalId,
 									  int iConditions, int iDangerId )
 {
-	extern ConVar bot_pathrevs;
-	extern ConVar rcbot_debug_show_route;
-
 	if ( bRestart )
 	{
 		CWaypoint *pGoalWaypoint;
@@ -1522,7 +1517,6 @@ bool CWaypoint :: touched ( edict_t *pEdict )
 bool CWaypoint :: touched ( Vector vOrigin, Vector vOffset, float fTouchDist, bool onground )
 {
 	static Vector v_dynamic;
-	extern ConVar rcbot_ladder_offs;
 
 	v_dynamic = m_vOrigin+vOffset;
 
@@ -2310,8 +2304,6 @@ int CWaypoints :: addWaypoint ( CClient *pClient, const char *type1, const char 
 	QAngle playerAngles = CBotGlobals::playerAngles (pClient->getPlayer());
 	float fMaxDistance = 0.0; // distance for auto type
 
-	extern ConVar rcbot_wpt_autotype;
-
 	CBotMod *pCurrentMod = CBotGlobals::getCurrentMod();
 
 	if ( bUseTemplate )
@@ -2432,7 +2424,6 @@ int CWaypoints :: addWaypoint ( CClient *pClient, const char *type1, const char 
 int CWaypoints :: addWaypoint ( edict_t *pPlayer, Vector vOrigin, int iFlags, bool bAutoPath, int iYaw, int iArea, float fRadius )
 {
 	int iIndex = freeWaypointIndex();
-	extern ConVar rcbot_wpt_autoradius;
 
 	if ( iIndex == -1 )	
 	{
