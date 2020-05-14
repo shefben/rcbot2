@@ -495,8 +495,6 @@ public:
 		return ret;
 	}
 
-	void selectWeaponSlot ( int iSlot );
-
 	edict_t *getAvoidEntity () { return m_pAvoidEntity; }
 
 	void setAvoidEntity ( edict_t *pEntity ) { m_pAvoidEntity = pEntity; }

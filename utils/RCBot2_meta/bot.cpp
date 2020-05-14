@@ -735,16 +735,6 @@ void CBot :: selectWeaponName ( const char *szWeapon )
 	m_pController->SetActiveWeapon(szWeapon);
 }
 
-void CBot :: selectWeaponSlot ( int iSlot )
-{
-	char cmd[16];
-
-	sprintf(cmd,"slot%d",iSlot);
-
-	helpers->ClientCommand(m_pEdict,cmd);
-	//m_iSelectWeapon = iSlot;
-}
-
 CBotWeapon *CBot :: getBestWeapon (edict_t *pEnemy,bool bAllowMelee, bool bAllowMeleeFallback, bool bMeleeOnly, bool bExplosivesOnly )
 {
 	return m_pWeapons->getBestWeapon(pEnemy,bAllowMelee,bAllowMeleeFallback,bMeleeOnly,bExplosivesOnly);
@@ -1097,7 +1087,6 @@ void CBot :: handleWeapons ()
 
 		if ( m_bWantToChangeWeapon && (pWeapon != NULL) && (pWeapon != getCurrentWeapon()) && pWeapon->getWeaponIndex() )
 		{
-			//selectWeaponSlot(pWeapon->getWeaponInfo()->getSlot());
 			selectWeapon(pWeapon->getWeaponIndex());
 		}
 

@@ -3269,7 +3269,6 @@ void CBotTF2::handleWeapons()
 
 		if ( m_bWantToChangeWeapon && (pWeapon != NULL) && (pWeapon != getCurrentWeapon()) && pWeapon->getWeaponIndex() )
 		{
-			//selectWeaponSlot(pWeapon->getWeaponInfo()->getSlot());
 			select_CWeapon(pWeapon->getWeaponInfo());
 			//selectWeapon(pWeapon->getWeaponIndex());
 		}

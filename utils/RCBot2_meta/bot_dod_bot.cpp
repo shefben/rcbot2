@@ -891,7 +891,6 @@ void CDODBot :: handleWeapons ()
 
 		if ( m_bWantToChangeWeapon && (pWeapon != NULL) && (pWeapon != getCurrentWeapon()) && pWeapon->getWeaponIndex() )
 		{
-			//selectWeaponSlot(pWeapon->getWeaponInfo()->getSlot());
 			selectBotWeapon(pWeapon);
 		}
 
