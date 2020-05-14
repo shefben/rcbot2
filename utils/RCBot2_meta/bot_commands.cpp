@@ -1739,7 +1739,7 @@ eBotCommandResult CDebugMstrOffsetSearch::execute(CClient *pClient, const char *
 
 		offset++;
 	}
-
+	return COMMAND_ACCESSED;
 }
 
 //usage \"memorycheck <classname> <offset> <type>\"");

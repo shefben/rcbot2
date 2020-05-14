@@ -114,6 +114,10 @@ for sdk_name in MMS.sdks:
     if (cxx.version >= 'gcc-4.0') or cxx.family == 'clang':
       cxx.cflags += [ '-Dstrcmpi=strcasecmp', ]
 
+    if cxx.family == 'msvc':
+      # suppress macro redefinition of 'offsetof'
+      cxx.cflags += [ '/wd4005' ]
+
     cxx.cxxincludes += include_paths
     cxx.defines += compiler_defines
 
