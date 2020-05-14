@@ -1,12 +1,15 @@
-# RCBot2 for Windows and Linux (TF2, HL2:DM, DOD:S)
+# RCBot2
 
 ## Information
 
-This is a fork of [the official RCBot2 plugin][rcbot2] written by Cheeseh.
+This is a fork of [the RCBot2 plugin][rcbot2] written primarily by Cheeseh.
+
+The primary goal of this fork is to perform many wide-sweeping changes to improve
+maintainability and to bring the codebase up to modern C++ standards.
 
 The [bots-united.com discord][] and [forums][bots-united forums] are the places to ask for
 general RCBot2 support. I'm not present in either of those; file an issue on this repository if
-you need support for this particular project. 
+you need support for this particular project.
 
 [rcbot2]: http://rcbot.bots-united.com/
 [bots-united.com discord]: https://discord.gg/BbxR5wY
@@ -15,9 +18,11 @@ you need support for this particular project.
 ## Changes from upstream
 
 - Build process uses [AMBuild][] instead of `make` or Visual Studio.  This removes the need for
-Valve's cross platform make conversion tool and keeping copies of modified Source SDK files.
+Valve's cross platform make conversion tool.
 - The plugin has been split into SDK-specific builds to ensure proper compatibility, using the
 same loader shim SourceMod uses to load mod-specific builds.
+	- This means all mod-specific changes are provided in the upstream SDK repository, instead
+	of this repository having vendored code.
 	- The shim is named `RCBot2Meta` to maintain compatibility with existing files; mod-specific
 	plugins are named `rcbot.2.${MOD}`.
 	- The `sdk-split` branch only contains modifications to get the project running on the
