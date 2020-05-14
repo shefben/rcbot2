@@ -1718,7 +1718,7 @@ int CBot :: getTeam ()
 	return m_pPlayerInfo->GetTeamIndex();
 }
 
-const char *pszConditionsDebugStrings[CONDITION_MAX_BITS+1] =
+const char *pszConditionsDebugStrings[NUM_CONDITIONS] =
 {"CONDITION_ENEMY_OBSCURED",
 "CONDITION_NO_WEAPON",
 "CONDITION_OUT_OF_AMMO",
@@ -1770,19 +1770,16 @@ void CBot ::debugBot(char *msg)
 
 	char szConditions[512];
 	int iBit = 0;
-	int iMask;
 
 	szConditions[0] = 0; // initialise string
 
-	for ( iMask = 1; iMask <= CONDITION_MAX; iBit++ )
+	for (size_t iCond = 0; iCond < NUM_CONDITIONS; iCond++)
 	{
-		if ( m_iConditions & iMask )
+		if ( m_iConditions[iCond] )
 		{
-			strcat(szConditions,pszConditionsDebugStrings[iBit]);
-			strcat(szConditions,"\n");
+			strcat(szConditions, pszConditionsDebugStrings[iCond]);
+			strcat(szConditions, "\n");
 		}
-	
-		iMask *= 2;
 	}
 
 	char task_string[256];

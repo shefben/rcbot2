@@ -227,8 +227,9 @@ typedef enum
 #define CONDITION_DEFENSIVE				(1 << 26) // bot leader told me to defend
 #define CONDITION_BUILDING_SAPPED		(1 << 27) // one of engineers buildings sapped
 #define CONDITION_SEE_ENEMY_GROUND		(1 << 28) // can see enemy ground so aim for it if i have explosive
-#define CONDITION_MAX					CONDITION_SEE_ENEMY_GROUND
-#define CONDITION_MAX_BITS				28
+
+// number of bits allocated to bot conditions (+1 from last bitshift)
+#define NUM_CONDITIONS					29
 
 #define CONDITION_SEE_HEAL				CONDITION_SEE_PLAYERTOHELP // TF: medic bot can see his player he wants to heal
 

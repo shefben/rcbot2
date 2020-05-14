@@ -68,7 +68,10 @@
 #include "bot_utility.h"
 #include "bot_const.h"
 #include "bot_ehandle.h"
+
 #include <queue>
+#include <bitset>
+#include <limits>
 
 #if defined WIN32 && !defined snprintf
 #define snprintf _snprintf
@@ -95,6 +98,9 @@ extern CGlobalVars *gpGlobals;
 #define GET_AMMO   2
 
 #define T_OFFSETMAX  3
+
+// use a fixed bitset for all the conditions in bot_const.h
+using ConditionBitSet = std::bitset<NUM_CONDITIONS>;
 
 class CBotSquad;
 
@@ -387,7 +393,7 @@ public:
 
 	inline bool hasSomeConditions ( int iConditions )
 	{
-		return (m_iConditions & iConditions) > 0;
+		return (m_iConditions & static_cast<ConditionBitSet>(iConditions)).any();
 	}
 
 	virtual bool handleAttack ( CBotWeapon *pWeapon, edict_t *pEnemy );
@@ -405,12 +411,13 @@ public:
 
 	inline int getConditions ()
 	{
-		return m_iConditions;
+		static_assert(NUM_CONDITIONS <= std::numeric_limits<int>::digits, "Condition bitset is larger than int");
+		return static_cast<int>(m_iConditions.to_ulong());
 	}
 
 	inline bool hasAllConditions ( int iConditions )
 	{
-		return (m_iConditions & iConditions) == iConditions;
+		return (m_iConditions & static_cast<ConditionBitSet>(iConditions)) == static_cast<ConditionBitSet>(iConditions);
 	}
 
 	inline void updateCondition ( int iCondition )
@@ -910,7 +917,8 @@ protected:
 	int m_iAccumulatedDamage;
 	int m_iPrevHealth;
 	///////////////////////////////////
-	int m_iConditions;
+	ConditionBitSet m_iConditions;
+
 	// bot tasks etc -- complex actuators
 	CBotSchedules *m_pSchedules;
 	// buttons held -- simple actuators
