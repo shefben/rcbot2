@@ -274,19 +274,17 @@ void CClient :: think ()
 			{
 				// wanting high five partner
 				// search for bots nearby who can see this player
-				CBotFunc_HighFiveSearch *newFunc = new CBotFunc_HighFiveSearch(m_pPlayer,CClassInterface::getTeam(m_pPlayer));
+				CBotFunc_HighFiveSearch func(m_pPlayer, CClassInterface::getTeam(m_pPlayer));
 
-				CBots::botFunction(newFunc);
+				CBots::botFunction(&func);
 
-				CBot *pBot = newFunc->getNearestBot();
+				CBot *pBot = func.getNearestBot();
 
 				if ( pBot != NULL )
 				{
 					((CBotTF2*)pBot)->highFivePlayer(m_pPlayer,CClassInterface::getTF2TauntYaw(m_pPlayer));
 					m_fMonitorHighFiveTime = engine->Time() + 3.0f;
-				}				
-
-				delete newFunc;
+				}
 			}
 		}
 	#endif

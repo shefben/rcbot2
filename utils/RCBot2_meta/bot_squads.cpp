@@ -203,9 +203,9 @@ CBotSquad *CBotSquads::FindSquadByLeader ( edict_t *pLeader )
 void CBotSquads::RemoveSquad ( CBotSquad *pSquad )
 {
 	// TODO see if we can modify this so the squad unregisters itself
-	CRemoveBotFromSquad *func = new CRemoveBotFromSquad(pSquad);
-	CBots::botFunction(func);
-	delete func;
+	// TODO call this logic in CBotSquad::~CBotSquad() instead
+	CRemoveBotFromSquad func(pSquad);
+	CBots::botFunction(&func);
 	
 	m_theSquads.erase(std::remove(m_theSquads.begin(), m_theSquads.end(), pSquad), m_theSquads.end());
 	
@@ -263,8 +263,8 @@ void CBotSquads :: ChangeLeader ( CBotSquad *pSquad )
 	// if no leader anymore/no members in group
 	if ( pSquad->IsLeader(NULL) )
 	{
-		CRemoveBotFromSquad *func = new CRemoveBotFromSquad(pSquad);
-		CBots::botFunction(func);
+		CRemoveBotFromSquad func(pSquad);
+		CBots::botFunction(&func);
 		
 		// must also remove from available squads.
 		m_theSquads.erase(std::remove(m_theSquads.begin(), m_theSquads.end(), pSquad), m_theSquads.end());

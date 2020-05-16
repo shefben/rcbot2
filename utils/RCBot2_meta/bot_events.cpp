@@ -1161,10 +1161,8 @@ void CDODFireWeaponEvent :: execute ( IBotEventInterface *pEvent )
 		edict_t *pAttacker = CBotGlobals::playerByUserId(iAttacker);
 		int iWeaponID = pEvent->getInt("weapon",-1);
 
-		CBotHearPlayerAttack *func = new CBotHearPlayerAttack(pAttacker,iWeaponID);
-
-		CBots::botFunction(func);
-		delete func;
+		CBotHearPlayerAttack func(pAttacker,iWeaponID);
+		CBots::botFunction(&func);
 	}
 
 

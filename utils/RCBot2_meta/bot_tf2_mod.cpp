@@ -735,11 +735,8 @@ void CTeamFortress2Mod:: flagPickedUp (int iTeam, edict_t *pPlayer)
 
 	m_iFlagCarrierTeam = iTeam;
 
-	CBotTF2FunctionEnemyAtIntel *function = new CBotTF2FunctionEnemyAtIntel(iTeam,CBotGlobals::entityOrigin(pPlayer),EVENT_FLAG_PICKUP);
-
-	CBots::botFunction(function);
-
-	delete function;
+	CBotTF2FunctionEnemyAtIntel func(iTeam, CBotGlobals::entityOrigin(pPlayer), EVENT_FLAG_PICKUP);
+	CBots::botFunction(&func);
 }
 
 bool CTeamFortress2Mod :: isArenaPointOpen ()
