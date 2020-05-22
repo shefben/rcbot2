@@ -130,12 +130,6 @@ CBotCommandInline KickBotCommand("kickbot", CMD_ACCESS_BOT | CMD_ACCESS_DEDICATE
 	return COMMAND_ACCESSED;
 }, "usage \"kickbot\" or \"kickbot <team>\" : kicks random bot or bot on team: <team>");
 
-CBotCommand :: CBotCommand ( char *szCommand, int iAccessLevel )
-{
-	m_szCommand = CStrings::getString(szCommand);
-	m_iAccessLevel = iAccessLevel;
-}
-
 bool CBotCommand :: hasAccess ( CClient *pClient )
 {
 	// check access level excluding dedicated server flag
