@@ -488,11 +488,6 @@ bool CBotGlobals :: traceVisible (edict_t *pEnt)
 	return (m_TraceResult.fraction >= 1.0)||(m_TraceResult.m_pEnt && pEnt && (m_TraceResult.m_pEnt==pEnt->GetUnknown()->GetBaseEntity()));
 }
 
-void CBotGlobals :: freeMemory ()
-{
-	m_pCommands->freeMemory();
-}
-
 bool CBotGlobals::initModFolder() {
 	char szGameFolder[512];
 	engine->GetGameDir(szGameFolder, 512);
@@ -893,7 +888,7 @@ bool CBotGlobals :: linesTouching3d (
 	return onOppositeSides3d(amins,amaxs,bmins,bmaxs) && boundingBoxTouch3d(amins,amaxs,bmins,bmaxs);
 }
 
-void CBotGlobals :: botMessage ( edict_t *pEntity, int iErr, char *fmt, ... )
+void CBotGlobals :: botMessage ( edict_t *pEntity, int iErr, const char *fmt, ... )
 {
 	va_list argptr; 
 	static char string[1024];
