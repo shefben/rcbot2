@@ -900,10 +900,10 @@ eBotCommandResult CWaypointDeleteCommand :: execute ( CClient *pClient, const ch
 
 			if ( radius > 0 )
 			{
-				std::vector<int> pWpt;
 				int numdeleted = 0;
 				Vector vOrigin = pClient->getOrigin();
 
+				WaypointList pWpt;
 				CWaypointLocations::GetAllInArea(vOrigin,&pWpt,-1);
 
 				for ( unsigned short int i = 0; i < pWpt.size(); i ++ )

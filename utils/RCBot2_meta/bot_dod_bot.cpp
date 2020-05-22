@@ -959,7 +959,7 @@ void CDODBot :: touchedWpt ( CWaypoint *pWaypoint, int iNextWaypoint, int iPrevW
 			int i;
 			int iPath;
 			CWaypointVisibilityTable *pTable = CWaypoints::getVisiblity();
-			std::vector<int> m_InvisPaths;
+			WaypointList m_InvisPaths;
 			CWaypoint *pPath;
 			int iThisWaypoint = CWaypoints::getWaypointIndex(pWaypoint);
 			//CWaypoint *pNextWaypoint = CWaypoints::getWaypoint(iNextWaypoint);
@@ -2076,21 +2076,21 @@ bool CDODBot :: executeAction ( CBotUtility *util )
 
 			int iEnemyWpt = CWaypointLocations::NearestWaypoint(CBotGlobals::entityOrigin(pEnemy),200.0f,-1,true,true,false,NULL,false,0,false);
 
-			std::vector <int> pWaypointList;
+			WaypointList waypoints;
 
 			Vector vOrigin = getOrigin();
 
 			// find all sniper points
-			CWaypointLocations::GetAllInArea(vOrigin,&pWaypointList,iEnemyWpt);
+			CWaypointLocations::GetAllInArea(vOrigin,&waypoints,iEnemyWpt);
 
-			unsigned int size = pWaypointList.size();
+			size_t size = waypoints.size();
 			float fDist;
 			float fNearest = 1024.0f;
 			CWaypoint *pNearest = NULL;
 
-			for ( unsigned short i = 0; i < size; i ++ )
+			for (size_t i = 0; i < size; i++)
 			{
-				CWaypoint *pWpt = CWaypoints::getWaypoint(pWaypointList[i]);
+				CWaypoint *pWpt = CWaypoints::getWaypoint(waypoints[i]);
 
 				if ( pWpt->hasFlag(CWaypointTypes::W_FL_SNIPER) )
 				{

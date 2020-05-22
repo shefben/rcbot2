@@ -3455,27 +3455,27 @@ bool CBots :: needToKickBot ()
 
 void CBots :: kickRandomBot (size_t count)
 {
-	std::vector<int> list;
+	std::vector<int> botList;
 	char szCommand[512];
 	//gather list of bots
 	for ( size_t i = 0; i < MAX_PLAYERS; i ++ )
 	{
 		if ( m_Bots[i]->inUse() )
-			list.push_back(i);
+			botList.push_back(i);
 	}
 
-	if ( list.empty() )
+	if ( botList.empty() )
 	{
 		CBotGlobals::botMessage(NULL,0,"kickRandomBot() : No bots to kick");
 		return;
 	}
 
-	std::random_shuffle ( list.begin(), list.end() );
+	std::random_shuffle ( botList.begin(), botList.end() );
 
 	size_t numBotsKicked = 0;
-	while (numBotsKicked < count && list.size()) {
-		size_t index = list.back();
-		list.pop_back();
+	while (numBotsKicked < count && botList.size()) {
+		size_t index = botList.back();
+		botList.pop_back();
 		
 		CBot *tokick = m_Bots[index];
 
@@ -3490,28 +3490,27 @@ void CBots :: kickRandomBot (size_t count)
 
 void CBots :: kickRandomBotOnTeam ( int team )
 {
-	dataUnconstArray<int> list;
+	std::vector<int> botList;
 	int index;
 	CBot *tokick;
 	char szCommand[512];
 	//gather list of bots
 	for ( short int i = 0; i < MAX_PLAYERS; i ++ )
 	{
-		if ( m_Bots[i]->inUse() )
+		if ( m_Bots[i]->inUse() && m_Bots[i]->getTeam() == team )
 		{
-			if ( m_Bots[i]->getTeam() == team )
-				list.Add(i);
+			botList.push_back(i);
 		}
 	}
 
-	if ( list.IsEmpty() )
+	if ( botList.empty() )
 	{
 		CBotGlobals::botMessage(NULL,0,"kickRandomBotOnTeam() : No bots to kick");
 		return;
 	}
 
-	index = list.Random();
-	list.Clear();
+	// TODO change this to container function
+	index = botList[ randomInt(0, botList.size() - 1) ];
 	
 	tokick = m_Bots[index];
 	

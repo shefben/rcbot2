@@ -3645,7 +3645,7 @@ int CBotFortress :: getSpyDisguiseClass ( int iTeam )
 {
 	int i = 0;
 	edict_t *pPlayer;
-	dataUnconstArray<int> m_classes;
+	std::vector<int> availableClasses;
 	int _class;
 	float fTotal;
 	float fRand;
@@ -3659,19 +3659,19 @@ int CBotFortress :: getSpyDisguiseClass ( int iTeam )
 			_class = CClassInterface::getTF2Class(pPlayer);
 
 			if ( _class )
-				m_classes.Add(_class);
+				availableClasses.push_back(_class);
 		}
 	}
 
 
-	if ( m_classes.IsEmpty() )
+	if ( availableClasses.empty() )
 		return randomInt(1,9);
 	
 	fTotal = 0;
 
-	for ( int i = 0; i < m_classes.Size(); i ++ )
+	for ( int i = 0; i < availableClasses.size(); i ++ )
 	{
-		fTotal += m_fClassDisguiseFitness[m_classes.ReturnValueFromIndex(i)];
+		fTotal += m_fClassDisguiseFitness[ availableClasses[i] ];
 	}
 
 	if ( fTotal > 0 )
@@ -3681,17 +3681,18 @@ int CBotFortress :: getSpyDisguiseClass ( int iTeam )
 
 		fTotal = 0;
 
-		for ( int i = 0; i < m_classes.Size(); i ++ )
+		for ( int i = 0; i < availableClasses.size(); i ++ )
 		{
-			fTotal += m_fClassDisguiseFitness[m_classes.ReturnValueFromIndex(i)];
+			fTotal += m_fClassDisguiseFitness[ availableClasses[i] ];
 
 			if ( fRand <= fTotal )
-				return m_classes.ReturnValueFromIndex(i);
+				return availableClasses[i];
 		}
 
 	}
 
-	return m_classes.Random();
+	// choose one of the classes proportional to whatever's on the team
+	return availableClasses[ randomInt(0, availableClasses.size() - 1) ];
 }
 
 bool CBotFortress :: incomingRocket ( float fRange )
@@ -4389,9 +4390,9 @@ void CBotTF2 :: getTasks ( unsigned int iIgnore )
 	}
 	if ( bNeedAmmo || bNeedHealth )
 	{
-		dataUnconstArray<int> *failed;
 		Vector vOrigin = getOrigin();
 
+		WaypointList *failed;
 		m_pNavigator->getFailedGoals(&failed);
 
 		failedlist = CWaypointLocations :: resetFailedWaypoints ( failed );
@@ -4559,9 +4560,9 @@ void CBotTF2 :: getTasks ( unsigned int iIgnore )
 				}
 				else
 				{
-					dataUnconstArray<int> *failed;
 					Vector vOrigin = getOrigin();
 
+					WaypointList *failed;
 					m_pNavigator->getFailedGoals(&failed);
 
 					failedlist = CWaypointLocations::resetFailedWaypoints(failed);
@@ -6032,8 +6033,8 @@ bool CBotTF2 :: executeAction ( CBotUtility *util )//eBotAction id, CWaypoint *p
 
 					vPoint = pWaypoint->getOrigin();
 
-					dataUnconstArray<int> m_iVisibles;
-					dataUnconstArray<int> m_iInvisibles;
+					WaypointList m_iVisibles;
+					WaypointList m_iInvisibles;
 
 					int iWptFrom = CWaypointLocations::NearestWaypoint(vPoint,2048.0,-1,true,true,true,NULL,false,0,false);
 
@@ -6041,7 +6042,7 @@ bool CBotTF2 :: executeAction ( CBotUtility *util )//eBotAction id, CWaypoint *p
 
 					CWaypointLocations::GetAllVisible(iWptFrom,iWptFrom,vPoint,vPoint,2048.0,&m_iVisibles,&m_iInvisibles);
 
-					for ( int i = 0; i < m_iVisibles.Size(); i ++ )
+					for ( int i = 0; i < m_iVisibles.size(); i ++ )
 					{
 						if ( m_iVisibles[i] == CWaypoints::getWaypointIndex(pWaypoint) )
 							continue;
@@ -6059,9 +6060,6 @@ bool CBotTF2 :: executeAction ( CBotUtility *util )//eBotAction id, CWaypoint *p
 							}
 						}
 					}
-					
-					m_iVisibles.Destroy();
-					m_iInvisibles.Destroy();
 
 					if ( !pStand )
 					{
@@ -7155,6 +7153,7 @@ void CBotTF2::updateDefendPoints()
 }
 
 /// TO DO : list of areas
+// TODO: determine if the intent was to use WaypointList for these
 void CBotTF2::getDefendArea ( std::vector<int> *m_iAreas )
 {
 	m_iCurrentDefendArea = CTeamFortress2Mod::m_ObjectiveResource.getRandomValidPointForTeam(m_iTeam,TF2_POINT_DEFEND);
@@ -7593,7 +7592,7 @@ void CBotTF2 :: enemyAtIntel ( Vector vPos, int type, int iArea )
 	// everyone go back to cap point unless doing something important
 	if ( (type == EVENT_CAPPOINT) || (!m_pNavigator->hasNextPoint() || ((m_pNavigator->getGoalOrigin()-getOrigin()).Length() > ((vPos-getOrigin()).Length()))) )
 	{
-		dataUnconstArray<int> *failed;
+		WaypointList *failed;
 		m_pNavigator->getFailedGoals(&failed);
 		CWaypoint *pWpt = NULL;
 		int iIgnore = -1;

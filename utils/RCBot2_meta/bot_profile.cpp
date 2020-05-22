@@ -32,7 +32,6 @@
 #include "bot_strings.h"
 #include "bot_globals.h"
 #include "bot_profile.h"
-#include "bot_genclass.h"
 #include "bot_visibles.h"
 #include "bot_navigator.h"
 #include "bot_kv.h"
@@ -180,23 +179,15 @@ CBotProfile *CBotProfiles :: getDefaultProfile ()
 CBotProfile *CBotProfiles :: getRandomFreeProfile ()
 {
 	unsigned int i;
-	dataUnconstArray<int> iList;
-	CBotProfile *found = NULL;
-
+	std::vector<CBotProfile*> freeProfiles;
+	
 	for ( i = 0; i < m_Profiles.size(); i ++ )
 	{
 		if ( !CBots::findBotByProfile(m_Profiles[i]) )
-			iList.Add(i);
+			freeProfiles.push_back(m_Profiles[i]);
 	}
 
-	if ( iList.IsEmpty() )
-		return NULL;
-	
-	found = m_Profiles[iList.Random()];
-	iList.Clear();
-
-	return found;
+	if ( freeProfiles.empty() )
+		return nullptr;
+	return freeProfiles[ randomInt(0, freeProfiles.size() - 1) ];
 }
-
-	
-
