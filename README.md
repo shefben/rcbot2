@@ -45,7 +45,7 @@ functionality to control the RCBot2 plugin from SourcePawn.
 ## Installation
 
 1. [Install MetaMod:Source][].
-2. Download or build the RCBot2 package.
+2. Build the RCBot2 package.  (I don't have prebulilt binaries here, sorry.  Too much work.)
 3. Extract the package into your game directory, similar to the process of installing MM:S.
 4. Start the server.
 5. To verify that the installation was successful, type `rcbotd` in your server console or RCON.
@@ -55,21 +55,25 @@ Things like the waypointing guide, hookinfo updater, and waypoints themselves ar
 available here.  You can download those from the [official release thread][].  Waypoints are
 also available at [this page][waypoints].
 
-If you are working with SourceMod interop, you will also need [SourceMod PR#1053].
-The pull request was merged in release 1.11.0.6466.
+If you are working with SourceMod interop, you will also need [SourceMod PR#1053][pr] for
+plugins to recognize that the natives are available.  The pull request was merged in release
+1.11.0.6466.
 
 [Install MetaMod:Source]: https://wiki.alliedmods.net/Installing_Metamod:Source
 [official release thread]: http://rcbot.bots-united.com/forums/index.php?showtopic=1994
 [waypoints]: http://rcbot.bots-united.com/waypoints.php
-[PR#1053]: https://github.com/alliedmodders/sourcemod/pull/1053
+[pr]: https://github.com/alliedmodders/sourcemod/pull/1053
 
 ## Building
 
 ### Cloning from source
 
 RCBot2's repo history had all sorts of build artifacts / binaries at various points in time, so
-pulling the repository down normally takes an unusually long while.  I'd highly recommend
-passing in `--depth 1` or a few to avoid retrieving the files that were removed since then.
+pulling the repository down normally takes an unusually long while.
+
+I'd highly recommend passing in `--shallow-since 2019-07-19` to minimize the size of your
+working repository.  This will create a repository with the earliest commit at
+9a7f11ea40be12c9384e7530c2b77763394601db.
 
 ### Compiling on Windows / Linux
 
