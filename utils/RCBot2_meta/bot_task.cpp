@@ -94,7 +94,7 @@ float getGrenadeZ ( edict_t *pShooter, edict_t *pTarget, Vector vOrigin, Vector 
 	float fDist2D = v_comp.Length2D();
 	float fDist3D = v_comp.Length();
 
-	getGrenadeAngle(fInitialSpeed,sv_gravity->GetFloat(),fDist2D,vTarget.z-vOrigin.z,&fAngle1,&fAngle2);
+	getGrenadeAngle(fInitialSpeed,sv_gravity.GetFloat(),fDist2D,vTarget.z-vOrigin.z,&fAngle1,&fAngle2);
 
 	angles = QAngle(0,0,0);
 	// do a quick traceline to check which angle to choose (minimum angle = straight)
@@ -3699,11 +3699,11 @@ void CThrowGrenadeTask ::execute (CBot *pBot,CBotSchedule *pSchedule)
 	{
 		m_fTime = engine->Time() + 2.5f;
 
-		if ( sv_gravity )
+		if ( sv_gravity.IsValid() )
 		{
 			float fFraction = pBot->distanceFrom(m_vLoc)/MAX_GREN_THROW_DIST;
 			//m_vLoc.z = m_vLoc.z + getGrenadeZ(pBot->getOrigin(),m_vLoc,m_pWeapon->getProjectileSpeed());
-			m_vLoc.z = m_vLoc.z + (sv_gravity->GetFloat() * randomFloat(1.5f,2.5f) * fFraction);
+			m_vLoc.z = m_vLoc.z + (sv_gravity.GetFloat() * randomFloat(1.5f,2.5f) * fFraction);
 		}
 	}
 

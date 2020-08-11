@@ -915,8 +915,8 @@ bool RCBotPluginMeta::Hook_LevelInit(const char *pMapName,
 	CBotGlobals::setMapRunning(true);
 	CBotConfigFile::reset();
 	
-	if ( mp_teamplay )
-		CBotGlobals::setTeamplay(mp_teamplay->GetBool());
+	if ( mp_teamplay.IsValid() )
+		CBotGlobals::setTeamplay(mp_teamplay.GetBool());
 	else
 		CBotGlobals::setTeamplay(false);
 
