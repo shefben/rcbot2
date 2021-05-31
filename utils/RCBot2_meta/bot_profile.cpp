@@ -144,6 +144,14 @@ void CBotProfiles :: setupProfiles ()
 			if (pKVL->getFloat("braveness", &flWholeValuePercent)) {
 				read.m_fBraveness = flWholeValuePercent / 100.0f;
 			}
+			if (pKVL->getFloat("aimskill", &flWholeValuePercent)) {
+				// *someone* wrote a broken bot profile generator.
+				// most of the profiles did not actually have working aim skill values
+				// we'll go ahead and allow it, but I have to express my displeasure about the matter in some way
+				CBotGlobals::botMessage(NULL, 0,
+						"Warning: Ignoring incorrect option 'aimskill' on bot profile \"%s\". "
+						"Did you mean 'aim_skill'?", filename);
+			}
 
 			pKVL->getInt("class", &read.m_iClass);
 
