@@ -48,7 +48,7 @@ functionality to control the RCBot2 plugin from SourcePawn.
 2. Build the RCBot2 package, or [download the most recent automated build][autobuild].
   - For the latter, `package.tar.gz` is the Linux build; `package.zip` is the Windows build.
   - The automated build uses Ubuntu 18.04 LTS as the build runner &mdash; RCBot2 will fail to
-  load on older operating systems with the error `version \`GLIBC_2.27' not found`.
+  load on older operating systems with the error `` version `GLIBC_2.27' not found ``.
 3. Extract the package into your game directory, similar to the process of installing MM:S.
 4. Start the server.
 5. To verify that the installation was successful, type `rcbotd` in your server console or RCON.
