@@ -2,7 +2,7 @@ name: Build Workflow
 
 on:
   push:
-    branches: [ master-build-staging ]
+    branches: [ master ]
 
 jobs:
   create_release:
