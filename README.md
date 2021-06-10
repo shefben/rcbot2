@@ -45,7 +45,10 @@ functionality to control the RCBot2 plugin from SourcePawn.
 ## Installation
 
 1. [Install MetaMod:Source][].
-2. Build the RCBot2 package.  (I don't have prebulilt binaries here, sorry.  Too much work.)
+2. Build the RCBot2 package, or [download the most recent automated build][autobuild].
+  - For the latter, `package.tar.gz` is the Linux build; `package.zip` is the Windows build.
+  - The automated build uses Ubuntu 18.04 LTS as the build runner &mdash; RCBot2 will fail to
+  load on older operating systems with the error `version \`GLIBC_2.27' not found`.
 3. Extract the package into your game directory, similar to the process of installing MM:S.
 4. Start the server.
 5. To verify that the installation was successful, type `rcbotd` in your server console or RCON.
@@ -63,6 +66,7 @@ plugins to recognize that the natives are available.  The pull request was merge
 [official release thread]: http://rcbot.bots-united.com/forums/index.php?showtopic=1994
 [waypoints]: http://rcbot.bots-united.com/waypoints.php
 [pr]: https://github.com/alliedmodders/sourcemod/pull/1053
+[autobuild]: https://github.com/nosoop/rcbot2/releases
 
 ## Building
 
@@ -79,9 +83,8 @@ working repository.  This will create a repository with the earliest commit at
 
 1. [Install the prerequisites for building SourceMod for your OS.][Building SourceMod]
 2. Create a `build/` subdirectory, then run `configure.py`.
-	- The project currently assumes GCC 5.4.0 (Ubuntu 16.04 LTS) on Linux, and MSVC version
-	1900 (VC++2014.3 v14.00 last I checked).  Other compiler toolchains are not guaranteed to
-	work at this time.
+	- The project requires C++11 support.  It was previously confirmed to compile on
+	GCC 5.4 (Ubuntu 16.04 LTS) and on MSVC 1900.
 	- I use the following options (where `${MOD}` is only TF2):
 	`python ../configure.py -s ${MOD} --mms_path ${MMS_PATH} --hl2sdk-root ${HL2SDK_ROOT}`
 	- Specifying an `--sm-path` argument enables linking to SourceMod.  This does not mean
