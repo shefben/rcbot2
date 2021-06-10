@@ -39,13 +39,13 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - ubuntu-latest
+          - ubuntu-18.04
           - windows-latest
         include:
           - meta_branch: "1.10-dev"
             sm_branch: "1.10-dev"
 
-          - os: ubuntu-latest
+          - os: ubuntu-18.04
             os_short: linux
             package_ext: tar.gz
 
