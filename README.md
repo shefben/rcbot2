@@ -8,8 +8,7 @@ The primary goal of this fork is to perform many wide-sweeping changes to improv
 maintainability and to bring the codebase up to modern C++ standards.
 
 The [bots-united.com discord][] and [forums][bots-united forums] are the places to ask for
-general RCBot2 support. I'm not present in either of those; file an issue on this repository if
-you need support for this particular project.
+general RCBot2 support.
 
 [rcbot2]: http://rcbot.bots-united.com/
 [bots-united.com discord]: https://discord.gg/BbxR5wY
@@ -47,20 +46,20 @@ functionality to control the RCBot2 plugin from SourcePawn.
 1. [Install MetaMod:Source][].
 2. Build the RCBot2 package, or [download the most recent automated build][autobuild].
     - For the latter, `package.tar.gz` is the Linux build; `package.zip` is the Windows build.
-    - The automated build uses Ubuntu 18.04 LTS as the build runner &mdash; RCBot2 will fail to
-    load on older operating systems with the error `` version `GLIBC_2.27' not found ``.
+    - The automated build uses Ubuntu 18.04 LTS as the Linux build runner &mdash; RCBot2 will
+    fail to load on older Linux distributions with the error
+    `` version `GLIBC_2.27' not found ``.
+    - Regardless of how you get a build, it does not include things like the waypointing guide,
+    hookinfo updater, and waypoints themselves.  You can download those from the
+    [official release thread][].  Waypoints are also available at [this page][waypoints].
 3. Extract the package into your game directory, similar to the process of installing MM:S.
 4. Start the server.
 5. To verify that the installation was successful, type `rcbotd` in your server console or RCON.
 You should see multiple lines starting with "[RCBot]".
 
-Things like the waypointing guide, hookinfo updater, and waypoints themselves are currently not
-available here.  You can download those from the [official release thread][].  Waypoints are
-also available at [this page][waypoints].
-
 If you are working with SourceMod interop, you will also need [SourceMod PR#1053][pr] for
-plugins to recognize that the natives are available.  The pull request was merged in release
-1.11.0.6466.
+plugins to recognize that the natives are available.  The pull request was merged in SourceMod
+build 1.11.0.6466.
 
 [Install MetaMod:Source]: https://wiki.alliedmods.net/Installing_Metamod:Source
 [official release thread]: http://rcbot.bots-united.com/forums/index.php?showtopic=1994
