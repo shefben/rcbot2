@@ -142,7 +142,7 @@ jobs:
       shell: bash
       run: |
         pushd package
-        tar -cf "../package.${{ matrix.package_ext }}" addons
+        tar -cf "../package.${{ matrix.package_ext }}" --owner=0 --group=0 addons
         popd
 
     - name: Upload Release Asset
