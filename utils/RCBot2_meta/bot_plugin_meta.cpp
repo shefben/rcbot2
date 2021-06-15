@@ -394,29 +394,27 @@ bool RCBotPluginMeta::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxle
 
 	FILE *fp = fopen(filename, "r");
 
-	CRCBotKeyValueList *pKVL = new CRCBotKeyValueList();
+	CRCBotKeyValueList kvl;
 
 	if (fp)
-		pKVL->parseFile(fp);
+		kvl.parseFile(fp);
 
 	void *gameServerFactory = reinterpret_cast<void*>(ismm->GetServerFactory(false));
 
 	int val;
 
 #ifdef _WIN32
-	if (pKVL->getInt("runplayermove_dods_win", &val))
+	if (kvl.getInt("runplayermove_dods_win", &val))
 		rcbot_runplayercmd_dods.SetValue(val);
-	if (pKVL->getInt("gamerules_win", &val))
+	if (kvl.getInt("gamerules_win", &val))
 		rcbot_gamerules_offset.SetValue(val);
 #else
-	if (pKVL->getInt("runplayermove_dods_linux", &val))
+	if (kvl.getInt("runplayermove_dods_linux", &val))
 		rcbot_runplayercmd_dods.SetValue(val);
 #endif
 
-	g_pGameRules_Obj = new CGameRulesObject(pKVL, gameServerFactory);
-	g_pGameRules_Create_Obj = new CCreateGameRulesObject(pKVL, gameServerFactory);
-
-	delete pKVL;
+	g_pGameRules_Obj = new CGameRulesObject(kvl, gameServerFactory);
+	g_pGameRules_Create_Obj = new CCreateGameRulesObject(kvl, gameServerFactory);
 
 	if (fp)
 		fclose(fp);
