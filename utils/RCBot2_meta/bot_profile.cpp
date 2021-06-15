@@ -122,42 +122,41 @@ void CBotProfiles :: setupProfiles ()
 		{
 			// copy defaults
 			CBotProfile read = *m_pDefaultProfile;
-			CRCBotKeyValueList *pKVL = new CRCBotKeyValueList();
+			CRCBotKeyValueList kvl;
 
 			CBotGlobals::botMessage(NULL,0,"Reading bot profile \"%s\"",filename);
 
-			pKVL->parseFile(fp);
+			kvl.parseFile(fp);
 
-			pKVL->getInt("team", &read.m_iTeam);
-			pKVL->getString("model", &read.m_szModel);
-			pKVL->getString("name", &read.m_szName);
-			pKVL->getInt("visionticks", &read.m_iVisionTicks);
-			pKVL->getInt("pathticks", &read.m_iPathTicks);
-			pKVL->getInt("visionticks_clients", &read.m_iVisionTicksClients);
-			pKVL->getInt("sensitivity", &read.m_iSensitivity);
+			kvl.getInt("team", &read.m_iTeam);
+			kvl.getString("model", &read.m_szModel);
+			kvl.getString("name", &read.m_szName);
+			kvl.getInt("visionticks", &read.m_iVisionTicks);
+			kvl.getInt("pathticks", &read.m_iPathTicks);
+			kvl.getInt("visionticks_clients", &read.m_iVisionTicksClients);
+			kvl.getInt("sensitivity", &read.m_iSensitivity);
 
 			// config maps [ 0.0, 100.0 ] to [ 0.0, 1.0 ]
 			float flWholeValuePercent;
-			if (pKVL->getFloat("aim_skill", &flWholeValuePercent)) {
+			if (kvl.getFloat("aim_skill", &flWholeValuePercent)) {
 				read.m_fAimSkill = flWholeValuePercent / 100.0f;
-			}
-			if (pKVL->getFloat("braveness", &flWholeValuePercent)) {
-				read.m_fBraveness = flWholeValuePercent / 100.0f;
-			}
-			if (pKVL->getFloat("aimskill", &flWholeValuePercent)) {
+			} else if (kvl.getFloat("aimskill", &flWholeValuePercent)) {
 				// *someone* wrote a broken bot profile generator.
 				// most of the profiles did not actually have working aim skill values
 				// we'll go ahead and allow it, but I have to express my displeasure about the matter in some way
 				CBotGlobals::botMessage(NULL, 0,
-						"Warning: Ignoring incorrect option 'aimskill' on bot profile \"%s\". "
+						"Warning: Incorrect option 'aimskill' on bot profile \"%s\". "
 						"Did you mean 'aim_skill'?", filename);
+				read.m_fAimSkill = flWholeValuePercent / 100.0f;
+			}
+			
+			if (kvl.getFloat("braveness", &flWholeValuePercent)) {
+				read.m_fBraveness = flWholeValuePercent / 100.0f;
 			}
 
-			pKVL->getInt("class", &read.m_iClass);
+			kvl.getInt("class", &read.m_iClass);
 
 			m_Profiles.push_back(new CBotProfile(read));
-
-			delete pKVL;
 
 			fclose(fp);
 		}
