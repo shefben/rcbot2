@@ -274,6 +274,10 @@ class MMSConfig(object):
 
       # catch link errors at compile time
       cxx.linkflags += [ '-Wl,-no-undefined' ]
+
+      if cxx.family == 'clang' and builder.options.debug != '1':
+        # strip debug info
+        cxx.linkflags += [ '-Wl,-S' ]
     elif builder.target.platform == 'mac':
       cxx.defines += [
         'POSIX',
