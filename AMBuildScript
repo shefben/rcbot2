@@ -275,8 +275,10 @@ class MMSConfig(object):
       # catch link errors at compile time
       cxx.linkflags += [ '-Wl,-no-undefined' ]
 
+      # strip debug info on non-debug clang builds
+      # ambuild passes `-g3` into clang but not for gcc, so the clang output
+      # needs to be stripped for the output to be similar to gcc
       if cxx.family == 'clang' and builder.options.debug != '1':
-        # strip debug info
         cxx.linkflags += [ '-Wl,-S' ]
     elif builder.target.platform == 'mac':
       cxx.defines += [
