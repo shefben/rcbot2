@@ -55,6 +55,7 @@
 #include "bot_fortress.h"
 #include "bot_wpt_dist.h"
 
+#include "rcbot/logging.h"
 
 #include <vector>    //bir3yk
 #include <algorithm>
@@ -123,11 +124,11 @@ bool CWaypointNavigator :: beliefLoad ( )
 
    FILE *bfp =  CBotGlobals::openFile(filename,"rb");
 
-   if ( bfp == NULL )
-   {
-	   Msg(" *** Can't open Waypoint belief array for reading!\n");
-	   return false;
-   }
+	if ( bfp == NULL )
+	{
+		logger->Log(LogLevel::ERROR, "Can't open Waypoint belief array for reading!");
+		return false;
+	}
 
    fseek (bfp, 0, SEEK_END); // seek at end
 
@@ -210,13 +211,13 @@ bool CWaypointNavigator :: beliefSave ( bool bOverride )
 
    bfp =  CBotGlobals::openFile(filename,"wb");
 
-   if ( bfp == NULL )
-   {
-	   m_bLoadBelief = true;
-	   m_iBeliefTeam = m_pBot->getTeam();
-	   Msg(" *** Can't open Waypoint Belief array for writing!\n");
-	   return false;
-   }
+	if ( bfp == NULL )
+	{
+		m_bLoadBelief = true;
+		m_iBeliefTeam = m_pBot->getTeam();
+		logger->Log(LogLevel::ERROR, "Can't open Waypoint Belief array for writing!");
+		return false;
+	}
 
    // convert from short int to float
    
@@ -1891,13 +1892,13 @@ bool CWaypoints :: load (const char *szMapName)
 
 	if ( !FStrEq(header.szFileType,BOT_WAYPOINT_FILE_TYPE) )
 	{
-		CBotGlobals::botMessage(NULL,0,"Error loading waypoints: File type mismatch");
+		logger->Log(LogLevel::ERROR, "Error loading waypoints: File type mismatch");
 		fclose(bfp);
 		return false;
 	}
 	if ( header.iVersion > WAYPOINT_VERSION )
 	{
-		CBotGlobals::botMessage(NULL,0,"Error loading waypoints: Waypoint version too new");
+		logger->Log(LogLevel::ERROR, "Error loading waypoints: Waypoint version too new");
 		fclose(bfp);
 		return false;
 	}
@@ -1906,14 +1907,14 @@ bool CWaypoints :: load (const char *szMapName)
 	{
 		if ( !FStrEq(header.szMapName,szMapName) )
 		{
-			CBotGlobals::botMessage(NULL,0,"Error loading waypoints: Map name mismatch");
+			logger->Log(LogLevel::ERROR, "Error loading waypoints: Map name mismatch");
 			fclose(bfp);
 			return false;
 		}
 	}
 	else if ( !FStrEq(header.szMapName,CBotGlobals::getMapName()) )
 	{
-		CBotGlobals::botMessage(NULL,0,"Error loading waypoints: Map name mismatch");
+		logger->Log(LogLevel::ERROR, "Error loading waypoints: Map name mismatch");
 		fclose(bfp);
 		return false;
 	}
@@ -1967,7 +1968,7 @@ bool CWaypoints :: load (const char *szMapName)
 	m_pVisibilityTable->setWorkVisiblity(bWorkVisibility);
 
 	if ( bWorkVisibility ) // say a message
-		Msg(" *** No waypoint visibility file ***\n *** Working out waypoint visibility information... ***\n");
+		logger->Log(LogLevel::INFO, "No waypoint visibility file -- working out waypoint visibility information...");
 
 	// if we're loading from another map just do this again!
 	if ( szMapName == NULL )
@@ -2435,7 +2436,7 @@ int CWaypoints :: addWaypoint ( edict_t *pPlayer, Vector vOrigin, int iFlags, bo
 
 	if ( iIndex == -1 )	
 	{
-		Msg("Waypoints full!");
+		logger->Log(LogLevel::ERROR, "Waypoints full!");
 		return -1;
 	}
 
