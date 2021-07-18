@@ -380,10 +380,8 @@ bool RCBotPluginMeta::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxle
 
 #if SOURCE_ENGINE!=SE_DARKMESSIAH
 	// read loglevel from startup param for early logging
-	if (CommandLine()->HasParm("+rcbot_loglevel")) {
-		ConVarRef rcbot_loglevel("rcbot_loglevel");
-		rcbot_loglevel.SetValue(CommandLine()->ParmValue("+rcbot_loglevel", rcbot_loglevel.GetInt()));
-	}
+	ConVarRef rcbot_loglevel("rcbot_loglevel");
+	rcbot_loglevel.SetValue(CommandLine()->ParmValue("+rcbot_loglevel", rcbot_loglevel.GetInt()));
 #endif
 
 	// Read Signatures and Offsets
