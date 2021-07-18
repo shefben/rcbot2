@@ -45,6 +45,8 @@
 #include "bot_kv.h"
 #include "bot_sigscan.h"
 
+#include "tier0/icommandline.h"
+
 #include <build_info.h>
 
 SH_DECL_HOOK6(IServerGameDLL, LevelInit, SH_NOATTRIB, 0, bool, char const *, char const *, char const *, char const *, bool, bool);
@@ -372,6 +374,14 @@ bool RCBotPluginMeta::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxle
 	ConVar_Register(0, &s_BaseAccessor);
 #else
 	ConCommandBaseMgr::OneTimeInit(&s_BaseAccessor);
+#endif
+
+#if SOURCE_ENGINE!=SE_DARKMESSIAH
+	// read loglevel from startup param for early logging
+	if (CommandLine()->HasParm("+rcbot_loglevel")) {
+		ConVarRef rcbot_loglevel("rcbot_loglevel");
+		rcbot_loglevel.SetValue(CommandLine()->ParmValue("+rcbot_loglevel", rcbot_loglevel.GetInt()));
+	}
 #endif
 
 	// Read Signatures and Offsets
