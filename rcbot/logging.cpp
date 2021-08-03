@@ -16,6 +16,12 @@
 
 #include "logging.h"
 
+#if defined WIN32
+	// for SetConsoleTextAttribute and co.
+	#define WIN32_LEAN_AND_MEAN
+	#include <Windows.h>
+#endif
+
 #include <cstdarg>
 #include <cstdio>
 
@@ -45,7 +51,15 @@ void CBotLogger::Log(LogLevel level, const char* fmt, ...) {
 	va_end(argptr);
 	
 	if (level <= LogLevel::WARN) {
-		Warning("[RCBot] %s: %s\n", LOGLEVEL_STRINGS[level], buf);
+		#if defined _LINUX
+			if (isatty(1) == 1) {
+				Warning("\x1B[1;33m[RCBot] %s: %s\x1B[0m\n", LOGLEVEL_STRINGS[level], buf);
+			} else {
+				Warning("[RCBot] %s: %s\n", LOGLEVEL_STRINGS[level], buf);
+			}
+		#else
+			Warning("[RCBot] %s: %s\n", LOGLEVEL_STRINGS[level], buf);
+		#endif
 	} else {
 		Msg("[RCBot] %s: %s\n", LOGLEVEL_STRINGS[level], buf);
 	}
