@@ -58,6 +58,8 @@
 #include "bot_squads.h"
 //#include "bot_hooks.h"
 
+#include "rcbot/logging.h"
+
 extern IVDebugOverlay *debugoverlay;
 
 #define TF2_SPY_CLOAK_BELIEF 40
@@ -971,6 +973,18 @@ void CBotFortress :: spawnInit ()
 	m_bSentryGunVectorValid = false;
 	m_bDispenserVectorValid = false;
 	m_bTeleportExitVectorValid = false;
+
+	// in case we're respawned as a different class than what we desired, assume we have no choice
+	// this should fix conflicts with class restrictions for bots
+	logger->Log(LogLevel::DEBUG, "Bot %s spawned (class = %d, desired = %d, game_desired = %d)",
+			m_szBotName, m_iClass, m_iDesiredClass, CClassInterface::getTF2DesiredClass(m_pEdict));
+	
+	if (m_iDesiredClass != CClassInterface::getTF2DesiredClass(m_pEdict)) {
+		logger->Log(LogLevel::INFO,
+				"Bot %s desired class mismatch (desired = %d, game_desired = %d); external change?",
+				m_szBotName, m_iDesiredClass, CClassInterface::getTF2DesiredClass(m_pEdict));
+	}
+	m_iClass = static_cast<TF_Class>(m_iDesiredClass = CClassInterface::getTF2DesiredClass(m_pEdict));
 }
 
 bool CBotFortress :: isBuilding ( edict_t *pBuilding )
