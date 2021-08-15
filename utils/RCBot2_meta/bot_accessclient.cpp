@@ -101,34 +101,6 @@ void CAccessClients :: showUsers ( edict_t *pEntity )
 	}	
 }
 
-void CAccessClients :: createFile ()
-{
-	char filename[1024];
-	
-	CBotGlobals::buildFileName(filename,BOT_ACCESS_CLIENT_FILE,BOT_CONFIG_FOLDER,BOT_CONFIG_EXTENSION);
-
-	std::fstream fp = CBotGlobals::openFile(filename, std::fstream::out);
-
-	logger->Log(LogLevel::WARN, "Making an accessclients.ini file for you... Edit it in %s", filename);
-
-	if ( fp )
-	{
-		fp << "# format is ";
-		fp << "# \"<STEAM ID>\" <access level>\n";
-		fp << "# see http://rcbot.bots-united.com/accesslev.htm for access\n";
-		fp << "# levels\n";
-		fp << "#\n";
-		fp << "# example:\n";
-		fp << "#\n";
-		fp << "# \"STEAM_0:123456789\" 63\n";
-		fp << "# don't put one of '#' these before a line you want to be read \n";
-		fp << "# by the bot!\n";
-		fp << "# \n";
-	}
-	else
-		logger->Log(LogLevel::ERROR, "Failed to create config file %s", filename);
-}
-
 void CAccessClients :: freeMemory ()
 {
 	for ( unsigned int i = 0; i < m_Clients.size(); i ++ )
@@ -220,7 +192,7 @@ void CAccessClients :: load ()
 		}
 	}
 	else
-		CAccessClients :: createFile();
+		logger->Log(LogLevel::ERROR, "Failed to open file '%s' for reading", filename);
 }
 
 void CAccessClients :: save ()
@@ -237,6 +209,10 @@ void CAccessClients :: save ()
 		{
 			m_Clients[i]->save(fp);
 		}
+	}
+	else
+	{
+		logger->Log(LogLevel::ERROR, "Failed to open file '%s' for writing", filename);
 	}
 }
 
