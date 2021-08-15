@@ -27,6 +27,8 @@
 
 #include "convar.h"
 
+#include "engine_wrappers.h"
+
 #include "tier0/dbg.h"
 
 static CBotLogger s_Logger;
@@ -37,6 +39,25 @@ ConVar rcbot_loglevel("rcbot_loglevel", "2", 0, "Display logging messages with i
 const char* LOGLEVEL_STRINGS[] = {
 	"FATAL", "ERROR", "WARN", "INFO", "DEBUG", "TRACE"
 };
+
+const char* LOGLEVEL_ANSI_COLORS[] = {
+	"\x1B[1;31m", "\x1B[1;91m", "\x1B[1;33m", "\x1B[1;92m", "\x1B[1;94m", "\x1B[1;96m"
+};
+
+enum MessageColorizationMode {
+	Colorize_None,
+	Colorize_ANSI,
+	Colorize_ClientConsole, // TODO
+};
+
+MessageColorizationMode GetMessageColorizationMode() {
+	#if defined _LINUX
+		if (engine->IsDedicatedServer()) {
+			return Colorize_ANSI;
+		}
+	#endif
+	return Colorize_None;
+}
 
 void CBotLogger::Log(LogLevel level, const char* fmt, ...) {
 	if (level > static_cast<LogLevel>(rcbot_loglevel.GetInt())) {
@@ -50,17 +71,23 @@ void CBotLogger::Log(LogLevel level, const char* fmt, ...) {
 	vsprintf(buf, fmt, argptr); 
 	va_end(argptr);
 	
-	if (level <= LogLevel::WARN) {
-		#if defined _LINUX
-			if (isatty(1) == 1) {
-				Warning("\x1B[1;33m[RCBot] %s: %s\x1B[0m\n", LOGLEVEL_STRINGS[level], buf);
+	switch (GetMessageColorizationMode()) {
+		case Colorize_ANSI:
+			if (level <= LogLevel::WARN) {
+				Warning("%s[RCBot] %s: %s\x1B[0m\n", LOGLEVEL_ANSI_COLORS[level],
+						LOGLEVEL_STRINGS[level], buf);
 			} else {
-				Warning("[RCBot] %s: %s\n", LOGLEVEL_STRINGS[level], buf);
+				Msg("%s[RCBot] %s: %s\x1B[0m\n", LOGLEVEL_ANSI_COLORS[level],
+						LOGLEVEL_STRINGS[level], buf);
 			}
-		#else
-			Warning("[RCBot] %s: %s\n", LOGLEVEL_STRINGS[level], buf);
-		#endif
-	} else {
-		Msg("[RCBot] %s: %s\n", LOGLEVEL_STRINGS[level], buf);
+			break;
+		case Colorize_None:
+		default:
+			if (level <= LogLevel::WARN) {
+				Warning("[RCBot] %s: %s\n", LOGLEVEL_STRINGS[level], buf);
+			} else {
+				Msg("[RCBot] %s: %s\n", LOGLEVEL_STRINGS[level], buf);
+			}
+			break;
 	}
 }
