@@ -29,6 +29,7 @@
 
 #include "engine_wrappers.h"
 
+#include "tier0/icommandline.h"
 #include "tier0/dbg.h"
 
 static CBotLogger s_Logger;
@@ -44,16 +45,42 @@ const char* LOGLEVEL_ANSI_COLORS[] = {
 	"\x1B[1;31m", "\x1B[1;91m", "\x1B[1;33m", "\x1B[1;92m", "\x1B[1;94m", "\x1B[1;96m"
 };
 
+#if defined WIN32
+#define FOREGROUND_YELLOW (FOREGROUND_GREEN | FOREGROUND_RED)
+#define FOREGROUND_WHITE  (FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE)
+const DWORD LOGLEVEL_WINCON_COLORS[] = {
+	FOREGROUND_RED,
+	FOREGROUND_RED | FOREGROUND_INTENSITY,
+	FOREGROUND_YELLOW,
+	FOREGROUND_GREEN | FOREGROUND_INTENSITY,
+	FOREGROUND_BLUE | FOREGROUND_INTENSITY,
+	FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_INTENSITY
+};
+#endif
+
 enum MessageColorizationMode {
 	Colorize_None,
+	
+	// ANSI escapes
 	Colorize_ANSI,
-	Colorize_ClientConsole, // TODO
+	
+	#if defined WIN32
+	// windows console -- uses console text attributes
+	Colorize_WinConsole,
+	#endif
+	
+	// TODO: client developer console
+	Colorize_ClientConsole,
 };
 
 MessageColorizationMode GetMessageColorizationMode() {
 	#if defined _LINUX
 		if (engine->IsDedicatedServer()) {
 			return Colorize_ANSI;
+		}
+	#elif defined WIN32
+		if (engine->IsDedicatedServer() && CommandLine()->CheckParm("-console") != nullptr) {
+			return Colorize_WinConsole;
 		}
 	#endif
 	return Colorize_None;
@@ -81,6 +108,17 @@ void CBotLogger::Log(LogLevel level, const char* fmt, ...) {
 						LOGLEVEL_STRINGS[level], buf);
 			}
 			break;
+		#if defined WIN32
+		case Colorize_WinConsole:
+			HANDLE hConsoleHandle;
+			hConsoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+			
+			SetConsoleTextAttribute(hConsoleHandle, LOGLEVEL_WINCON_COLORS[level]);
+			
+			Msg("[RCBot] %s: %s\n", LOGLEVEL_STRINGS[level], buf);
+			SetConsoleTextAttribute(hConsoleHandle, FOREGROUND_WHITE);
+			break;
+		#endif
 		case Colorize_None:
 		default:
 			if (level <= LogLevel::WARN) {
