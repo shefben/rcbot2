@@ -4,7 +4,7 @@
 
 #include "rcbot/logging.h"
 
-void CRCBotKeyValueList :: parseFile ( FILE *fp )
+void CRCBotKeyValueList :: parseFile (std::fstream &fp)
 {
 	char buffer[2*(RCBOT_MAX_KV_LEN)];
 	char szKey[RCBOT_MAX_KV_LEN];
@@ -20,7 +20,7 @@ void CRCBotKeyValueList :: parseFile ( FILE *fp )
 	iLine = 0;
 
 	// parse profile ini
-	while ( fgets(buffer,255,fp) != NULL )
+	while (fp.getline(buffer, 255))
 	{
 		iLine++;
 

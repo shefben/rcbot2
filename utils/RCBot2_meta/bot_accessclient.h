@@ -45,7 +45,7 @@ public:
 
 	void giveAccessToClient ( CClient *pClient );
 
-	void save ( FILE *fp );
+	void save (std::fstream &fp);
 
 	bool forBot ();
 

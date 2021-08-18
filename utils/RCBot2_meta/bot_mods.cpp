@@ -65,14 +65,14 @@ void CBotMods :: parseFile ()
 
 	CBotGlobals::buildFileName(buffer,BOT_MOD_FILE,BOT_CONFIG_FOLDER,BOT_CONFIG_EXTENSION);
 
-	FILE *fp = CBotGlobals::openFile(buffer,"r");
+	std::fstream fp = CBotGlobals::openFile(buffer, std::fstream::in);
 
 	CBotMod *curmod = NULL;
 
 	if ( !fp )
 	{
 		createFile();
-		fp = CBotGlobals::openFile(buffer,"r");
+		fp = CBotGlobals::openFile(buffer, std::fstream::in);
 	}
 
 	if ( !fp )
@@ -81,7 +81,7 @@ void CBotMods :: parseFile ()
 		return;
 	}
 
-	while ( fgets(buffer,1023,fp) != NULL )
+	while (fp.getline(buffer, 1023))
 	{
 		if ( buffer[0] == '#' )
 			continue;
@@ -228,8 +228,6 @@ void CBotMods :: parseFile ()
 		curmod->setup(gamefolder, modtype, bottype, weaponlist);
 		m_Mods.push_back(curmod);
 	}
-
-	fclose(fp);
 }
 
 void CBotMods :: createFile ()
@@ -238,71 +236,69 @@ void CBotMods :: createFile ()
 
 	CBotGlobals::buildFileName(filename,BOT_MOD_FILE,BOT_CONFIG_FOLDER,BOT_CONFIG_EXTENSION);
 
-	FILE *fp = CBotGlobals::openFile(filename,"w");
+	std::fstream fp = CBotGlobals::openFile(filename, std::fstream::out);
 
 	CBotGlobals::botMessage(NULL,0,"Making a %s.%s file for you... Edit it in '%s'",BOT_MOD_FILE,BOT_CONFIG_EXTENSION,filename);
 
 	if ( fp )
 	{
-		fprintf(fp,"# EXAMPLE MOD FILE");
-		fprintf(fp,"# valid mod types\n");
-		fprintf(fp,"# ---------------\n");
-		fprintf(fp,"# CSS\n");
-		fprintf(fp,"# TF2\n");
-		fprintf(fp,"# HL2DM\n");
-		fprintf(fp,"# HL1DM\n");
-		fprintf(fp,"# FF\n");
-		fprintf(fp,"# SVENCOOP2\n");
-		fprintf(fp,"# TIMCOOP\n");
-		fprintf(fp,"# NS2\n");
-		fprintf(fp,"# DOD (day of defeat source)\n");
-		fprintf(fp,"#\n");
-		fprintf(fp,"# valid bot types\n");
-		fprintf(fp,"# ---------------\n");
-		fprintf(fp,"# CSS\n");
-		fprintf(fp,"# TF2\n");
-		fprintf(fp,"# HL2DM\n");
-		fprintf(fp,"# HL1DM\n");
-		fprintf(fp,"# FF\n");
-		fprintf(fp,"# COOP\n");
-		fprintf(fp,"# ZOMBIE\n");
-		fprintf(fp,"# DOD\n");
-		fprintf(fp,"#\n");
-		fprintf(fp, "# weaponlists are changeable in config / weapons.ini\n");
-		fprintf(fp,"#\n");
-		fprintf(fp,"#mod = CSS\n");
-		fprintf(fp,"#steamdir = counter-strike source\n");
-		fprintf(fp,"#gamedir = cstrike\n");
-		fprintf(fp,"#bot = CSS\n");
-		fprintf(fp,"#\n");
-		fprintf(fp,"#mod = TF2\n");
-		fprintf(fp,"#steamdir = teamfortress 2\n");
-		fprintf(fp,"#gamedir = tf\n");
-		fprintf(fp,"#bot = TF2\n");
-		fprintf(fp,"#\n");
-		fprintf(fp,"#mod = FF\n");
-		fprintf(fp,"#steamdir = sourcemods\n");
-		fprintf(fp,"#gamedir = ff\n");
-		fprintf(fp,"#bot = FF\n");
-		fprintf(fp,"#\n");
-		fprintf(fp,"#mod = HL2DM\n");
-		fprintf(fp,"#steamdir = half-life 2 deathmatch\n");
-		fprintf(fp,"#gamedir = hl2mp\n");
-		fprintf(fp,"#bot = HL2DM\n");
-		fprintf(fp,"#\n");
-		fprintf(fp,"#mod = HL1DM\n");
-		fprintf(fp,"#steamdir = half-life 1 deathmatch\n");
-		fprintf(fp,"#gamedir = hl1dm\n");
-		fprintf(fp,"#bot = HL1DM\n");
-		fprintf(fp,"#\n");
-		fprintf(fp,"mod = DOD\n");
-		fprintf(fp,"steamdir = orangebox\n");
-		fprintf(fp,"gamedir = dod\n");
-		fprintf(fp,"bot = DOD\n");
-		fprintf(fp, "weaponlist = DOD\n");
-		fprintf(fp,"#\n");
-
-		fclose(fp);
+		fp << "# EXAMPLE MOD FILE";
+		fp << "# valid mod types\n";
+		fp << "# ---------------\n";
+		fp << "# CSS\n";
+		fp << "# TF2\n";
+		fp << "# HL2DM\n";
+		fp << "# HL1DM\n";
+		fp << "# FF\n";
+		fp << "# SVENCOOP2\n";
+		fp << "# TIMCOOP\n";
+		fp << "# NS2\n";
+		fp << "# DOD (day of defeat source)\n";
+		fp << "#\n";
+		fp << "# valid bot types\n";
+		fp << "# ---------------\n";
+		fp << "# CSS\n";
+		fp << "# TF2\n";
+		fp << "# HL2DM\n";
+		fp << "# HL1DM\n";
+		fp << "# FF\n";
+		fp << "# COOP\n";
+		fp << "# ZOMBIE\n";
+		fp << "# DOD\n";
+		fp << "#\n";
+		fp <<  "# weaponlists are changeable in config / weapons.ini\n";
+		fp << "#\n";
+		fp << "#mod = CSS\n";
+		fp << "#steamdir = counter-strike source\n";
+		fp << "#gamedir = cstrike\n";
+		fp << "#bot = CSS\n";
+		fp << "#\n";
+		fp << "#mod = TF2\n";
+		fp << "#steamdir = teamfortress 2\n";
+		fp << "#gamedir = tf\n";
+		fp << "#bot = TF2\n";
+		fp << "#\n";
+		fp << "#mod = FF\n";
+		fp << "#steamdir = sourcemods\n";
+		fp << "#gamedir = ff\n";
+		fp << "#bot = FF\n";
+		fp << "#\n";
+		fp << "#mod = HL2DM\n";
+		fp << "#steamdir = half-life 2 deathmatch\n";
+		fp << "#gamedir = hl2mp\n";
+		fp << "#bot = HL2DM\n";
+		fp << "#\n";
+		fp << "#mod = HL1DM\n";
+		fp << "#steamdir = half-life 1 deathmatch\n";
+		fp << "#gamedir = hl1dm\n";
+		fp << "#bot = HL1DM\n";
+		fp << "#\n";
+		fp << "mod = DOD\n";
+		fp << "steamdir = orangebox\n";
+		fp << "gamedir = dod\n";
+		fp << "bot = DOD\n";
+		fp <<  "weaponlist = DOD\n";
+		fp << "#\n";
 	}
 	else
 		logger->Log(LogLevel::ERROR, "Couldn't create config file %s", filename);

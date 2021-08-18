@@ -118,7 +118,7 @@ void CBotProfiles :: setupProfiles ()
 		sprintf(szId,"%d",iId);
 		CBotGlobals::buildFileName(filename,szId,BOT_PROFILE_FOLDER,BOT_CONFIG_EXTENSION);
 
-		FILE *fp = CBotGlobals::openFile(filename,"r");
+		std::fstream fp = CBotGlobals::openFile(filename, std::fstream::in);
 
 		if ( fp )
 		{
@@ -159,8 +159,6 @@ void CBotProfiles :: setupProfiles ()
 			kvl.getInt("class", &read.m_iClass);
 
 			m_Profiles.push_back(new CBotProfile(read));
-
-			fclose(fp);
 		}
 		else
 		{

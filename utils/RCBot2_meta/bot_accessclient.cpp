@@ -59,9 +59,9 @@ bool CAccessClient :: isForSteamId ( const char *szSteamId )
 	return FStrEq(m_szSteamId,szSteamId);
 }
 
-void CAccessClient :: save ( FILE *fp )
+void CAccessClient :: save ( std::fstream &fp )
 {
-	fprintf(fp,"\"%s\":%d\n",m_szSteamId,m_iAccessLevel);
+	fp << '"' << m_szSteamId << '"' << ":" << m_iAccessLevel << "\n";
 }
 
 void CAccessClient :: giveAccessToClient ( CClient *pClient )
@@ -107,24 +107,23 @@ void CAccessClients :: createFile ()
 	
 	CBotGlobals::buildFileName(filename,BOT_ACCESS_CLIENT_FILE,BOT_CONFIG_FOLDER,BOT_CONFIG_EXTENSION);
 
-	FILE *fp = CBotGlobals::openFile(filename,"w");
+	std::fstream fp = CBotGlobals::openFile(filename, std::fstream::out);
 
 	logger->Log(LogLevel::WARN, "Making an accessclients.ini file for you... Edit it in %s", filename);
 
 	if ( fp )
 	{
-		fprintf(fp,"# format is ");
-		fprintf(fp,"# \"<STEAM ID>\" <access level>\n");
-		fprintf(fp,"# see http://rcbot.bots-united.com/accesslev.htm for access\n");
-		fprintf(fp,"# levels\n");
-		fprintf(fp,"#\n");
-		fprintf(fp,"# example:\n");
-		fprintf(fp,"#\n");
-		fprintf(fp,"# \"STEAM_0:123456789\" 63\n");
-		fprintf(fp,"# don't put one of '#' these before a line you want to be read \n");
-		fprintf(fp,"# by the bot!\n");
-		fprintf(fp,"# \n");
-		fclose(fp);
+		fp << "# format is ";
+		fp << "# \"<STEAM ID>\" <access level>\n";
+		fp << "# see http://rcbot.bots-united.com/accesslev.htm for access\n";
+		fp << "# levels\n";
+		fp << "#\n";
+		fp << "# example:\n";
+		fp << "#\n";
+		fp << "# \"STEAM_0:123456789\" 63\n";
+		fp << "# don't put one of '#' these before a line you want to be read \n";
+		fp << "# by the bot!\n";
+		fp << "# \n";
 	}
 	else
 		logger->Log(LogLevel::ERROR, "Failed to create config file %s", filename);
@@ -147,7 +146,7 @@ void CAccessClients :: load ()
 	
 	CBotGlobals::buildFileName(filename,BOT_ACCESS_CLIENT_FILE,BOT_CONFIG_FOLDER,BOT_CONFIG_EXTENSION);
 
-	FILE *fp = CBotGlobals::openFile(filename,"r");
+	std::fstream fp = CBotGlobals::openFile(filename, std::fstream::in);
 
 	if ( fp )
 	{
@@ -162,7 +161,7 @@ void CAccessClients :: load ()
 
 		int iLine = 0;
 
-		while ( fgets(buffer,255,fp) != NULL )
+		while (fp.getline(buffer,255))
 		{
 			iLine++;
 
@@ -219,8 +218,6 @@ void CAccessClients :: load ()
 
 			m_Clients.push_back(new CAccessClient(szSteamId,iAccess));
 		}
-
-		fclose(fp);
 	}
 	else
 		CAccessClients :: createFile();
@@ -232,7 +229,7 @@ void CAccessClients :: save ()
 	
 	CBotGlobals::buildFileName(filename,BOT_ACCESS_CLIENT_FILE,BOT_CONFIG_FOLDER,BOT_CONFIG_EXTENSION);
 
-	FILE *fp = CBotGlobals::openFile(filename,"w");
+	std::fstream fp = CBotGlobals::openFile(filename, std::fstream::out);
 
 	if ( fp )
 	{
@@ -240,8 +237,6 @@ void CAccessClients :: save ()
 		{
 			m_Clients[i]->save(fp);
 		}
-
-		fclose(fp);
 	}
 }
 
