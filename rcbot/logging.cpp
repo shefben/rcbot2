@@ -25,6 +25,7 @@
 #include <cstdarg>
 #include <cstdio>
 
+#include "icvar.h"
 #include "convar.h"
 
 #include "engine_wrappers.h"
@@ -58,6 +59,16 @@ const DWORD LOGLEVEL_WINCON_COLORS[] = {
 };
 #endif
 
+// colors based on https://www.codeproject.com/Tips/5255355/How-to-Put-Color-on-Windows-Console
+const Color LOGLEVEL_CONSOLE_COLORS[] = {
+	{ 197,  15,  31, 255 },
+	{ 231,  72,  75, 255 },
+	{ 193, 156,   0, 255 },
+	{  19, 198,  13, 255 },
+	{  59, 120, 255, 255 },
+	{  97, 214, 214, 255 },
+};
+
 enum MessageColorizationMode {
 	Colorize_None,
 	
@@ -69,17 +80,20 @@ enum MessageColorizationMode {
 	Colorize_WinConsole,
 	#endif
 	
-	// TODO: client developer console
 	Colorize_ClientConsole,
 };
 
 MessageColorizationMode GetMessageColorizationMode() {
 	#if defined _LINUX
-		if (engine->IsDedicatedServer()) {
+		if (!engine->IsDedicatedServer()) {
+			return Colorize_ClientConsole;
+		} else {
 			return Colorize_ANSI;
 		}
 	#elif defined WIN32
-		if (engine->IsDedicatedServer() && CommandLine()->CheckParm("-console") != nullptr) {
+		if (!engine->IsDedicatedServer()) {
+			return Colorize_ClientConsole;
+		} else if (CommandLine()->CheckParm("-console") != nullptr) {
 			return Colorize_WinConsole;
 		}
 	#endif
@@ -119,6 +133,10 @@ void CBotLogger::Log(LogLevel level, const char* fmt, ...) {
 			SetConsoleTextAttribute(hConsoleHandle, FOREGROUND_WHITE);
 			break;
 		#endif
+		case Colorize_ClientConsole:
+			extern ICvar *icvar;
+			icvar->ConsoleColorPrintf(LOGLEVEL_CONSOLE_COLORS[level], "[RCBot] %s: %s\n", LOGLEVEL_STRINGS[level], buf);
+			break;
 		case Colorize_None:
 		default:
 			if (level <= LogLevel::WARN) {
