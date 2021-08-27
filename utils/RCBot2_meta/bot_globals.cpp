@@ -49,6 +49,11 @@
 #include <sys/stat.h>
 #endif
 
+//caxanga334: SDK 2013 contains macros for std::min and std::max which causes errors when compiling
+#if SOURCE_ENGINE == SE_SDK2013 || SOURCE_ENGINE == SE_BMS
+#include "valve_minmax_off.h"
+#endif
+
 extern IServerGameEnts *servergameents;
 
 ///////////
@@ -831,6 +836,7 @@ bool CBotGlobals :: boundingBoxTouch3d (
 	return (((bmins.x >= amins.x) && (bmins.y >= amins.y) && (bmins.z >= amins.z)) && ((bmins.x <= amaxs.x) && (bmins.y <= amaxs.y) && (bmins.z <= amaxs.z)) ||
 		    ((bmaxs.x >= amins.x) && (bmaxs.y >= amins.y) && (bmaxs.z >= amins.z)) && ((bmaxs.x <= amaxs.x) && (bmaxs.y <= amaxs.y) && (bmaxs.z <= amaxs.z)));	
 }
+
 bool CBotGlobals :: onOppositeSides2d (
 		const Vector2D &amins, const Vector2D &amaxs,
 		const Vector2D &bmins, const Vector2D &bmaxs )
