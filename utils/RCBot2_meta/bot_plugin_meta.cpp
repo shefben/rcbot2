@@ -28,6 +28,10 @@
 
 #include "bot_cvars.h"
 
+#ifdef _WIN32
+	#include <time.h>
+#endif
+
 // for IServerTools
 #include "bot.h"
 #include "bot_configfile.h"
