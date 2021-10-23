@@ -138,12 +138,6 @@ jobs:
         7z a -r "../package.${{ matrix.package_ext }}" addons
         popd
 
-    - name: Build Debug Symbol Package (Windows)
-      working-directory: rcbot2/build
-      shell: bash
-      run: |
-        find * -name '*.${{ matrix.dbg_ext }}' -exec tar -caf 'dbgsym-${{ matrix.os_short }}.tar.gz' {} +;
-
     - name: Build Package (Linux)
       if: runner.os == 'Linux'
       working-directory: rcbot2/build
@@ -152,6 +146,12 @@ jobs:
         pushd package
         tar -czf "../package.${{ matrix.package_ext }}" --owner=0 --group=0 addons
         popd
+
+    - name: Build Debug Symbol Package
+      working-directory: rcbot2/build
+      shell: bash
+      run: |
+        find * -name '*.${{ matrix.dbg_ext }}' -exec tar -caf 'dbgsym-${{ matrix.os_short }}.tar.gz' {} +;
 
     - name: Upload Release Asset
       id: upload-release-asset
