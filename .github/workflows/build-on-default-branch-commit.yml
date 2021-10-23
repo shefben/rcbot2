@@ -48,10 +48,12 @@ jobs:
           - os: ubuntu-18.04
             os_short: linux
             package_ext: tar.gz
+            dbg_ext: dbg
 
           - os: windows-latest
             os_short: win
             package_ext: zip
+            dbg_ext: pdb
 
     steps:
     - name: Install (Linux)
@@ -136,6 +138,12 @@ jobs:
         7z a -r "../package.${{ matrix.package_ext }}" addons
         popd
 
+    - name: Build Debug Symbol Package (Windows)
+      working-directory: rcbot2/build
+      shell: bash
+      run: |
+        find * -name '*.${{ matrix.dbg_ext }}' -exec tar -caf 'dbgsym-${{ matrix.os_short }}.tar.gz' {} +;
+
     - name: Build Package (Linux)
       if: runner.os == 'Linux'
       working-directory: rcbot2/build
@@ -154,4 +162,15 @@ jobs:
         upload_url: ${{ needs.create_release.outputs.upload_url }}
         asset_path: ./rcbot2/build/package.${{ matrix.package_ext }}
         asset_name: package.${{ matrix.package_ext }}
+        asset_content_type: application/octet-stream
+
+    - name: Upload Debug Asset
+      id: upload-release-asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create_release.outputs.upload_url }}
+        asset_path: ./rcbot2/build/dbgsym-${{ matrix.os_short }}.tar.gz
+        asset_name: dbgsym-${{ matrix.os_short }}.tar.gz
         asset_content_type: application/octet-stream
