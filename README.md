@@ -51,6 +51,9 @@ functionality to access certain functionality of the RCBot2 plugin via SourceMod
     - The automated build uses Ubuntu 18.04 LTS as the Linux build runner &mdash; RCBot2 will
     fail to load on older Linux distributions with the error
     `` version `GLIBC_2.27' not found ``.
+    - If you get something like `` version `GLIBC_3.4.20' not found `` instead, your game likely
+    has an outdated bundled copy.  Please refer to [these instructions][bundled-glibc] to
+    resolve the issue.
     - Regardless of how you get a build, it does not include things like the waypointing guide,
     hookinfo updater, and waypoints themselves.  You can download those from the
     [official release thread][].  Waypoints are also available at [this page][waypoints].
@@ -69,6 +72,7 @@ build 1.11.0.6466.
 [waypoints]: http://rcbot.bots-united.com/waypoints.php
 [pr]: https://github.com/alliedmodders/sourcemod/pull/1053
 [autobuild]: https://github.com/nosoop/rcbot2/releases
+[bundled-glibc]: https://wiki.alliedmods.net/User:Nosoop/Guide/Game_Server_Configuration#Linux_extension_failing_to_load_on_outdated_GLIBCXX_.2A_version
 
 ## Building
 
