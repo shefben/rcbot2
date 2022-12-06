@@ -1179,13 +1179,13 @@ void CTeamFortress2Mod::updatePointMaster()
 			logger->Log(LogLevel::INFO, "Computed point master offset %d", baseEntityOffset);
 
 			int idx = m_PointMaster->m_iCurrentRoundIndex;
-			int size = m_PointMaster->m_ControlPointRounds.Size();
+			int size = m_PointMaster->m_ControlPointRounds.Count();
 
 			if (idx >= 0 && size >= 0 && idx < 100 && size < 100) 
 			{
 				int infoCount = 0;
 
-				for (int r = 0; r < m_PointMaster->m_ControlPointRounds.Size(); ++r) 
+				for (int r = 0; r < m_PointMaster->m_ControlPointRounds.Count(); ++r) 
 				{
 					try
 					{
