@@ -366,8 +366,13 @@ void CBotMenu ::render (CClient *pClient)
 
 	pszCaption = getCaption(pClient,color);
 
+#if SOURCE_ENGINE == SE_TF2
+	debugoverlay->AddScreenTextOverlay(0.135,0.4,0,fUpdateTime,color.r,color.g,color.b,color.a,pszCaption);
+	debugoverlay->AddScreenTextOverlay(0.135,0.4,1,fUpdateTime,color.r,color.g,color.b,color.a,"----------------");
+#else
 	debugoverlay->AddTextOverlayRGB(vOrigin,0,fUpdateTime,color.r,color.g,color.b,color.a,pszCaption);
 	debugoverlay->AddTextOverlayRGB(vOrigin,1,fUpdateTime,color.r,color.g,color.b,color.a,"----------------");
+#endif
 /*
 	Vector screen;
 	Vector point = Vector(0,0,0);
@@ -381,7 +386,13 @@ void CBotMenu ::render (CClient *pClient)
 
 		pszCaption = item->getCaption(pClient,color);
 
-		debugoverlay->AddTextOverlayRGB(vOrigin,i+2,fUpdateTime,color.r,color.g,color.b,color.a,"%d. %s",(i==9)?(0):(i+1),pszCaption);
+		char text[64];
+		snprintf(text, sizeof(text), "%d. %s",(i==9)?(0):(i+1),pszCaption);
+#if SOURCE_ENGINE == SE_TF2
+		debugoverlay->AddScreenTextOverlay(0.135,0.4,i+2,fUpdateTime,color.r,color.g,color.b,color.a,text);
+#else
+		debugoverlay->AddTextOverlayRGB(vOrigin,i+2,fUpdateTime,color.r,color.g,color.b,color.a,text);
+#endif
 	}
 }
 
