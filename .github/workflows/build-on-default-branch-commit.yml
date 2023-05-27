@@ -39,7 +39,7 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - ubuntu-18.04
+          - ubuntu-20.04
           - windows-latest
         include:
           - meta_branch: "1.10-dev"
