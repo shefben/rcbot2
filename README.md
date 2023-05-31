@@ -48,9 +48,9 @@ functionality to access certain functionality of the RCBot2 plugin via SourceMod
 2. Build the RCBot2 package, or [download the most recent automated build][autobuild].
     - For the latter, `package.tar.gz` is the Linux build; `package.zip` is the Windows build.
     - Automated builds are compiled with support for SourceMod native bindings.
-    - The automated build uses Ubuntu 18.04 LTS as the Linux build runner &mdash; RCBot2 will
-    fail to load on older Linux distributions with the error
-    `` version `GLIBC_2.27' not found ``.
+    - The automated build uses Ubuntu 20.04 LTS as the Linux build runner &mdash; RCBot2 will
+    fail to load on older Linux distributions with an error resembling
+    `` version `GLIBC_2.xx' not found ``.
     - If you get something like `` version `GLIBC_3.4.20' not found `` instead, your game likely
     has an outdated bundled copy.  Please refer to [these instructions][bundled-glibc] to
     resolve the issue.
@@ -65,7 +65,7 @@ You should see multiple lines starting with "[RCBot]".
 
 If you are working with SourceMod interop, you will also need [SourceMod PR#1053][pr] for
 plugins to recognize that the natives are available.  The pull request was merged in SourceMod
-build 1.11.0.6466.
+build 1.11.0.6466, so at this point any stable version will do.
 
 [Install MetaMod:Source]: https://wiki.alliedmods.net/Installing_Metamod:Source
 [official release thread]: http://rcbot.bots-united.com/forums/index.php?showtopic=1994
