@@ -1,248 +1,313 @@
 #include "ObjectivePlanner.h"
-#include "FFBaseAI.h"       // For BotKnowledgeBase (if not in its own header)
-#include "CFFPlayer.h"      // Conceptual CFFPlayer
-#include "CBaseEntity.h"    // Conceptual CBaseEntity
-#include <algorithm>        // For std::sort (in PrioritizeTasks if used)
+#include "FFBaseAI.h"       // For BotKnowledgeBase (which includes ff_state_structs.h for Vector, CPInfo etc.)
+                            // Also for CFFPlayer, CBaseEntity conceptual placeholders
+#include <algorithm>        // For std::sort, std::find_if
 #include <iostream>         // For placeholder logging
+
+// --- Conceptual Placeholder Implementations (would rely on actual game/bot SDK) ---
+// These allow the ObjectivePlanner to compile and have basic logic flow.
+
+#ifndef CBASEENTITY_CONCEPTUAL_DEF_OBJECTIVEPLANNER // Prevent redefinition
+#define CBASEENTITY_CONCEPTUAL_DEF_OBJECTIVEPLANNER
+// class CBaseEntity { public: Vector GetPosition() const; bool IsAlive() const; int GetTeamNumber() const; /* ... */ };
+#endif
+
+#ifndef CFFPLAYER_CONCEPTUAL_DEF_OBJECTIVEPLANNER
+#define CFFPLAYER_CONCEPTUAL_DEF_OBJECTIVEPLANNER
+// class CFFPlayer { public: Vector GetPosition() const; bool IsAlive() const; int GetTeamNumber() const; /* ... */ };
+#endif
+
+// Assume BotKnowledgeBase provides access to ControlPointInfo vector
+// struct BotKnowledgeBase {
+//    const std::vector<ControlPointInfo>* controlPoints;
+//    GameModeType GetGameMode() const { return GameModeType::CONTROL_POINT; } // Example
+//    // ... other game state accessors
+//    BotKnowledgeBase() : controlPoints(nullptr) {}
+// };
+// --- End Conceptual Placeholders ---
+
+
+// --- HighLevelTask Method Implementations (from BotTasks.h) ---
+// (Moved here as they are primarily used by ObjectivePlanner and this was specified in plan)
+
+const SubTask* HighLevelTask::GetCurrentSubTask() const {
+    if (type != HighLevelTaskType::NONE && currentSubTaskIndex >= 0 && currentSubTaskIndex < (int)subTasks.size()) {
+        return &subTasks[currentSubTaskIndex];
+    }
+    return nullptr;
+}
+
+SubTask* HighLevelTask::GetCurrentSubTaskMutable() {
+    if (type != HighLevelTaskType::NONE && currentSubTaskIndex >= 0 && currentSubTaskIndex < (int)subTasks.size()) {
+        return &subTasks[currentSubTaskIndex];
+    }
+    return nullptr;
+}
+
+bool HighLevelTask::AdvanceToNextSubTask() {
+    if (type == HighLevelTaskType::NONE || subTasks.empty()) return false;
+
+    // Check if current task was actually completed successfully before advancing and resetting next.
+    // If it failed, the HLT might need to fail entirely or re-strategize.
+    // For now, we assume OnSubTaskCompleted is only called on success by AI.
+    if (currentSubTaskIndex >=0 && currentSubTaskIndex < (int)subTasks.size()){
+        // if (!subTasks[currentSubTaskIndex].isCompleted) {
+            // Current subtask wasn't marked completed, this might be an issue or forced advance.
+            // std::cout << "Warning: Advancing HLT when current subtask not marked completed." << std::endl;
+        // }
+    }
+
+    currentSubTaskIndex++;
+    if (currentSubTaskIndex < (int)subTasks.size()) {
+        subTasks[currentSubTaskIndex].isCompleted = false; // Ensure new subtask is not stale
+        return true; // Advanced to a new valid subtask
+    }
+    // Reached end of subtask list
+    // std::cout << "HLT: All subtasks finished for " << description << std::endl;
+    return false;
+}
+
+void HighLevelTask::Reset() {
+    type = HighLevelTaskType::NONE;
+    priority = 0.0f;
+    targetPosition = Vector();
+    pTargetEntity = nullptr;
+    description = "";
+    subTasks.clear();
+    currentSubTaskIndex = -1;
+}
+
 
 // --- CObjectivePlanner Implementation ---
 
 CObjectivePlanner::CObjectivePlanner(CFFPlayer* pBotOwner, const BotKnowledgeBase* pKnowledgeBase)
     : m_pBotOwner(pBotOwner),
       m_pKnowledgeBase(pKnowledgeBase) {
-    m_CurrentHighLevelTask.type = HighLevelTaskType::NONE; // Start with no task
+    m_CurrentHighLevelTask.Reset(); // Ensure it starts as NONE
+    // std::cout << "CObjectivePlanner: Initialized." << std::endl;
 }
 
-CObjectivePlanner::~CObjectivePlanner() {}
-
-void CObjectivePlanner::UpdateGameState(const BotKnowledgeBase* pKnowledgeBase) {
-    m_pKnowledgeBase = pKnowledgeBase; // Update pointer if KB changes externally
+CObjectivePlanner::~CObjectivePlanner() {
+    // std::cout << "CObjectivePlanner: Destroyed." << std::endl;
 }
 
-GameMode CObjectivePlanner::GetCurrentGameMode() const {
-    // Conceptual: This would query the game rules or a global state manager.
-    // For example: if (FortressForever::GetGameRules()->IsControlPointGame()) return GameMode::CONTROL_POINT;
-    // For now, hardcode to Control Point for testing.
-    return GameMode::CONTROL_POINT;
+// void CObjectivePlanner::UpdateKnowledgeBase(const BotKnowledgeBase* pKnowledgeBase) {
+//     m_pKnowledgeBase = pKnowledgeBase;
+// }
+
+GameModeType CObjectivePlanner::GetCurrentGameMode() const {
+    if (m_pKnowledgeBase) {
+        // return m_pKnowledgeBase->GetGameMode(); // Conceptual
+    }
+    return GameModeType::CONTROL_POINT; // Default for now
 }
 
 void CObjectivePlanner::EvaluateAndSelectTask() {
-    // If current HLT is valid, has subtasks, and current subtask is not completed, continue it.
     const SubTask* currentSub = GetCurrentSubTask();
     if (m_CurrentHighLevelTask.IsValid() && currentSub && !currentSub->isCompleted) {
-        // std::cout << "Planner: Continuing current HLT & SubTask" << std::endl;
-        return;
-    }
-    // If HLT is valid but current subtask IS completed, OnSubTaskCompleted should have advanced it.
-    // If all subtasks of current HLT are done, IsValid() might still be true but GetCurrentSubTask() would be null.
-
-    // Clear completed/failed HLT to allow new selection.
-    // OnSubTaskCompleted/Failed should handle clearing m_CurrentHighLevelTask when the HLT is fully done/failed.
-    // This check ensures we re-evaluate if the HLT finished.
-    if (m_CurrentHighLevelTask.IsValid() && !GetCurrentSubTask()) { // HLT is done (all subtasks finished)
-        // Log completion of the HLT here for learning data if needed
-        std::cout << "Planner: HighLevelTask '" << m_CurrentHighLevelTask.description << "' completed all subtasks." << std::endl;
-        m_CurrentHighLevelTask.Reset(); // Mark HLT as invalid/done
+        // std::cout << "Planner: Continuing current HLT '" << m_CurrentHighLevelTask.description
+        //           << "', SubTask: " << static_cast<int>(currentSub->type) << std::endl;
+        return; // Current HLT has an active, incomplete subtask
     }
 
+    // If HLT is valid but GetCurrentSubTask() is null, it means all subtasks were completed or it failed to advance.
+    if (m_CurrentHighLevelTask.IsValid() && !currentSub) {
+        // std::cout << "Planner: Current HLT '" << m_CurrentHighLevelTask.description << "' has no more subtasks or finished." << std::endl;
+        // For learning: LogTaskOutcome(m_CurrentHighLevelTask, Outcome::SUCCESS); // Assuming success if all subtasks done
+        m_CurrentHighLevelTask.Reset();
+    }
 
-    // If no valid HLT, or current one just finished, try to get a new one.
-    if (!m_CurrentHighLevelTask.IsValid()) {
-        // std::cout << "Planner: No valid HLT or current HLT finished. Evaluating new tasks." << std::endl;
+    // If no valid HLT, try to select a new one
+    if (m_CurrentHighLevelTask.type == HighLevelTaskType::NONE) {
+        // std::cout << "Planner: No current HLT. Generating and selecting new task." << std::endl;
         GenerateAvailableTasks();
-        PrioritizeTasks(); // Simple version will just use order from Generate.
-        if (SelectTaskFromList()) { // This sets m_CurrentHighLevelTask
+        PrioritizeTasks();
+        if (SelectTaskFromList()) { // Sets m_CurrentHighLevelTask
             // std::cout << "Planner: New HLT selected: " << m_CurrentHighLevelTask.description << std::endl;
             if (!DecomposeTask(m_CurrentHighLevelTask)) {
                 std::cerr << "Planner Error: Failed to decompose task: " << m_CurrentHighLevelTask.description << std::endl;
-                m_CurrentHighLevelTask.Reset(); // Failed decomposition, clear it.
+                // For learning: LogTaskOutcome(m_CurrentHighLevelTask, Outcome::FAILURE, "DecompositionFailed");
+                m_CurrentHighLevelTask.Reset();
+            } else if (m_CurrentHighLevelTask.subTasks.empty()){
+                 std::cerr << "Planner Error: Task decomposition resulted in no subtasks for " << m_CurrentHighLevelTask.description << std::endl;
+                 m_CurrentHighLevelTask.Reset();
             } else {
-                // std::cout << "Planner: Task decomposed. First subtask: " << (int)GetCurrentSubTask()->type << std::endl;
+                // std::cout << "Planner: Task decomposed. First subtask type: "
+                //           << static_cast<int>(m_CurrentHighLevelTask.subTasks[0].type) << std::endl;
             }
         } else {
-            // std::cout << "Planner: No suitable new HLT found." << std::endl;
+            // std::cout << "Planner: No suitable new HLT found. Bot will idle or do default actions." << std::endl;
         }
     }
 }
 
-const HighLevelTask* CObjectivePlanner::GetCurrentHighLevelTask() const {
-    return m_CurrentHighLevelTask.IsValid() ? &m_CurrentHighLevelTask : nullptr;
+const SubTask* CObjectivePlanner::GetCurrentSubTask() const {
+    return m_CurrentHighLevelTask.GetCurrentSubTask();
 }
 
-const SubTask* CObjectivePlanner::GetCurrentSubTask() const {
-    if (m_CurrentHighLevelTask.IsValid()) {
-        return m_CurrentHighLevelTask.GetCurrentSubTask();
-    }
-    return nullptr;
+SubTask* CObjectivePlanner::GetCurrentSubTaskMutable() {
+    return m_CurrentHighLevelTask.GetCurrentSubTaskMutable();
 }
 
 void CObjectivePlanner::OnSubTaskCompleted() {
-    // std::cout << "Planner: SubTask completed." << std::endl;
+    // std::cout << "Planner: Received OnSubTaskCompleted." << std::endl;
     if (m_CurrentHighLevelTask.IsValid()) {
         if (!m_CurrentHighLevelTask.AdvanceToNextSubTask()) { // No more subtasks
-            // Log HLT completion here for learning
-            std::cout << "Planner: All subtasks for HLT '" << m_CurrentHighLevelTask.description << "' completed." << std::endl;
+            // std::cout << "Planner: All subtasks for HLT '" << m_CurrentHighLevelTask.description << "' are now complete." << std::endl;
             // For learning: LogTaskOutcome(m_CurrentHighLevelTask, Outcome::SUCCESS);
-            m_CurrentHighLevelTask.Reset(); // Mark HLT as done
+            m_CurrentHighLevelTask.Reset(); // HLT is fully done
         } else {
-            // std::cout << "Planner: Advanced to next SubTask." << std::endl;
+            // const SubTask* nextSub = GetCurrentSubTask();
+            // std::cout << "Planner: Advanced to next SubTask, type: " << (nextSub ? static_cast<int>(nextSub->type) : -1) << std::endl;
         }
     }
 }
 
 void CObjectivePlanner::OnSubTaskFailed() {
-    // std::cout << "Planner: SubTask failed." << std::endl;
+    // std::cout << "Planner: Received OnSubTaskFailed for HLT '" << m_CurrentHighLevelTask.description << "'." << std::endl;
     if (m_CurrentHighLevelTask.IsValid()) {
-        // Log HLT failure here for learning
-         std::cout << "Planner: HLT '" << m_CurrentHighLevelTask.description << "' failed due to subtask failure." << std::endl;
-        // For learning: LogTaskOutcome(m_CurrentHighLevelTask, Outcome::FAILURE);
-        m_CurrentHighLevelTask.Reset(); // Mark HLT as failed, force re-evaluation
+        // For learning: LogTaskOutcome(m_CurrentHighLevelTask, Outcome::FAILURE, "SubTaskFailed");
+        m_CurrentHighLevelTask.Reset(); // HLT failed, force re-evaluation
     }
 }
 
 void CObjectivePlanner::OnBotKilled() {
-    // std::cout << "Planner: Bot killed. Resetting HLT." << std::endl;
+    // std::cout << "Planner: Received OnBotKilled. Resetting HLT." << std::endl;
     if (m_CurrentHighLevelTask.IsValid()) {
-         // For learning: LogTaskOutcome(m_CurrentHighLevelTask, Outcome::ABORTED); // Or FAILED
+        // For learning: LogTaskOutcome(m_CurrentHighLevelTask, Outcome::ABORTED, "BotKilled");
     }
     m_CurrentHighLevelTask.Reset();
 }
 
 void CObjectivePlanner::GenerateAvailableTasks() {
     m_AvailableTasks.clear();
-    if (!m_pKnowledgeBase /* || !m_pBotOwner */) return; // Need KB and bot owner info
+    if (!m_pKnowledgeBase || !m_pBotOwner) {
+        std::cerr << "Planner: KnowledgeBase or BotOwner not set, cannot generate tasks." << std::endl;
+        return;
+    }
 
-    GameMode currentMode = GetCurrentGameMode();
+    GameModeType currentMode = GetCurrentGameMode(); // Assumes this can be determined
     switch (currentMode) {
-        case GameMode::CONTROL_POINT:
-            GenerateTasks_ControlPoint();
+        case GameModeType::CONTROL_POINT:
+            GenerateTasks_ControlPoint_FF();
             break;
-        // case GameMode::CAPTURE_THE_FLAG: GenerateTasks_CaptureTheFlag(); break;
-        // ... other game modes
+        // case GameModeType::CAPTURE_THE_FLAG: GenerateTasks_CaptureTheFlag_FF(); break;
         default:
-            std::cout << "Planner: No task generation logic for current game mode." << std::endl;
+            // std::cout << "Planner: Task generation not implemented for game mode " << static_cast<int>(currentMode) << std::endl;
             break;
     }
+     // std::cout << "Planner: Generated " << m_AvailableTasks.size() << " available tasks." << std::endl;
 }
 
-void CObjectivePlanner::GenerateTasks_ControlPoint() {
-    // Conceptual: Access CP data from m_pKnowledgeBase, which points to CRCBotPlugin's m_ControlPoints vector
-    // For now, create dummy tasks as the actual CP data structures might not be fully populated or accessible yet.
-    // int myTeam = m_pBotOwner ? m_pBotOwner->GetTeamNumber() : 0; // Conceptual
+void CObjectivePlanner::GenerateTasks_ControlPoint_FF() {
+    // This is a placeholder. It needs actual game state data from m_pKnowledgeBase.
+    // Conceptual: int myTeam = m_pBotOwner->GetTeamNumber();
+    // Conceptual: const std::vector<ControlPointInfo>* cpList = m_pKnowledgeBase->controlPoints;
+    // if (!cpList) return;
 
-    // Dummy Task 1: Capture a point (e.g., CP1 at 1000,0,0)
-    HighLevelTask captureTask(HighLevelTaskType::CAPTURE_POINT, 80.0f); // Default priority 80
-    captureTask.targetPosition = Vector(1000, 0, 0);
-    // captureTask.pTargetEntity = FindEntityForCP("CP1"); // Conceptual
-    captureTask.description = "Capture CP at (1000,0,0)";
-    m_AvailableTasks.push_back(captureTask);
+    // for (const auto& cp : *cpList) {
+    //     if (cp.ownerTeam != myTeam && !cp.isLocked /* for myTeam */) {
+    //         HighLevelTask capTask(HighLevelTaskType::CAPTURE_POINT_FF, 80.0f);
+    //         capTask.targetPosition = cp.position;
+    //         capTask.pTargetEntity = reinterpret_cast<CBaseEntity*>(cp.pEntity); // Assuming pEntity exists
+    //         capTask.description = "Capture " + cp.gameDisplayName;
+    //         m_AvailableTasks.push_back(capTask);
+    //     } else if (cp.ownerTeam == myTeam && cp.isBeingCapturedByEnemy /* conceptual */) {
+    //         HighLevelTask defTask(HighLevelTaskType::DEFEND_POINT_FF, 90.0f);
+    //         defTask.targetPosition = cp.position;
+    //         defTask.pTargetEntity = reinterpret_cast<CBaseEntity*>(cp.pEntity);
+    //         defTask.description = "Defend " + cp.gameDisplayName;
+    //         m_AvailableTasks.push_back(defTask);
+    //     }
+    // }
 
-    // Dummy Task 2: Defend a point (e.g., CP2 at -1000,0,0)
-    HighLevelTask defendTask(HighLevelTaskType::DEFEND_POINT, 70.0f); // Default priority 70
-    defendTask.targetPosition = Vector(-1000, 0, 0);
-    // defendTask.pTargetEntity = FindEntityForCP("CP2"); // Conceptual
-    defendTask.description = "Defend CP at (-1000,0,0)";
-    m_AvailableTasks.push_back(defendTask);
+    // --- Dummy Tasks for Testing ---
+    if (m_AvailableTasks.empty()) { // Only add dummies if real logic (commented out) adds nothing
+        HighLevelTask captureTask(HighLevelTaskType::CAPTURE_POINT_FF, 80.0f);
+        captureTask.targetPosition = Vector(1000, 200, 0); // Example position
+        // captureTask.pTargetEntity = GetSomeGameEntityAt(captureTask.targetPosition); // Conceptual
+        captureTask.description = "Capture Dummy CP Alpha";
+        m_AvailableTasks.push_back(captureTask);
 
-    std::cout << "Planner: Generated " << m_AvailableTasks.size() << " dummy CP tasks." << std::endl;
+        HighLevelTask defendTask(HighLevelTaskType::DEFEND_POINT_FF, 75.0f);
+        defendTask.targetPosition = Vector(-500, 300, 0); // Example position
+        defendTask.description = "Defend Dummy CP Bravo";
+        m_AvailableTasks.push_back(defendTask);
+    }
+    // --- End Dummy Tasks ---
 }
 
 void CObjectivePlanner::PrioritizeTasks() {
     if (m_AvailableTasks.empty()) return;
-    // Simple prioritization: For now, just use the order they were added or sort by default priority.
-    // More advanced: iterate m_AvailableTasks, calculate dynamic priority based on features
-    // (distance, threat, bot class suitability, game state) and then sort.
+    // More complex prioritization would involve features: distance, threat, objective value, bot role etc.
+    // For now, just sort by the base priority assigned during generation.
     std::sort(m_AvailableTasks.begin(), m_AvailableTasks.end(),
               [](const HighLevelTask& a, const HighLevelTask& b) {
                   return a.priority > b.priority; // Higher priority first
               });
-    // std::cout << "Planner: Prioritized available tasks." << std::endl;
+    // std::cout << "Planner: Prioritized " << m_AvailableTasks.size() << " tasks." << std::endl;
 }
 
 bool CObjectivePlanner::SelectTaskFromList() {
     if (m_AvailableTasks.empty()) {
-        m_CurrentHighLevelTask.Reset();
+        // std::cout << "Planner: No available tasks to select." << std::endl;
+        m_CurrentHighLevelTask.Reset(); // Ensure current task is invalid
         return false;
     }
     // Select the highest priority task (first in the sorted list)
-    m_CurrentHighLevelTask = m_AvailableTasks[0];
-    // std::cout << "Planner: Selected HLT: " << m_CurrentHighLevelTask.description << " with prio " << m_CurrentHighLevelTask.priority << std::endl;
+    m_CurrentHighLevelTask = m_AvailableTasks[0]; // Copy assignment
+    // std::cout << "Planner: Selected new HLT: " << m_CurrentHighLevelTask.description << " (Prio: " << m_CurrentHighLevelTask.priority << ")" << std::endl;
     return true;
 }
 
 bool CObjectivePlanner::DecomposeTask(HighLevelTask& task) {
-    task.subTasks.clear();
-    task.currentSubTaskIndex = -1;
+    if (task.type == HighLevelTaskType::NONE) return false;
 
+    task.subTasks.clear(); // Clear any previous subtasks
+    // std::cout << "Planner: Decomposing task: " << task.description << std::endl;
+
+    // Use helper methods for common sequences
     switch (task.type) {
-        case HighLevelTaskType::CAPTURE_POINT:
-            AddMoveAndCaptureSubTasks(task, task.targetPosition, task.pTargetEntity);
+        case HighLevelTaskType::CAPTURE_POINT_FF:
+            AddDefaultSubTasksForCapture(task, task.targetPosition, task.pTargetEntity);
             break;
-        case HighLevelTaskType::DEFEND_POINT:
-            AddMoveAndDefendSubTasks(task, task.targetPosition, task.pTargetEntity);
+        case HighLevelTaskType::DEFEND_POINT_FF:
+            AddDefaultSubTasksForDefense(task, task.targetPosition, task.pTargetEntity);
             break;
-        // ... other HLT types
+        // ... other HLT types like ATTACK_ENEMY, SEEK_HEALTH etc.
         default:
             std::cerr << "Planner Error: Unknown HighLevelTaskType for decomposition: " << static_cast<int>(task.type) << std::endl;
             return false;
     }
 
     if (!task.subTasks.empty()) {
-        task.currentSubTaskIndex = 0;
-        // std::cout << "Planner: Decomposed task. First subtask type: " << (int)task.subTasks[0].type << std::endl;
+        task.currentSubTaskIndex = 0; // Start with the first subtask
+        // std::cout << "Planner: Task decomposed into " << task.subTasks.size() << " subtasks. First: " << static_cast<int>(task.subTasks[0].type) << std::endl;
         return true;
     }
-    std::cerr << "Planner Error: Task decomposition resulted in no subtasks for " << task.description << std::endl;
-    return false;
+    // std::cerr << "Planner Warning: Task decomposition resulted in no subtasks for " << task.description << std::endl;
+    return false; // No subtasks added might mean an issue or a very simple HLT
 }
 
-void CObjectivePlanner::AddMoveAndCaptureSubTasks(HighLevelTask& hlt, const Vector& targetPos, CBaseEntity* targetEnt) {
-    SubTask move(SubTaskType::MOVE_TO_POSITION);
-    move.targetPosition = targetPos;
-    if (targetEnt) { // If entity is known, can target it more specifically
-        move.type = SubTaskType::MOVE_TO_ENTITY;
-        move.pTargetEntity = targetEnt;
-    }
-    hlt.AddSubTask(move);
-
-    // Conceptual: Secure area around point before trying to cap
-    // SubTask secure(SubTaskType::SECURE_AREA);
-    // secure.targetPosition = targetPos;
-    // secure.desiredDuration = 8.0f; // Secure for 8 seconds
-    // hlt.AddSubTask(secure);
-
-    SubTask capture(SubTaskType::CAPTURE_OBJECTIVE);
-    capture.pTargetEntity = targetEnt; // The CP entity
-    capture.targetPosition = targetPos; // Stand on point
-    // capture.desiredDuration = 20.0f; // Max time to attempt capture on point
-    hlt.AddSubTask(capture);
-}
-
-void CObjectivePlanner::AddMoveAndDefendSubTasks(HighLevelTask& hlt, const Vector& targetPos, CBaseEntity* targetEnt){
-    SubTask move(SubTaskType::MOVE_TO_POSITION);
-    move.targetPosition = targetPos; // Move to the general defensive area / CP
+// --- Example Decomposition Helpers ---
+void CObjectivePlanner::AddDefaultSubTasksForMovement(HighLevelTask& hlt, const Vector& targetPos, CBaseEntity* targetEnt) {
     if (targetEnt) {
-        move.type = SubTaskType::MOVE_TO_ENTITY;
-        move.pTargetEntity = targetEnt;
+        hlt.AddSubTask(SubTask(SubTaskType::MOVE_TO_ENTITY, targetEnt));
+    } else {
+        hlt.AddSubTask(SubTask(SubTaskType::MOVE_TO_POSITION, targetPos));
     }
-    hlt.AddSubTask(move);
+}
 
-    // Conceptual: Secure area more thoroughly for defense
-    // SubTask secure(SubTaskType::SECURE_AREA);
-    // secure.targetPosition = targetPos;
-    // secure.desiredDuration = 15.0f;
-    // hlt.AddSubTask(secure);
+void CObjectivePlanner::AddDefaultSubTasksForCapture(HighLevelTask& hlt, const Vector& targetPos, CBaseEntity* targetEnt) {
+    AddDefaultSubTasksForMovement(hlt, targetPos, targetEnt);
+    hlt.AddSubTask(SubTask(SubTaskType::SECURE_AREA, targetPos, 8.0f)); // Secure for 8s
+    // STAND_ON_POINT is more specific and better if available, CAPTURE_OBJECTIVE is generic
+    hlt.AddSubTask(SubTask(SubTaskType::STAND_ON_POINT, targetEnt ? targetEnt : nullptr, 20.0f));
+    if(!targetEnt) hlt.subTasks.back().targetPosition = targetPos; // Ensure STAND_ON_POINT also has position if no entity
+}
 
-    // Conceptual: Hold position task
-    // SubTask hold(SubTaskType::HOLD_POSITION); // Assuming HOLD_POSITION is a defined SubTaskType
-    // hold.targetPosition = targetPos;
-    // hold.desiredDuration = 60.0f; // Hold for a minute or until interrupted
-    // hlt.AddSubTask(hold);
-    // For now, using CAPTURE_OBJECTIVE as a placeholder for "stay on point" for defense too.
-    // A dedicated DEFEND_AREA or HOLD_POSITION subtask would be better.
-    SubTask defend_stand(SubTaskType::CAPTURE_OBJECTIVE); // Placeholder for "stay and defend"
-    defend_stand.pTargetEntity = targetEnt;
-    defend_stand.targetPosition = targetPos;
-    defend_stand.desiredDuration = 60.0f;
-    hlt.AddSubTask(defend_stand);
+void CObjectivePlanner::AddDefaultSubTasksForDefense(HighLevelTask& hlt, const Vector& targetPos, CBaseEntity* targetEnt) {
+    AddDefaultSubTasksForMovement(hlt, targetPos, targetEnt); // Move to general CP area
+    hlt.AddSubTask(SubTask(SubTaskType::SECURE_AREA, targetPos, 15.0f)); // Secure for 15s
+    hlt.AddSubTask(SubTask(SubTaskType::HOLD_POSITION, targetPos, 60.0f)); // Hold for 60s
 }

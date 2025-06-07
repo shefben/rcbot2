@@ -5,135 +5,87 @@
 #pragma once
 #endif
 
-#include "ff_state_structs.h"
-#include "BotTasks.h"         // For HighLevelTask, SubTask
 #include <vector>
 #include <string>
-#include <map>
 #include <memory> // For std::unique_ptr
 
 // Forward declarations
-class CreateInterfaceFn;
-class IServerPluginCallbacks;
-struct edict_t;
-class CCommand;
-struct lua_State;
-class CFFBaseAI;             // Forward declare base AI class
-class CObjectivePlanner;     // Forward declare planner
-struct BotKnowledgeBase;     // Forward declare (defined in FFBaseAI.h or similar)
+struct edict_t;         // Engine's entity representation (conceptual)
+struct CUserCmd;        // Engine's user command structure (conceptual)
+class CFFBaseAI;        // Bot's AI logic base class
+class CObjectivePlanner;// Bot's high-level planning class
+class CreateInterfaceFn;// Engine interface factory function pointer type
+struct BotKnowledgeBase; // Forward declare (defined in FFBaseAI.h or similar)
+class ClassConfigInfo;   // Forward declare (defined in ff_state_structs.h)
 
-
-// Engine interface placeholders
-class IVEngineServer;
-class IServerGameClients;
-class CGlobalVarsBase;
-
-// Global pointer to the plugin instance
-class CRCBotPlugin;
-extern CRCBotPlugin* g_pRCBotPlugin;
 
 // Structure to hold info about managed bots
 struct BotInfo {
-    edict_t* pEdict; // Engine's representation of the bot player
+    edict_t* pEdict;    // Conceptual: pointer to game entity, set when engine confirms spawn
+    int botId;          // Unique ID for the bot
     std::string name;
-    int assignedTeamId;    // Team ID the bot is currently assigned to (e.g., 2 for RED, 3 for BLUE in TF2 terms)
-    int desiredClassId;    // Game-specific class ID (e.g., TF_CLASS_SCOUT)
-    std::string className; // Human-readable class name
-    int skillLevel;
+    int teamId;         // Requested/Assigned Team ID
+    std::string classNameRequest; // Requested Class Name
+    int classIdInternal; // Game-specific class ID, resolved from classNameRequest
+
     std::unique_ptr<CFFBaseAI> aiModule;
     std::unique_ptr<CObjectivePlanner> objectivePlanner;
-    bool isPendingSpawn; // Flag to indicate if bot is waiting for engine to spawn it after commands
 
-    BotInfo() :
-        pEdict(nullptr),
-        assignedTeamId(0), // 0 might mean spectator or unassigned
-        desiredClassId(0),
-        skillLevel(1),
-        isPendingSpawn(false)
-         {}
+    bool isActive;      // Is this bot fully initialized and running?
+    bool isPendingPlayerSlot; // True if we've asked engine for a slot, waiting for ClientPutInServer
+
+    // Constructor
+    BotInfo(edict_t* ed, int id, const std::string& botName, int team, const std::string& clsName)
+        : pEdict(ed), botId(id), name(botName), teamId(team), classNameRequest(clsName),
+          classIdInternal(0), // Resolve this later
+          aiModule(nullptr), objectivePlanner(nullptr), isActive(false), isPendingPlayerSlot(true) {}
+
+    // Move constructor and assignment for vector management
+    BotInfo(BotInfo&& other) noexcept = default;
+    BotInfo& operator=(BotInfo&& other) noexcept = default;
+
+    // Prevent copying due to unique_ptrs
+    BotInfo(const BotInfo&) = delete;
+    BotInfo& operator=(const BotInfo&) = delete;
 };
 
-
-class CRCBotPlugin // : public IServerPluginCallbacks // Conceptually
-{
+class CRCBotPlugin { // : public IServerPluginCallbacks { // Conceptual inheritance
 public:
     CRCBotPlugin();
     virtual ~CRCBotPlugin();
 
-    // --- IServerPluginCallbacks (Conceptual Methods) ---
+    // Conceptual IServerPluginCallbacks methods
     virtual bool Load(CreateInterfaceFn interfaceFactory, CreateInterfaceFn gameServerFactory);
     virtual void Unload();
-    // ... other IServerPluginCallbacks methods ...
-    virtual void LevelInit(char const *pMapName);
-    virtual void ServerActivate(edict_t *pEdictList, int edictCount, int clientMax);
     virtual void GameFrame(bool simulating);
+    virtual void LevelInit(char const *pMapName);
     virtual void LevelShutdown();
-    // ClientPutInServer is important for finalizing bot setup after engine spawns the entity.
+    // Callbacks for when entities are actually created/destroyed by engine
     virtual void ClientPutInServer(edict_t *pEntity, char const *playername);
     virtual void ClientDisconnect(edict_t *pEntity);
 
 
-    // --- Bot Creation/Management ---
-    // Method called by the rcbot_add_bot command handler
-    bool RequestNewBot(const char* desiredTeamStr, const char* desiredClassStr, const char* botNameStr, int skill);
-
-    // Called from ClientPutInServer when a bot we requested actually spawns
-    void FinalizeBotSetup(edict_t* pBotEdict, const BotInfo& pendingBotInfo);
-
-    // Called when a managed bot disconnects or is kicked
-    void OnBotLeaveGame(edict_t* pBotEdict);
-
-
-    // --- Plugin Specific Logic ---
-    void PluginCycle();
-
-    // --- Lua Bridge Management ---
-    bool InitializeLuaBridge(const char* mapName);
-    void ShutdownLuaBridge();
-    bool ExecuteLuaScript(const char* scriptPath);
-    void RegisterLuaFunctions();
-
-    // --- C++ functions to be exposed to Lua ---
-    void LogMessageToConsole(const char* message);
-    float GetCurrentGameTime() const;
-    const char* GetCurrentMapName() const;
-
-    // --- Engine Helper Accessors (Conceptual) ---
-    IVEngineServer* GetEngineServer() { return m_pEngineServer; }
-    CGlobalVarsBase* GetGlobals() { return m_pGlobals; }
-    int GetTeamPlayerCount(int teamId) const; // Renamed for clarity
-    void AssignBotToTeam(edict_t* pBotEdict, int teamId, const char* desiredClassStr); // Helper
-
+    // Bot Management
+    // Returns botId if successful request, -1 otherwise
+    int RequestBot(const std::string& name, int team, const std::string& className);
+    bool RemoveBot(int botId); // Remove by our internal botId
+    void UpdateAllBots(CUserCmd* pUserCmdArray); // pUserCmdArray is conceptual for now
 
 private:
-    bool FindLuaState();
-    // Conceptual: Actually makes the bot entity run the command (e.g., via engine->ClientCommand)
-    void EngineIssueBotCommand(edict_t* pBotEdict, const char* commandFormat, ...);
+    void FinalizeBotAddition(BotInfo& botInfo, edict_t* pEdict); // Helper called by ClientPutInServer
 
-    // --- Lua State ---
-    lua_State* m_pLuaState;
-    bool m_bLuaBridgeInitialized;
+    std::vector<BotInfo> m_ManagedBots; // Stores all bot instances. BotInfo.botId can be its index + 1 or a unique counter.
+                                        // Using a vector means botId might not directly be index if RemoveBot compacts.
+                                        // For simplicity, botId will be m_NextBotIdCounter, and we search by it.
+    int m_NextBotIdCounter;             // Counter to generate unique botIds
 
-    // --- Engine Interfaces (example) ---
-    IVEngineServer* m_pEngineServer;
-    IServerGameClients* m_pServerGameClients;
-    CGlobalVarsBase* m_pGlobals;
+    // Conceptual: Pointers to engine interfaces needed by the plugin itself
+    // void* m_pEngineServer;
+    // void* m_pGameRules; // For game mode, team scores etc.
 
-    // --- Game State Data Storage ---
-    std::vector<ControlPointInfo> m_ControlPoints;
-    std::vector<PayloadPathInfo>  m_PayloadPaths;
-    std::vector<ClassConfigInfo>  m_ClassConfigs;
-    std::unique_ptr<BotKnowledgeBase> m_pKnowledgeBase; // Owns the KB
-
-    const char* m_CurrentMapName;
-
-    // --- Bot Management ---
-    // Using edict_t* as key might be problematic if edicts are reused quickly.
-    // An internal, persistent bot ID might be better long-term.
-    std::map<edict_t*, BotInfo> m_ManagedBots;
-    // Store bots that have been requested but not yet seen by ClientPutInServer
-    std::vector<BotInfo> m_PendingBots;
-    int m_NextBotUniqueId; // For generating unique bot names if not provided
+    // Conceptual: Global knowledge, configs - loaded from Lua
+    std::unique_ptr<BotKnowledgeBase> m_pGlobalKnowledgeBase;
+    std::vector<ClassConfigInfo> m_GlobalClassConfigs;
 };
 
 #endif // RCBOT_PLUGIN_H
