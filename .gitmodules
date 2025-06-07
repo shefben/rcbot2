@@ -1,9 +1,3 @@
 [submodule "metamod-source"]
 	path = metamod-source
 	url = https://github.com/alliedmodders/metamod-source.git
-[submodule "fortressforever-scripts"]
-	path = fortressforever-scripts
-	url = https://github.com/fortressforever/fortressforever-scripts.git
-[submodule "fortressforever-lua-repo"]
-	path = fortressforever-lua-repo
-	url = https://github.com/fortressforever-2013/fortressforever-lua-repo.git
