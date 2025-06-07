@@ -855,15 +855,28 @@ void CBotTF2 ::init(bool bVarInit) { CBotFortress::init(bVarInit); }
 #define BOT_UTIL_FF_USE_GRENADE_STD 1001
 #define BOT_UTIL_FF_USE_GRENADE_CONC 1002
 #define BOT_UTIL_FF_CONC_JUMP_MOBILITY 1008
-
 #define BOT_UTIL_FF_HUNTED_VIP_ESCAPE 1009
 #define BOT_UTIL_FF_HUNTED_KILL_VIP 1010
 #define BOT_UTIL_FF_HUNTED_PROTECT_VIP 1011
+#define BOT_UTIL_FF_ENGRI_BUILD_MANCANNON 1012
+#define BOT_UTIL_FF_DEMO_LAY_PIPE_TRAP 1013
+#define BOT_UTIL_FF_SPY_USE_TRANQ 1014
+
 
 #define SCHED_FF_PRIME_THROW_GRENADE 2001
 #define SCHED_FF_CONC_JUMP_SELF 2002
-// #define SCHED_FF_HUNTED_ESCAPE 2003 // Not strictly needed if using CBotGotoOriginSched
-// #define SCHED_FF_HUNTED_GUARD_VIP 2004 // Not strictly needed if using compound schedule
+#define SCHED_FF_HUNTED_ESCAPE 2003
+#define SCHED_FF_HUNTED_GUARD_VIP 2004
+#define SCHED_FF_ENGRI_BUILD_MANCANNON 2005
+#define SCHED_FF_DEMO_LAY_PIPE_TRAP 2006
+
+
+// FF Engineer Buildable Defines (local for now)
+#define FF_ENGIBUILD_MANCANNON 1
+// Potentially others:
+// #define FF_ENGIBUILD_DISPENSER 0
+// #define FF_ENGIBUILD_DETPACK 2
+
 
 // Initialize static member for Hunted mode testing
 bool CBotFF::s_IsHuntedModeForTesting = false; // Set to true via debugger or temp code to test Hunted logic
@@ -967,6 +980,84 @@ void CTaskFFExecuteConcJump::execute(CBot* pBot)
 bool CTaskFFExecuteConcJump::isTaskComplete(CBot* pBot) { return m_bTaskComplete; }
 const char* CTaskFFExecuteConcJump::getTaskName() { return "CTaskFFExecuteConcJump"; }
 
+// --- CTaskFFEngineerBuild ---
+CTaskFFEngineerBuild::CTaskFFEngineerBuild(int buildableId, const Vector& buildPos) :
+  m_buildableId(buildableId), m_vBuildPos(buildPos), m_bCommandSent(false)
+{
+    setTaskName("CTaskFFEngineerBuild");
+    m_bTaskComplete = false;
+}
+
+void CTaskFFEngineerBuild::execute(CBot* pBot) {
+    CBotFF* pFFBot = static_cast<CBotFF*>(pBot);
+    if (!pFFBot) {
+        setTaskStatus(TASK_FAILED);
+        m_bTaskComplete = true;
+        return;
+    }
+
+    if (m_bCommandSent) {
+        setTaskStatus(TASK_COMPLETE);
+        m_bTaskComplete = true;
+        return;
+    }
+
+    pFFBot->setLookAt(m_vBuildPos);
+    pFFBot->setLookAtTask(LOOK_VECTOR_PRIORITY);
+
+    const char* cmd = "";
+    if (m_buildableId == FF_ENGIBUILD_MANCANNON) {
+        cmd = "build mancannon";
+    }
+
+
+    if (cmd[0] != '\0') {
+        if (helpers && pFFBot->getEdict()) {
+            helpers->ClientCommand(pFFBot->getEdict(), cmd);
+        }
+        pFFBot->m_fNextMancannonBuildTime = engine->Time() + 30.0f;
+        m_bCommandSent = true;
+        setTaskStatus(TASK_COMPLETE);
+        m_bTaskComplete = true;
+    } else {
+        setTaskStatus(TASK_FAILED);
+        m_bTaskComplete = true;
+    }
+}
+
+bool CTaskFFEngineerBuild::isTaskComplete(CBot* pBot) {
+    return m_bTaskComplete;
+}
+const char* CTaskFFEngineerBuild::getTaskName() { return "CTaskFFEngineerBuild"; }
+
+// --- CTaskFFDemoLaySinglePipe ---
+CTaskFFDemoLaySinglePipe::CTaskFFDemoLaySinglePipe(const Vector& vTargetPos) : m_vTargetPos(vTargetPos), m_bFired(false) {
+    setTaskName("CTaskFFDemoLaySinglePipe");
+    m_bTaskComplete = false;
+}
+void CTaskFFDemoLaySinglePipe::execute(CBot* pBot) {
+    CBotFF* pFFBot = static_cast<CBotFF*>(pBot);
+    if (!pFFBot) {
+        setTaskStatus(TASK_FAILED);
+        m_bTaskComplete = true;
+        return;
+    }
+    if (m_bFired) {
+        setTaskStatus(TASK_COMPLETE);
+        m_bTaskComplete = true;
+        return;
+    }
+    pFFBot->setLookAt(m_vTargetPos);
+    pFFBot->setLookAtTask(LOOK_VECTOR_PRIORITY);
+    pFFBot->getButtons()->tap(IN_ATTACK);
+    pFFBot->m_fNextPipeLayTime = engine->Time() + 0.5f;
+    m_bFired = true;
+    setTaskStatus(TASK_COMPLETE);
+    m_bTaskComplete = true;
+}
+bool CTaskFFDemoLaySinglePipe::isTaskComplete(CBot* pBot) { return m_bTaskComplete; }
+const char* CTaskFFDemoLaySinglePipe::getTaskName() { return "CTaskFFDemoLaySinglePipe"; }
+
 
 // --- CSchedFFPrimeThrowGrenade ---
 CSchedFFPrimeThrowGrenade::CSchedFFPrimeThrowGrenade(const Vector &vTargetPos, CBotWeapon* pGrenadeWeapon, float fPrimeTime)
@@ -1001,8 +1092,69 @@ CSchedFFConcJumpSelf::CSchedFFConcJumpSelf(CBotFF* pBot, CBotWeapon* pConcGrenad
 }
 const char* CSchedFFConcJumpSelf::getScheduleName() { return "CSchedFFConcJumpSelf"; }
 
+// --- CSchedFFBuildMancannon ---
+CSchedFFBuildMancannon::CSchedFFBuildMancannon(CBotFF* pBot, CWaypoint* pBuildSpot) {
+    setID(SCHED_FF_ENGRI_BUILD_MANCANNON);
+    setScheduleName("CSchedFFBuildMancannon");
+
+    if (!pBuildSpot || !pBot) {
+        failSchedule();
+        return;
+    }
+    addTask(new CMoveToPointTask(pBuildSpot->getOrigin(), CWaypointLocations::REACHABLE_RANGE - 20.0f));
+    addTask(new CTaskFFEngineerBuild(FF_ENGIBUILD_MANCANNON, pBuildSpot->getOrigin()));
+}
+const char* CSchedFFBuildMancannon::getScheduleName() { return "CSchedFFBuildMancannon"; }
+
+// --- CSchedFFDemoLayPipeTrap ---
+CSchedFFDemoLayPipeTrap::CSchedFFDemoLayPipeTrap(CBotFF* pBot, CWaypoint* pTrapSpotWpt, int numPipes) {
+    setID(SCHED_FF_DEMO_LAY_PIPE_TRAP);
+    setScheduleName("CSchedFFDemoLayPipeTrap");
+
+    if (!pBot || !pTrapSpotWpt || numPipes <= 0) {
+        failSchedule();
+        return;
+    }
+
+    CBotWeapon* pPipeLauncher = pBot->getWeapons()->getWeaponByName("weapon_ff_pipebomblauncher");
+    // Ensure getAmmo is called with pBot context if it's a member function that needs it
+    if (!pPipeLauncher || !pPipeLauncher->hasWeapon() || pPipeLauncher->getAmmo(pBot) < numPipes) {
+        failSchedule();
+        return;
+    }
+
+    addTask(new CSelectWeaponTask(pPipeLauncher->getWeaponInfo()));
+    addTask(new CMoveToPointTask(pTrapSpotWpt->getOrigin(), CWaypointLocations::REACHABLE_RANGE - 20.0f));
+
+    for (int i = 0; i < numPipes; ++i) {
+        Vector targetPos = pTrapSpotWpt->getOrigin() + Vector(randomFloat(-30, 30), randomFloat(-30, 30), 10);
+        addTask(new CTaskFFDemoLaySinglePipe(targetPos));
+        if (i < numPipes - 1) {
+            addTask(new CBotTaskWait(0.6f));
+        }
+    }
+}
+const char* CSchedFFDemoLayPipeTrap::getScheduleName() { return "CSchedFFDemoLayPipeTrap"; }
+
 
 // CBotFF Method Implementations
+CBotFF::CBotFF()
+	: CBotFortress(),
+	  m_fGrenadePrimeStartTime(0.0f),
+	  m_bIsPrimingGrenade(false),
+	  m_pGrenadeTargetEnt(NULL),
+	  m_fPrimeDuration(1.0f),
+      m_pVIP(NULL),
+      m_bIsVIP(false),
+      m_fNextMancannonBuildTime(0.0f),
+      m_iPipesToLay(0),
+      m_fNextPipeLayTime(0.0f)
+	{
+		m_vGrenadeTargetPos = Vector(0,0,0);
+        m_hBuiltMancannon.Set(NULL);
+        m_vCurrentPipeTrapLocation = Vector(0,0,0);
+	}
+
 
 void CBotFF::chooseClass()
 {
@@ -1040,10 +1192,9 @@ void CBotFF::selectClass()
 void CBotFF::modThink ()
 {
 	CBotFortress :: modThink();
-	// FF specific periodic checks
-	if (s_IsHuntedModeForTesting) { // Replace with CFortressForeverMod::isMapTypeHunted()
-		TF_Class currentClass = getClass(); // Ensure this correctly gets FF class or maps to TF_Class
-		if (currentClass == TF_CLASS_CIVILIAN) { // Ensure TF_CLASS_CIVILIAN maps to FF Civilian
+	if (s_IsHuntedModeForTesting) {
+		TF_Class currentClass = (TF_Class)CClassInterface::getTF2Class(m_pEdict);
+		if (currentClass == TF_CLASS_CIVILIAN) {
 			m_bIsVIP = true;
 		} else {
 			m_bIsVIP = false;
@@ -1051,17 +1202,13 @@ void CBotFF::modThink ()
 	} else {
 		m_bIsVIP = false;
 	}
-	m_pVIP = NULL; // Clear each think, will be repopulated in getTasks if needed
 }
 
 bool CBotFF::isEnemy ( edict_t *pEdict,bool bCheckWeapons )
 {
 	if ( pEdict == m_pEdict ) return false;
 	if ( !CBotGlobals::entityIsValid(pEdict) || !CBotGlobals::entityIsAlive(pEdict) ) return false;
-	// FF might have different team definitions or logic (e.g. free-for-all modes)
-	// For now, assuming standard team check from base class or simple team comparison.
-	if ( CBotGlobals::getTeam(pEdict) == getTeam() && CBotGlobals::getTeam(pEdict) != 0) return false; // Added a check for team 0 (unassigned/spectator)
-	// FF specific checks for disguised spies or other complex conditions could go here.
+	if ( CBotGlobals::getTeam(pEdict) == getTeam() && CBotGlobals::getTeam(pEdict) != 0 ) return false;
 	return true;
 }
 
@@ -1070,7 +1217,7 @@ void CBotFF::modAim(edict_t *pEntity, Vector &v_origin, Vector *v_desired_offset
 	CBot::modAim(pEntity, v_origin, v_desired_offset, v_size, fDist, fDist2D);
 
 	CBotWeapon *pWp = getCurrentWeapon();
-	static float fTime; // Consider making this a member if its state needs to persist across calls in a more complex way
+	static float fTime;
 
 	if (m_bIsPrimingGrenade && m_pSchedules && m_pSchedules->isCurrentSchedule(SCHED_FF_CONC_JUMP_SELF))
 	{
@@ -1091,7 +1238,7 @@ void CBotFF::modAim(edict_t *pEntity, Vector &v_origin, Vector *v_desired_offset
 	if (pWp)
 	{
 		float projSpeed = pWp->getProjectileSpeed();
-		if (projSpeed <= 0.001f) projSpeed = 1000.0f; // Avoid division by zero/very small speeds
+		if (projSpeed <= 0.001f) projSpeed = 1000.0f;
 
 		bool isArcingFFGrenade = pWp->isGrenade();
 
@@ -1112,7 +1259,7 @@ void CBotFF::modAim(edict_t *pEntity, Vector &v_origin, Vector *v_desired_offset
 			const char* currentWeaponClassname = pWp->getWeaponInfo() ? pWp->getWeaponInfo()->getWeaponName() : "";
             if (strcmp(currentWeaponClassname, "weapon_ff_grenadelauncher") == 0 ||
                 strcmp(currentWeaponClassname, "weapon_ff_pipebomblauncher") == 0 ||
-                strcmp(currentWeaponClassname, "weapon_ff_mirv") == 0) { // Add other arcing FF weapons
+                strcmp(currentWeaponClassname, "weapon_ff_mirv") == 0) {
                 use2DdistForTime = true;
             }
 
@@ -1256,50 +1403,99 @@ void CBotFF::getTasks(unsigned int iIgnore)
 {
 	CBot::getTasks(iIgnore);
 
-	if (!hasSomeConditions(CONDITION_CHANGED) && !m_pSchedules->isEmpty() && !m_bIsVIP) // If VIP, escape is priority
+	if (!hasSomeConditions(CONDITION_CHANGED) && !m_pSchedules->isEmpty() && !m_bIsVIP)
 		return;
 
 	removeCondition(CONDITION_CHANGED);
 	CBotUtilities utils;
 	
-	m_bIsVIP = false; // Reset VIP status at the start of task evaluation
-    m_pVIP = NULL;    // Reset VIP pointer
+	m_pVIP = NULL;
 
-	// Placeholder for actual Hunted mode detection from CGameRules or similar
-	// For testing, use CBotFF::s_IsHuntedModeForTesting
 	if (CBotFF::s_IsHuntedModeForTesting)
 	{
-		TF_Class botFFClass = (TF_Class)CClassInterface::getTF2Class(m_pEdict); // Adapt for FF
-		int botTeam = getTeam();
-
-		if (botFFClass == TF_CLASS_CIVILIAN) // This needs to map to FF Civilian
+		if (m_bIsVIP)
 		{
-			m_bIsVIP = true;
-			ADD_UTILITY(BOT_UTIL_FF_HUNTED_VIP_ESCAPE, true, 1.0f); // Highest priority for VIP
+			ADD_UTILITY(BOT_UTIL_FF_HUNTED_VIP_ESCAPE, true, 1.0f);
 		}
 		else
 		{
+			edict_t* foundVIP = NULL;
 			for (int i = 1; i <= gpGlobals->maxClients; ++i) {
 				edict_t* pPlayer = INDEXENT(i);
 				if (pPlayer && pPlayer != m_pEdict && CBotGlobals::entityIsValid(pPlayer) && CBotGlobals::entityIsAlive(pPlayer)) {
-					TF_Class playerFFClass = (TF_Class)CClassInterface::getTF2Class(pPlayer); // Adapt for FF
-					if (playerFFClass == TF_CLASS_CIVILIAN) { // FF Civilian
-						if (CBotGlobals::getTeam(pPlayer) == botTeam) { // Friendly VIP
+					TF_Class playerFFClass = (TF_Class)CClassInterface::getTF2Class(pPlayer);
+					if (playerFFClass == TF_CLASS_CIVILIAN) {
+						foundVIP = pPlayer;
+						if (CBotGlobals::getTeam(pPlayer) == getTeam()) {
 							m_pVIP = pPlayer;
 							ADD_UTILITY_TARGET(BOT_UTIL_FF_HUNTED_PROTECT_VIP, true, 0.9f, pPlayer);
-						} else { // Enemy VIP
+						} else {
 							m_pVIP = pPlayer;
 							ADD_UTILITY_TARGET(BOT_UTIL_FF_HUNTED_KILL_VIP, true, 0.95f, pPlayer);
 						}
-						break; // Assuming one VIP per team or first found is primary target
+						break;
 					}
 				}
 			}
 		}
 	}
 
-	if (!m_bIsVIP) // Non-VIPs (or if not Hunted mode) consider grenades and other objectives
+	if (!m_bIsVIP)
 	{
+        if (getClass() == TF_CLASS_ENGINEER && engine->Time() > m_fNextMancannonBuildTime && !m_bIsPrimingGrenade)
+        {
+            CWaypoint* pMancannonSpot = CWaypoints::randomWaypointGoal(CWaypointTypes::W_FL_FF_MANCANNON_SPOT, getTeam(), 0, true, this);
+            if (pMancannonSpot)
+            {
+                bool spotTaken = false;
+                if (m_hBuiltMancannon.Get() && CBotGlobals::entityIsValid(m_hBuiltMancannon.Get())) {
+                    if ( (CBotGlobals::entityOrigin(m_hBuiltMancannon.Get()) - pMancannonSpot->getOrigin()).LengthSqr() < (200.0f * 200.0f) ) {
+                        spotTaken = true;
+                    }
+                }
+                if (!spotTaken) {
+                    ADD_UTILITY_DATA(BOT_UTIL_FF_ENGRI_BUILD_MANCANNON, true, 0.7f, CWaypoints::getWaypointIndex(pMancannonSpot));
+                }
+            }
+        }
+
+        if (getClass() == TF_CLASS_DEMOMAN && engine->Time() > m_fNextPipeLayTime && !m_bIsPrimingGrenade)
+        {
+            CBotWeapon* pPipeLauncher = m_pWeapons->getWeaponByName("weapon_ff_pipebomblauncher");
+            if (pPipeLauncher && pPipeLauncher->hasWeapon() && pPipeLauncher->getAmmo(this) >= 3)
+            {
+                CWaypoint* pTrapSpot = CWaypoints::randomWaypointGoal(CWaypointTypes::W_FL_FF_PIPE_TRAP_SPOT, getTeam(), 0, true, this);
+                if (pTrapSpot)
+                {
+                    ADD_UTILITY_DATA(BOT_UTIL_FF_DEMO_LAY_PIPE_TRAP, true, 0.6f, CWaypoints::getWaypointIndex(pTrapSpot));
+                }
+            }
+        }
+
+        if (getClass() == TF_CLASS_SPY && !m_bIsPrimingGrenade)
+        {
+            CBotWeapon* pTranqGun = m_pWeapons->getWeaponByName("weapon_ff_tranqgun");
+            if (pTranqGun && pTranqGun->hasWeapon() && !pTranqGun->outOfAmmo(this))
+            {
+                if (m_pEnemy && CBotGlobals::entityIsAlive(m_pEnemy) && isVisible(m_pEnemy))
+                {
+                    float utilityScore = 0.5f;
+                    TF_Class enemyClass = (TF_Class)CClassInterface::getTF2Class(m_pEnemy);
+
+                    if (enemyClass == TF_CLASS_MEDIC || enemyClass == TF_CLASS_HWGUY ||
+                        enemyClass == TF_CLASS_SOLDIER || enemyClass == TF_CLASS_SCOUT || enemyClass == TF_CLASS_SPY) {
+                        utilityScore += 0.25f;
+                    }
+                    Vector enemyVelocity;
+                    if (CClassInterface::getVelocity(m_pEnemy, &enemyVelocity) && enemyVelocity.Length() > 150.0f) {
+                        utilityScore += 0.1f;
+                    }
+                    ADD_UTILITY_WEAPON(BOT_UTIL_FF_SPY_USE_TRANQ, true, utilityScore, pTranqGun);
+                }
+            }
+        }
+
+
 		if (m_pEnemy && CBotGlobals::entityIsAlive(m_pEnemy) && isVisible(m_pEnemy) && !m_bIsPrimingGrenade)
 		{
 			float enemyDist = distanceFrom(m_pEnemy);
@@ -1337,11 +1533,6 @@ void CBotFF::getTasks(unsigned int iIgnore)
 				ADD_UTILITY_WEAPON(BOT_UTIL_FF_CONC_JUMP_MOBILITY, true, 0.8f, pConcGrenade);
 			}
 		}
-		// Standard CTF/AD logic if not Hunted or not VIP
-		// if (!CBotFF::s_IsHuntedModeForTesting) {
-		//    ADD_UTILITY(BOT_UTIL_GETFLAG, ... );
-		//    ADD_UTILITY(BOT_UTIL_ATTACK_POINT, ... );
-		// }
 	}
 	
     ADD_UTILITY(BOT_UTIL_ROAM,true,0.0001f);
@@ -1373,25 +1564,27 @@ bool CBotFF::executeAction(CBotUtility *util)
 	float primeTime = 1.0f;
 	Vector targetPos = m_vEmpty;
 
-	// Retrieve weapon if it's a grenade utility
-	if (id >= BOT_UTIL_FF_USE_GRENADE_STD && id <= BOT_UTIL_FF_CONC_JUMP_MOBILITY) {
+	if (id >= BOT_UTIL_FF_USE_GRENADE_STD && id <= BOT_UTIL_FF_CONC_JUMP_MOBILITY) { // Includes conc jump for weapon choice
         pGrenadeWeapon = util->getWeaponChoice();
+        if (!pGrenadeWeapon) return false;
+    } else if (id == BOT_UTIL_FF_SPY_USE_TRANQ) { // Spy tranq also passes weapon
+         pGrenadeWeapon = util->getWeaponChoice();
         if (!pGrenadeWeapon) return false;
     }
 
-	// Determine target for offensive grenades
-	if (id == BOT_UTIL_FF_USE_GRENADE_STD || (id == BOT_UTIL_FF_USE_GRENADE_CONC && id != BOT_UTIL_FF_CONC_JUMP_MOBILITY) ) {
+
+	if (id == BOT_UTIL_FF_USE_GRENADE_STD || (id == BOT_UTIL_FF_USE_GRENADE_CONC && id != BOT_UTIL_FF_CONC_JUMP_MOBILITY) || id == BOT_UTIL_FF_SPY_USE_TRANQ ) {
 		if (m_pEnemy && CBotGlobals::entityIsAlive(m_pEnemy)) {
 			targetPos = CBotGlobals::entityOrigin(m_pEnemy);
-		} else {
-			return false; // No valid enemy target for these offensive grenades
+		} else { // If no enemy, these utilities shouldn't have been chosen or are invalid now
+			return false;
 		}
 	}
 
     switch (id)
     {
         case BOT_UTIL_FF_USE_GRENADE_STD:
-            if (targetPos != m_vEmpty) { // Ensure targetPos was set
+            if (targetPos != m_vEmpty && pGrenadeWeapon) {
 				primeTime = 1.5f;
                 m_pSchedules->add(new CSchedFFPrimeThrowGrenade(targetPos, pGrenadeWeapon, primeTime));
                 return true;
@@ -1399,10 +1592,12 @@ bool CBotFF::executeAction(CBotUtility *util)
             break;
 
         case BOT_UTIL_FF_USE_GRENADE_CONC:
-            if (targetPos != m_vEmpty) {
+            if (targetPos != m_vEmpty && pGrenadeWeapon) {
 				primeTime = 0.5f;
                 m_pSchedules->add(new CSchedFFPrimeThrowGrenade(targetPos, pGrenadeWeapon, primeTime));
-                return true;
+		        return true;
+			} else {
+                return false;
             }
             break;
 
@@ -1413,20 +1608,49 @@ bool CBotFF::executeAction(CBotUtility *util)
 				return true;
 			}
 			break;
-
+        case BOT_UTIL_FF_ENGRI_BUILD_MANCANNON:
+            {
+                CWaypoint* pBuildSpot = CWaypoints::getWaypoint(util->getIntData());
+                if (pBuildSpot) {
+                    m_pSchedules->add(new CSchedFFBuildMancannon(this, pBuildSpot));
+                    return true;
+                }
+            }
+            break;
+        case BOT_UTIL_FF_DEMO_LAY_PIPE_TRAP:
+            {
+                CWaypoint* pTrapSpot = CWaypoints::getWaypoint(util->getIntData());
+                if (pTrapSpot) {
+                    m_pSchedules->add(new CSchedFFDemoLayPipeTrap(this, pTrapSpot));
+                    return true;
+                }
+            }
+            break;
+        case BOT_UTIL_FF_SPY_USE_TRANQ:
+             if (pGrenadeWeapon && targetPos != m_vEmpty) { // pGrenadeWeapon is tranq gun here
+                CBotSchedule* pSpyTranqSched = new CBotSchedule();
+                // Ensure weapon info is valid before creating task
+                if(util->getWeaponChoice() && util->getWeaponChoice()->getWeaponInfo())
+                {
+                    pSpyTranqSched->addTask(new CSelectWeaponTask(util->getWeaponChoice()->getWeaponInfo()));
+                    pSpyTranqSched->addTask(new CBotAttackSched(m_pEnemy));
+                    m_pSchedules->add(pSpyTranqSched);
+                    return true;
+                }
+            }
+            break;
 		case BOT_UTIL_FF_HUNTED_VIP_ESCAPE:
 			{
-				// Conceptual: W_FL_VIP_ESCAPE_POINT should be defined in waypoint system
 				CWaypoint* pEscapeWpt = CWaypoints::randomWaypointGoal(CWaypointTypes::W_FL_VIP_ESCAPE_POINT, getTeam());
 				if (pEscapeWpt) {
-					m_pSchedules->add(new CBotGotoOriginSched(pEscapeWpt->getOrigin())); // Simple goto for now
+					m_pSchedules->add(new CBotGotoOriginSched(pEscapeWpt->getOrigin()));
 				} else {
-					pEscapeWpt = CWaypoints::randomWaypointGoal(-1, getTeam(),0,false,this); // Fallback roam
+					pEscapeWpt = CWaypoints::randomWaypointGoal(-1, getTeam(),0,false,this);
 					if (pEscapeWpt) {
 						m_pSchedules->add(new CBotGotoOriginSched(pEscapeWpt->getOrigin()));
 					}
 				}
-				return true; // Return true even if no escape point, to prevent default roam if VIP
+				return true;
 			}
 			break;
        case BOT_UTIL_FF_HUNTED_KILL_VIP:
@@ -1438,9 +1662,8 @@ bool CBotFF::executeAction(CBotUtility *util)
        case BOT_UTIL_FF_HUNTED_PROTECT_VIP:
            if (util->getTaskEdictTarget()) {
                CBotSchedule* pFollowSched = new CBotSchedule();
-			   // pFollowSched->setID(SCHED_FF_HUNTED_GUARD_VIP); // Conceptual ID
                pFollowSched->addTask(new CFindPathTask(util->getTaskEdictTarget()));
-               pFollowSched->addTask(new CBotNest(randomFloat(200.0f, 400.0f), 15.0f)); // Stay near VIP
+               pFollowSched->addTask(new CBotNest(randomFloat(200.0f, 400.0f), 15.0f));
                m_pSchedules->add(pFollowSched);
 			   return true;
            }
@@ -1453,93 +1676,7 @@ bool CBotFF::executeAction(CBotUtility *util)
 }
 
 
-void CBotFF::chooseClass()
-{
-	// Check forced class cvar
-	const int forcedClass = rcbot_force_class.GetInt();
-
-	if (forcedClass >= 1 && forcedClass <= 10)
-	{
-		m_iDesiredClass = forcedClass;
-	}
-	else
-	{
-		// Randomly select a class if not forced
-		// FF Class IDs: 1:Scout, 2:Sniper, 3:Soldier, 4:Demoman, 5:Medic,
-		// 6:HWGuy, 7:Pyro, 8:Spy, 9:Engineer, 10:Civilian
-		m_iDesiredClass = randomInt(1, 10);
-	}
-}
-
-void CBotFF::selectClass()
-{
-	const char* cmd = "";
-
-	// Ensure m_iDesiredClass has been set by chooseClass()
-	if (m_iDesiredClass < 1 || m_iDesiredClass > 10)
-	{
-		// Fallback if chooseClass wasn't called or set an invalid class
-		chooseClass();
-	}
-
-	switch (m_iDesiredClass)
-	{
-		case 1:  cmd = "joinclass scout"; break;
-		case 2:  cmd = "joinclass sniper"; break;
-		case 3:  cmd = "joinclass soldier"; break;
-		case 4:  cmd = "joinclass demoman"; break;
-		case 5:  cmd = "joinclass medic"; break;
-		case 6:  cmd = "joinclass hwguy"; break; // FF uses 'hwguy'
-		case 7:  cmd = "joinclass pyro"; break;
-		case 8:  cmd = "joinclass spy"; break;
-		case 9:  cmd = "joinclass engineer"; break;
-		case 10: cmd = "joinclass civilian"; break;
-		default:
-			// Should not happen if chooseClass is working correctly
-			cmd = "joinclass scout"; // Default to scout
-			break;
-	}
-
-	if (helpers && m_pEdict)
-	{
-		helpers->ClientCommand(m_pEdict, cmd);
-	}
-
-	// Update class change time, similar to CBotFortress::selectClass()
-	if (engine)
-	{
-		m_fChangeClassTime = engine->Time() + randomFloat(bot_min_cc_time.GetFloat(), bot_max_cc_time.GetFloat());
-	}
-}
-
-void CBotFF :: modThink ()
-{
-	CBotFortress :: modThink();
-	if (s_IsHuntedModeForTesting) {
-		TF_Class currentClass = (TF_Class)CClassInterface::getTF2Class(m_pEdict); // Needs FF Adaptation
-		if (currentClass == TF_CLASS_CIVILIAN) {
-			m_bIsVIP = true;
-		} else {
-			m_bIsVIP = false;
-		}
-	} else {
-		m_bIsVIP = false;
-	}
-	m_pVIP = NULL;
-}
-
-bool CBotFF :: isEnemy ( edict_t *pEdict,bool bCheckWeapons )
-{
-	if ( pEdict == m_pEdict )
-		return false;
-
-	if ( !CBotGlobals::entityIsValid(pEdict) || !CBotGlobals::entityIsAlive(pEdict) )
-		return false;
-
-	if ( CBotGlobals::getTeam(pEdict) == getTeam() && CBotGlobals::getTeam(pEdict) != 0 )
-		return false;
-
-	return true;	
-}
-
+// CBotTF2 methods remain below, untouched by this specific FF modification pass.
 void CBotTF2::MannVsMachineWaveComplete()
+
+[end of utils/RCBot2_meta/bot_fortress.cpp]

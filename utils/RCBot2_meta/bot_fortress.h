@@ -630,6 +630,15 @@ public:
 	edict_t* m_pVIP;        // Pointer to the VIP (if known and relevant to this bot)
 	bool     m_bIsVIP;      // Is this bot the VIP?
 	static bool s_IsHuntedModeForTesting; // Temporary for testing without bot_mods changes
+
+	// Member variables for Engineer Mancannon
+	MyEHandle m_hBuiltMancannon; // Currently not used for list, but good for tracking one's own.
+	float     m_fNextMancannonBuildTime;
+
+	// Member variables for Demoman pipe traps
+	int      m_iPipesToLay;
+	Vector   m_vCurrentPipeTrapLocation;
+	float    m_fNextPipeLayTime;
 };
 
 
@@ -679,6 +688,64 @@ class CSchedFFConcJumpSelf : public CBotSchedule
 public:
 	CSchedFFConcJumpSelf(CBotFF* pBot, CBotWeapon* pConcGrenade); // Target is implicit (self)
 	virtual const char *getScheduleName();
+};
+
+class CTaskFFEngineerBuild : public CBotTask
+{
+public:
+    CTaskFFEngineerBuild(int buildableId, const Vector& buildPos);
+    virtual void execute(CBot* pBot);
+    virtual bool isTaskComplete(CBot* pBot);
+    virtual const char* getTaskName();
+private:
+    int m_buildableId;
+    Vector m_vBuildPos;
+    bool m_bCommandSent;
+};
+
+class CSchedFFBuildMancannon : public CBotSchedule
+{
+public:
+    CSchedFFBuildMancannon(CBotFF* pBot, CWaypoint* pBuildSpot);
+    virtual const char* getScheduleName();
+};
+
+class CTaskFFDemoLaySinglePipe : public CBotTask
+{
+public:
+    CTaskFFDemoLaySinglePipe(const Vector& vTargetPos);
+    virtual void execute(CBot* pBot);
+    virtual bool isTaskComplete(CBot* pBot);
+    virtual const char* getTaskName();
+private:
+    Vector m_vTargetPos;
+    bool m_bFired;
+};
+
+class CSchedFFDemoLayPipeTrap : public CBotSchedule
+{
+public:
+    CSchedFFDemoLayPipeTrap(CBotFF* pBot, CWaypoint* pTrapSpotWpt, int numPipes = 3);
+    virtual const char* getScheduleName();
+};
+
+class CTaskFFMedicAimAndHeal : public CBotTask
+{
+public:
+    CTaskFFMedicAimAndHeal(edict_t* pTarget);
+    virtual void init(CBot* pBot);
+    virtual void execute(CBot* pBot);
+    virtual bool isTaskComplete(CBot* pBot);
+    virtual const char* getTaskName();
+private:
+    MyEHandle m_hTarget;
+};
+
+class CSchedFFMedicHealTeammate : public CBotSchedule
+{
+public:
+    CSchedFFMedicHealTeammate(CBotFF* pBot, edict_t* pTargetTeammate);
+    virtual const char* getScheduleName();
 };
 
 
