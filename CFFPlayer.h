@@ -1,29 +1,24 @@
 #ifndef CFF_PLAYER_H
 #define CFF_PLAYER_H
 
-#include "FFStateStructs.h" // For Vector (and QAngle if it were defined there)
+#include "FFStateStructs.h"
 #include <string>
-// #include "EngineInterfaces.h" // Not strictly needed in .h if only .cpp uses globals
+// #include "FFEngineerAI.h" // Only if BuildingType_FF is needed directly by CFFPlayer methods
 
-// Forward declarations for engine/game types (conceptual)
+// Forward declarations
 struct edict_t;
-struct CUserCmd;    // Represents player input
-// class CBaseEntity;  // Not directly stored, but methods might return it conceptually
+struct CUserCmd;
+class CBaseEntity;
+// enum class BuildingType_FF; // Forward declare if needed by a CFFPlayer method
 
-// Conceptual: If QAngle is different from Vector for angles
-// For FFStateStructs.h, Vector is used for angles.
-// struct QAngle { float x, y, z; QAngle(float _x=0, float _y=0, float _z=0) : x(_x),y(_y),z(_z){} };
-
-// Conceptual Player Flags (replace with actual game defines from e.g., const.h or player_const.h)
+// Conceptual Player Flags & Button Flags
 #ifndef FL_ONGROUND
 #define FL_ONGROUND (1 << 0)
 #endif
 #ifndef FL_DUCKING
 #define FL_DUCKING  (1 << 1)
 #endif
-// ... other flags
-
-// Conceptual Button Flags (replace with actual game defines from usercmd.h or similar)
+// ... (other FL_ flags if used by CFFPlayer directly) ...
 #ifndef IN_ATTACK
 #define IN_ATTACK   (1 << 0)
 #endif
@@ -39,13 +34,12 @@ struct CUserCmd;    // Represents player input
 #ifndef IN_ATTACK2
 #define IN_ATTACK2  (1 << 11)
 #endif
-// ... other buttons
+// ... (other IN_ flags if used by CFFPlayer directly) ...
 
 
 class CFFPlayer {
 public:
     CFFPlayer(edict_t* pEdict);
-    // virtual ~CFFPlayer(); // If CFFPlayer directly manages heap resources
 
     bool IsValid() const;
     bool IsAlive() const;
@@ -53,35 +47,69 @@ public:
     // --- Getters for Game State ---
     Vector GetOrigin() const;
     Vector GetVelocity() const;
-    Vector GetEyeAngles() const;        // Using Vector as QAngle for view angles
+    Vector GetEyeAngles() const;
     int GetHealth() const;
     int GetMaxHealth() const;
     int GetArmor() const;
     int GetMaxArmor() const;
     int GetTeam() const;
     int GetFlags() const;
-
     bool IsDucking() const;
     bool IsOnGround() const;
+    int GetAmmo(int ammoTypeIndex) const;
+    int GetActiveWeaponId_Conceptual() const;
+    bool IsWeaponActive_Conceptual(const std::string& weaponName) const;
 
-    int GetAmmo(int ammoTypeIndex /* or string ammoName for some games */) const;
-    // CBaseEntity* GetActiveWeaponEntity() const; // Conceptual: returns current weapon CBaseEntity
-    // int GetActiveWeaponId() const; // Conceptual: returns an enum/int ID for the weapon
+    // --- Engineer-Specific Getters ---
+    int GetMetalCount_Conceptual() const;
+
+    // --- Spy-Specific Getters (New) ---
+    bool IsCloaked_Conceptual() const;
+    bool IsDisguised_Conceptual() const;
+    int GetDisguiseTeam_Conceptual() const;   // Returns game-specific team ID (e.g., TEAM_RED)
+    int GetDisguiseClass_Conceptual() const; // Returns game-specific class ID (e.g., TF_CLASS_SOLDIER)
+    float GetCloakEnergy_Conceptual() const;
+    bool CanCloak_Conceptual() const;       // Checks energy, cooldowns, conditions
+    bool CanDisguise_Conceptual() const;    // Checks cooldowns, conditions
+
 
     // --- Action Methods (filling UserCmd) ---
-    void SetViewAngles(CUserCmd* pCmd, const Vector& angles); // Using Vector as QAngle
+    void SetViewAngles(CUserCmd* pCmd, const Vector& angles);
     void SetMovement(CUserCmd* pCmd, float forwardMove, float sideMove, float upMove = 0.0f);
     void AddButton(CUserCmd* pCmd, int buttonFlag);
     void RemoveButton(CUserCmd* pCmd, int buttonFlag);
-    // void SelectWeaponById(CUserCmd* pCmd, int weaponId);
-    // void ReloadWeapon(CUserCmd* pCmd);
+    void SelectWeaponByName_Conceptual(const std::string& weaponName, CUserCmd* pCmd);
+    void SelectWeaponById_Conceptual(int weaponId, CUserCmd* pCmd);
+
+    // --- Engineer-Specific Action Methods ---
+    // void IssuePDABuildCommand_Conceptual(BuildingType_FF buildingType, int subCommand, CUserCmd* pCmd); // BuildingType_FF needs definition
+    void IssuePDABuildCommand_Conceptual(int buildingTypeId, int subCommand, CUserCmd* pCmd); // Use int for type for now
+    void SwingWrench_Conceptual(CUserCmd* pCmd);
+
+    // --- Spy-Specific Action Methods (New) ---
+    void StartCloak_Conceptual(CUserCmd* pCmd); // Assumes Invis Watch is active weapon, typically IN_ATTACK2
+    void StopCloak_Conceptual(CUserCmd* pCmd);  // If cloak is toggled by same button or different action
+    void IssueDisguiseCommand_Conceptual(int targetTeamId_conceptual, int targetClassId_conceptual); // Queues a ClientCommand
+    void DeploySapper_Conceptual(CUserCmd* pCmd); // Assumes Sapper is active weapon, typically IN_ATTACK
+
 
     edict_t* GetEdict() const { return m_pEdict; }
-    // CBaseEntity* GetBaseEntity() const; // Helper to get CBaseEntity from m_pEdict using engine interface
 
 private:
     edict_t* m_pEdict;
-    // EHANDLE m_hEdict; // If using Source SDK's EHANDLE for safety
+
+    // Conceptual placeholders for internal state if not directly reading from engine each call
+    Vector m_CurrentPosition_placeholder;
+    Vector m_CurrentViewAngles_placeholder;
+    int m_iCurrentHealth_placeholder;
+    int m_iCurrentMetal_placeholder;
+    int m_iActiveWeaponId_placeholder;
+    // Spy conceptual state placeholders (to be replaced by engine calls)
+    bool m_bIsCloaked_placeholder;
+    bool m_bIsDisguised_placeholder;
+    int m_iDisguiseTeam_placeholder;
+    int m_iDisguiseClass_placeholder;
+    float m_fCloakEnergy_placeholder;
 };
 
 #endif // CFF_PLAYER_H

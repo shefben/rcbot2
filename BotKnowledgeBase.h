@@ -4,90 +4,117 @@
 #include <vector>
 #include <string>
 #include <map>
-#include <memory> // For std::unique_ptr if NavMeshGraph is heap allocated by KB
+#include <memory>
 
-#include "FFStateStructs.h"   // For Vector, ControlPointInfo, PayloadPathInfo, ClassConfigInfo
-#include "NavSystem.h"        // For NavMeshGraph, NavAreaNode, etc.
-#include "TrackedEntityInfo.h"// For TrackedEntityInfo
+#include "FFStateStructs.h"
+#include "NavSystem.h"
+#include "TrackedEntityInfo.h"
+#include "FFEngineerAI.h" // For BuildingType_FF (Ideally, BuildingType_FF is in a more general header if KB needs it)
 
-// Forward declare lua_State for Lua interaction methods
 struct lua_State;
+// enum class GameModeType_KB { UNKNOWN, CONTROL_POINT, CAPTURE_THE_FLAG, PAYLOAD_ATTACK, PAYLOAD_DEFEND }; // Already here
 
-// Conceptual Game Mode enum (if not defined globally elsewhere)
-enum class GameModeType_KB { UNKNOWN, CONTROL_POINT, CAPTURE_THE_FLAG, PAYLOAD_ATTACK, PAYLOAD_DEFEND };
+// New enum and struct for building information
+enum class BuildingStatus_FF {
+    UNKNOWN,
+    CONSTRUCTION_GHOST, // Blueprint placed, not yet being built
+    BUILDING,           // Being hit by wrench to construct
+    ACTIVE,             // Fully built and operational
+    SAPPED,             // Has a sapper on it
+    UPGRADING,          // Being hit by wrench to upgrade level
+    DESTROYED           // Not present or destroyed
+};
+
+struct BuildingInfo {
+    edict_t* pEdict;            // Conceptual pointer to the building's game entity
+    int uniqueId;               // If engine provides one (e.g. netprop), otherwise use edict index or hash
+    BuildingType_FF type;
+    int level;                  // Typically 1-3 for Sentry/Dispenser/Teleporter
+    int health;
+    int maxHealth;              // Can depend on type and level
+    int builderPlayerId;        // UserID of the CFFPlayer who built it (0 if not player built/unknown)
+    int teamId;                 // Team affiliation
+    Vector position;
+    Vector angles; // QAngle or Vector for orientation
+
+    bool isSapped;
+    bool isBuildingInProgress;   // True if it's a blueprint being built (health increasing from 0)
+    bool isUpgrading;            // True if currently receiving wrench hits for next level
+    // float nextUpgradeMetalRequirement; // Metal needed for next level progress
+    // float repairMetalCost;          // Current metal cost to repair 1 unit of health (can vary)
+
+    BuildingInfo() :
+        pEdict(nullptr), uniqueId(-1), type(BuildingType_FF::UNKNOWN), level(0),
+        health(0), maxHealth(0), builderPlayerId(-1), teamId(0),
+        isSapped(false), isBuildingInProgress(false), isUpgrading(false) {}
+};
 
 
 class BotKnowledgeBase {
 public:
     BotKnowledgeBase();
-    // ~BotKnowledgeBase(); // If managing raw pointers directly (e.g. m_NavGraph if it was raw)
+    // ~BotKnowledgeBase();
 
     // --- Initialization & Update ---
-
-    // Called once at plugin load or equivalent to load static data like class configs
-    // Assumes Lua state is passed for FFLuaBridge interaction
     bool LoadGlobalClassConfigs(lua_State* L, const std::vector<std::string>& classConfigTableNames);
+    bool LoadNavMesh(const char* mapName);
+    bool LoadMapObjectiveData(lua_State* L, const char* mapName, const std::vector<std::string>& cpTableNames);
 
-    // Called at map load
-    // For NavMesh, conceptual: bool LoadNavMesh(const char* mapName, void* pEngineNavMeshInterface);
-    bool LoadNavMesh(const char* mapName); // Simpler version for now, assumes internal/dummy loading
-    bool LoadMapObjectiveData(lua_State* L, const char* mapName, const std::vector<std::string>& cpTableNames); // Pass list of CP table names
-
-    // Called periodically or by events to update dynamic state
     void UpdateControlPointState(int cpId, int newOwnerTeam, float newCaptureProgress, bool newIsLocked);
-    // void UpdatePayloadState(/* ...payload params... */);
-    // void UpdateFlagState(/* ...flag params... */);
-
-    // Updates the lists of tracked entities based on current perception input
     void UpdateTrackedEntities(const std::vector<TrackedEntityInfo>& currentTrackedEntities, int botTeamId);
 
-    void ClearDynamicMapData(); // Called on LevelShutdown (clears CPs, Payload, Tracked Entities)
-    void ClearAllData();        // Called on Unload (clears everything including configs, navmesh)
+    // Building specific updates
+    void UpdateOrAddBuilding(const BuildingInfo& newBuildingInfo);
+    void RemoveBuilding(edict_t* pEdict); // Or by uniqueId
+    void UpdateBuildingHealth(edict_t* pEdict, int newHealth, bool isStillBuilding); // Also updates isBuildingInProgress
+    void UpdateBuildingSapped(edict_t* pEdict, bool isSapped);
+    void UpdateBuildingLevel(edict_t* pEdict, int newLevel);
 
+
+    void ClearDynamicMapData();
+    void ClearAllData();
 
     // --- Accessors ---
     const NavMeshGraph* GetNavGraph() const { return &m_NavGraph; }
-    NavMeshGraph* GetNavGraphMutable() { return &m_NavGraph; } // For loading
-
+    NavMeshGraph* GetNavGraphMutable() { return &m_NavGraph; }
     const std::vector<ControlPointInfo>& GetControlPoints() const { return m_ControlPoints; }
-    const ControlPointInfo* GetControlPoint(int cpId) const; // By internal ID
+    const ControlPointInfo* GetControlPoint(int cpId) const;
     const ControlPointInfo* GetControlPointByLuaName(const std::string& luaName) const;
-
-
-    // const std::vector<PayloadPathInfo>& GetPayloadPaths() const { return m_PayloadPaths; }
-    // ... Getters for Flags ...
-
     const std::vector<ClassConfigInfo>& GetClassConfigs() const { return m_ClassConfigs; }
     const ClassConfigInfo* GetClassConfigByName(const std::string& className) const;
     const ClassConfigInfo* GetClassConfigById(int classId) const;
-
     const std::vector<TrackedEntityInfo>& GetTrackedEnemies() const { return m_TrackedEnemies; }
     const std::vector<TrackedEntityInfo>& GetTrackedAllies() const { return m_TrackedAllies; }
-    const TrackedEntityInfo* GetTrackedEntity(edict_t* pEdict) const; // Find by edict
-    const TrackedEntityInfo* GetTrackedEntityById(int entityId) const; // Find by entityId
+    const TrackedEntityInfo* GetTrackedEntity(edict_t* pEdict) const;
+    const TrackedEntityInfo* GetTrackedEntityById(int entityId) const;
+
+    // Building specific accessors
+    const BuildingInfo* GetBuildingInfo(edict_t* pEdict) const;
+    const BuildingInfo* GetBuildingInfoByUniqueId(int uniqueId) const;
+    std::vector<const BuildingInfo*> GetFriendlyBuildings(int botTeamId) const;
+    std::vector<const BuildingInfo*> GetFriendlyBuildingsOfType(BuildingType_FF type, int botTeamId) const;
+    std::vector<const BuildingInfo*> GetEnemyBuildingsInArea(const Vector& areaCenter, float radius, int botTeamId) const;
+    std::vector<const BuildingInfo*> GetOwnBuildings(int botPlayerId) const; // Buildings built by a specific bot
 
 
-    // --- Utility / Game State Queries (Conceptual) ---
     GameModeType_KB GetCurrentGameMode() const { return m_CurrentGameMode; }
     void SetCurrentGameMode(GameModeType_KB mode) { m_CurrentGameMode = mode; }
-    // float GetAreaThreat(unsigned int navAreaId) const; // Example for A* dynamic costs
-    // bool IsAreaNearObjective(unsigned int navAreaId, const HighLevelTask* currentTask) const;
-
+    // ... (Conceptual GetAreaThreat, IsAreaNearObjective) ...
 
 private:
-    NavMeshGraph m_NavGraph; // KB owns the nav graph instance
+    void CreatePlaceholderNavMesh(); // Moved from .cpp to be callable by constructor if needed
 
+    NavMeshGraph m_NavGraph;
     std::vector<ControlPointInfo> m_ControlPoints;
     std::vector<PayloadPathInfo> m_PayloadPaths;
-    // std::vector<FlagInfo> m_Flags;
-
-    std::vector<ClassConfigInfo> m_ClassConfigs; // Loaded once typically
-
-    // Dynamic entities (cleared/updated often)
+    std::vector<ClassConfigInfo> m_ClassConfigs;
     std::vector<TrackedEntityInfo> m_TrackedEnemies;
     std::vector<TrackedEntityInfo> m_TrackedAllies;
-    // For faster edict-based lookup if many entities are tracked:
-    std::map<edict_t*, TrackedEntityInfo*> m_TrackedEntityMap; // Pointers to entities within the above vectors
+    // std::map<edict_t*, TrackedEntityInfo*> m_TrackedEntityMap; // Pointers to entities within the above vectors
+
+    std::vector<BuildingInfo> m_TrackedBuildings; // Stores all known buildings on map
+    // For faster lookup of buildings by edict (if edicts are reliable keys)
+    // std::map<edict_t*, size_t> m_BuildingEdictToIndexMap;
 
     GameModeType_KB m_CurrentGameMode;
 };
