@@ -20,24 +20,19 @@ struct GameStateSnapshot {
     int playersAlive_Ally;
     int playersAlive_Enemy;
 
-    // Objective-specific status (examples, can be detailed per game mode)
-    // For Control Points:
-    // std::vector<std::pair<int, int>> controlPointStates; // <cpId, ownerTeamId>
-    // For Payload:
-    // float payloadProgressPercent;
-    // bool isCartContested;
-
     std::string simpleObjectiveStatus; // A string summary, e.g., "CP1:Blue, CP2:Red, CartAt:CheckpointA"
-
-    // Could also include bot's own immediate state if relevant for the snapshot context
-    // float botHealth;
-    // int botAmmoPrimary;
 
     GameStateSnapshot() :
         teamScore_Ally(0), teamScore_Enemy(0),
         playersAlive_Ally(0), playersAlive_Enemy(0),
         simpleObjectiveStatus("N/A")
         {}
+
+    void Clear() { // Helper to reset
+        teamScore_Ally = 0; teamScore_Enemy = 0;
+        playersAlive_Ally = 0; playersAlive_Enemy = 0;
+        simpleObjectiveStatus = "N/A";
+    }
 };
 
 // 3. Define SubTaskOutcomeLog Struct
@@ -45,10 +40,10 @@ struct SubTaskOutcomeLog {
     SubTaskType type;
     bool success;
     float durationSeconds;
-    // std::string failureReason; // Optional
+    std::string failureReason; // Optional
 
-    SubTaskOutcomeLog(SubTaskType t = SubTaskType::NONE, bool s = false, float d = 0.f)
-        : type(t), success(s), durationSeconds(d) {}
+    SubTaskOutcomeLog(SubTaskType t = SubTaskType::NONE, bool s = false, float d = 0.f, std::string reason = "")
+        : type(t), success(s), durationSeconds(d), failureReason(std::move(reason)) {}
 };
 
 // 4. Define TaskOutcomeLog Struct
@@ -72,7 +67,8 @@ struct TaskOutcomeLog {
     float durationSeconds;          // Calculated from startTime and endTime
 
     // Bot context
-    // int botId; // If logging for multiple bots centrally and this struct is stored outside BotInfo
+    int botId;                      // ID of the bot that performed this task
+    std::string botName;            // Name of the bot
     std::string botClassUsed;       // e.g., "Soldier", "Medic" (from ClassConfigInfo)
 
     GameStateSnapshot stateAtStart;
@@ -80,19 +76,27 @@ struct TaskOutcomeLog {
 
     std::vector<SubTaskOutcomeLog> executedSubTasks;
 
-    // Resource usage (conceptual - would be populated by the bot tracking its own changes)
-    // int healthLost;
-    // int ammoUsedPrimary;
-    // bool uberDeployed; // For Medic
+    TaskOutcomeLog() { // Default constructor calls Reset
+        Reset();
+    }
 
-    TaskOutcomeLog() :
-        taskType(HighLevelTaskType::NONE),
-        outcome(Outcome::PENDING),
-        outcomeScore(0.0f),
-        durationSeconds(0.0f),
-        botClassUsed("Unknown")
-        // healthLost(0), ammoUsedPrimary(0), uberDeployed(false)
-        {}
+    void Reset() {
+        taskType = HighLevelTaskType::NONE;
+        taskDescription.clear();
+        targetNameOrId.clear();
+        targetPosition = Vector(); // Assumes Vector default constructor
+        outcome = Outcome::PENDING;
+        outcomeScore = 0.0f;
+        startTime = std::chrono::system_clock::time_point(); // Default construction (often epoch)
+        endTime = std::chrono::system_clock::time_point();
+        durationSeconds = 0.0f;
+        botId = -1;
+        botName.clear();
+        botClassUsed = "Unknown";
+        stateAtStart.Clear();
+        stateAtEnd.Clear();
+        executedSubTasks.clear();
+    }
 };
 
 #endif // BOT_LEARNING_DATA_H

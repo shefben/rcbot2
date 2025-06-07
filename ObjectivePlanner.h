@@ -3,68 +3,84 @@
 
 #include <vector>
 #include <string>
-#include <memory> // For std::unique_ptr if used for tasks, though HLT is direct member
+#include <memory>
+#include <chrono> // For m_CurrentSubTaskStartTime
 
-#include "BotTasks.h" // Includes HighLevelTask, SubTask, Enums
+#include "BotTasks.h"
+#include "BotLearningData.h" // For TaskOutcomeLog, GameStateSnapshot, SubTaskOutcomeLog
 
 // Forward declarations
-class CFFPlayer;             // Represents the bot this planner is for
-struct BotKnowledgeBase;     // Shared game state, navmesh, etc. (ensure FFStateStructs.h is included by this eventually)
-class CBaseEntity;           // Conceptual game entity
+class CFFPlayer;
+struct BotKnowledgeBase;
+class CBaseEntity;
+class CRCBotPlugin; // For storing logs, if planner calls back to plugin
 
-// Conceptual Game Mode enum, if not defined globally
-enum class GameModeType { UNKNOWN, CONTROL_POINT, CAPTURE_THE_FLAG, PAYLOAD_ATTACK, PAYLOAD_DEFEND };
+// Conceptual Game Mode enum
+// Assuming GameModeType_KB from BotKnowledgeBase.h is preferred if defined there.
+// If not, this can be used:
+// enum class GameModeType { UNKNOWN, CONTROL_POINT, CAPTURE_THE_FLAG, PAYLOAD_ATTACK, PAYLOAD_DEFEND };
 
 
 class CObjectivePlanner {
 public:
-    CObjectivePlanner(CFFPlayer* pBotOwner, const BotKnowledgeBase* pKnowledgeBase);
+    // Constructor now takes CRCBotPlugin* for log storage callback
+    CObjectivePlanner(CFFPlayer* pBotOwner, const BotKnowledgeBase* pKnowledgeBase, CRCBotPlugin* pPluginOwner);
     ~CObjectivePlanner();
 
-    // Main method called by AI to get decisions
     void EvaluateAndSelectTask();
 
     const HighLevelTask* GetCurrentHighLevelTask() const {
         return m_CurrentHighLevelTask.type != HighLevelTaskType::NONE ? &m_CurrentHighLevelTask : nullptr;
     }
-    const SubTask* GetCurrentSubTask() const;      // Gets subtask from current HLT
-    SubTask* GetCurrentSubTaskMutable(); // Gets modifiable subtask from current HLT
+    const SubTask* GetCurrentSubTask() const;
+    SubTask* GetCurrentSubTaskMutable();
 
     // Callbacks from AI module about subtask status
-    void OnSubTaskCompleted();
-    void OnSubTaskFailed();
-    void OnBotKilled();         // Resets current HLT
+    // These will now also take actual outcome details
+    void OnSubTaskOutcomeReported(bool success, const std::string& failureReason = "");
+    // OnSubTaskCompleted and OnSubTaskFailed will be internal after outcome reported
 
-    // Optional: To update KB if it's not always the same instance or needs refreshing signal
-    // void UpdateKnowledgeBase(const BotKnowledgeBase* pKnowledgeBase);
+    void OnBotKilled();
 
 private:
     CFFPlayer* m_pBotOwner;
-    const BotKnowledgeBase* m_pKnowledgeBase;   // Pointer to shared game state info
+    const BotKnowledgeBase* m_pKnowledgeBase;
+    CRCBotPlugin* m_pPluginOwner; // For storing logs
 
-    HighLevelTask m_CurrentHighLevelTask;       // The currently active high-level task
-    std::vector<HighLevelTask> m_AvailableTasks; // Pool of potential tasks, priorities recalculated
+    HighLevelTask m_CurrentHighLevelTask;
+    TaskOutcomeLog m_CurrentTaskLogEntry; // Log entry for the m_CurrentHighLevelTask
+    // std::chrono::system_clock::time_point m_CurrentSubTaskStartTime; // Moved to SubTask struct in BotTasks.h
+
+    std::vector<HighLevelTask> m_AvailableTasks;
 
     // Task Selection Pipeline
-    void GenerateAvailableTasks(); // Populates m_AvailableTasks based on game mode & state
-    void PrioritizeTasks();        // Scores and sorts m_AvailableTasks
-    bool SelectTaskFromList();     // Chooses the highest priority valid task and sets it to m_CurrentHighLevelTask
+    void GenerateAvailableTasks();
+    void PrioritizeTasks();
+    bool SelectTaskFromList(); // This will now also initialize m_CurrentTaskLogEntry
 
-    // Subtask Decomposition
-    // Fills m_CurrentHighLevelTask.subTasks based on its type
     bool DecomposeTask(HighLevelTask& taskToDecompose);
 
-    // Game Mode Specific Task Generation (called by GenerateAvailableTasks)
-    GameModeType GetCurrentGameMode() const; // Conceptual: queries KB or game state
+    // Game Mode Specific Task Generation
+    GameModeType_KB GetCurrentGameMode() const; // Assuming GameModeType_KB from BotKnowledgeBase.h
     void GenerateTasks_ControlPoint_FF();
-    // void GenerateTasks_CaptureTheFlag_FF();
-    // void GenerateTasks_PayloadAttack_FF();
-    // void GenerateTasks_PayloadDefend_FF();
 
-    // Example Helper for decomposition
+    // Priority Calculation Helpers
+    float CalculateCapturePriority(const ControlPointInfo& cpInfo, CFFPlayer* bot, const BotKnowledgeBase* kb);
+    float CalculateDefensePriority(const ControlPointInfo& cpInfo, CFFPlayer* bot, const BotKnowledgeBase* kb);
+
+    // Decomposition Helpers (kept from previous version)
     void AddDefaultSubTasksForMovement(HighLevelTask& hlt, const Vector& targetPos, CBaseEntity* targetEnt = nullptr);
     void AddDefaultSubTasksForCapture(HighLevelTask& hlt, const Vector& targetPos, CBaseEntity* targetEnt = nullptr);
     void AddDefaultSubTasksForDefense(HighLevelTask& hlt, const Vector& targetPos, CBaseEntity* targetEnt = nullptr);
+
+    // Internal Logging Helper Methods
+    GameStateSnapshot CreateGameStateSnapshot() const;
+    void StartNewSubTaskLogging(); // Called when a subtask becomes current
+    void FinalizeSubTaskLog(bool success, const std::string& reason = ""); // Called before advancing/resetting HLT due to subtask end
+    void FinalizeAndStoreCurrentHLTLog(TaskOutcomeLog::Outcome outcome, float score);
+
+    // Internal task advancement after logging subtask outcome
+    void ProcessSubTaskCompletion(bool success);
 };
 
 #endif // OBJECTIVE_PLANNER_H

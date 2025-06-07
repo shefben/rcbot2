@@ -144,19 +144,20 @@ public:
     // Finds a path of NavAreaNode IDs from startAreaId to targetAreaId.
     // pKnowledgeBase can be used to access dynamic costs (e.g., enemy presence).
     std::vector<unsigned int> FindPath(unsigned int startAreaId, unsigned int targetAreaId,
-                                       const BotKnowledgeBase* pKnowledgeBase = nullptr);
+                                       const BotKnowledgeBase* pKnowledgeBase = nullptr); // pKB is optional
 
 private:
     const NavMeshGraph* m_pNavMeshGraph; // Non-owning pointer to the navmesh data.
 
     float CalculateHeuristic(const Vector& posA, const Vector& posB);
 
+    // Ensure BotKnowledgeBase is forward declared or NavSystem.h includes BotKnowledgeBase.h (already done via FFBaseAI.h indirectly)
     float CalculateMovementCost(const NavAreaNode* fromArea, const NavAreaNode* toArea,
                                 const NavConnectionInternal& connection,
-                                const BotKnowledgeBase* pKnowledgeBase); // pKB for dynamic costs
+                                const BotKnowledgeBase* pKnowledgeBase); // pKB for dynamic costs, already matches
 
     std::vector<unsigned int> ReconstructPath(unsigned int targetAreaId,
-                                              const std::unordered_map<unsigned int, AStarNode>& cameFromMap);
+                                              const std::unordered_map<unsigned int, AStarNode>& nodeDataMap); // Renamed param for clarity
 };
 
 #endif // NAV_SYSTEM_H

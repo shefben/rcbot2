@@ -2,12 +2,10 @@
 #include "ObjectivePlanner.h"
 #include "BotTasks.h"
 #include "FFStateStructs.h"
-// Conceptual includes
-#include "CFFPlayer.h"
-#include "CBaseEntity.h"
-#include "UserCmd.h"
-#include "BotKnowledgeBase.h"
-#include <iostream>           // Placeholder logging
+// Conceptual includes (ensure these are defined or properly included from FFBaseAI.cpp's similar section)
+#include "FFBaseAI.h" // For BotKnowledgeBase, and conceptual CFFPlayer/CBaseEntity/UserCmd if defined there
+
+#include <iostream>
 #include <vector>
 #include <algorithm>          // For std::sort, std::min_element etc.
 
@@ -16,24 +14,34 @@
 #endif
 
 // --- Conceptual constants for Medic AI ---
-const float MEDIC_HEAL_RANGE = 480.0f; // Approx units for Medigun beam
+const float MEDIC_HEAL_RANGE = 480.0f;
 const float MEDIC_HEAL_RANGE_SQ = MEDIC_HEAL_RANGE * MEDIC_HEAL_RANGE;
-const float MEDIC_MAX_HEAL_TARGET_SEARCH_RANGE = 1000.0f; // Look for targets in this radius
-const float MEDIC_MAX_HEAL_TARGET_SEARCH_RANGE_SQ = MEDIC_MAX_HEAL_TARGET_SEARCH_RANGE * MEDIC_MAX_HEAL_TARGET_SEARCH_RANGE;
-const float MEDIC_ALLY_EVAL_INTERVAL = 0.5f;    // How often to re-evaluate best heal target
-const float MEDIC_SELF_DEFENSE_SCAN_INTERVAL = 0.3f; // How often to check for direct threats
-const float MEDIC_UBER_DURATION = 8.0f;        // Seconds
-const float UBER_CHARGE_PER_SECOND_HEALING = 0.03125f; // Approx 3.125% per sec (32s for full charge)
-                                                    // This is TF2 specific, FF might differ.
-const float UBER_CHARGE_PER_SECOND_NOT_HEALING = 0.015625f; // Slower passive build
+const float MEDIC_MAX_HEAL_TARGET_SEARCH_RANGE_SQ = 1000.0f * 1000.0f;
+const float MEDIC_FOLLOW_HEAL_TARGET_DISTANCE = 200.0f;
+const float MEDIC_FOLLOW_HEAL_TARGET_DISTANCE_SQ = MEDIC_FOLLOW_HEAL_TARGET_DISTANCE * MEDIC_FOLLOW_HEAL_TARGET_DISTANCE;
 
-// Conceptual button defines (if not from SDK)
+const float MEDIC_ALLY_EVAL_INTERVAL_SECONDS = 0.5f;
+const float MEDIC_SELF_DEFENSE_SCAN_INTERVAL_SECONDS = 0.3f;
+const float MEDIC_UBER_DURATION_SECONDS = 8.0f;
+const float MEDIC_UBER_CHARGE_PER_SEC_HEALING_SIM = 1.0f / 32.0f; // Sim value
+const float MEDIC_UBER_CHARGE_PER_SEC_NOT_HEALING_SIM = 1.0f / 64.0f; // Sim value
+
+// Conceptual button defines
 #ifndef IN_ATTACK
 #define IN_ATTACK (1 << 0)
 #endif
 #ifndef IN_ATTACK2
 #define IN_ATTACK2 (1 << 11)
 #endif
+#ifndef IN_RELOAD
+#define IN_RELOAD (1 << 3)
+#endif
+
+// Conceptual global time for placeholders
+// In a real scenario, this would come from CBot::GetTime() or gpGlobals->curtime
+static float g_fMedicConceptualWorldTime = 0.0f;
+void AdvanceMedicConceptualTime() { g_fMedicConceptualWorldTime += 0.015f; } // Call per frame for simulation
+float GetMedicConceptualWorldTime() { return g_fMedicConceptualWorldTime; }
 
 
 CMedicAI_FF::CMedicAI_FF(CFFPlayer* pBotPlayer, CObjectivePlanner* pPlanner,
@@ -46,283 +54,308 @@ CMedicAI_FF::CMedicAI_FF(CFFPlayer* pBotPlayer, CObjectivePlanner* pPlanner,
       m_flLastHealTargetCheckTime(0.0f),
       m_flLastEnemyScanTime(0.0f)
 {
-    std::cout << "CMedicAI_FF created." << std::endl;
+    // std::cout << "CMedicAI_FF created for bot " << (m_pBotPlayer ? m_pBotPlayer->GetNamePlaceholder() : "Unknown") << std::endl;
 }
 
 CMedicAI_FF::~CMedicAI_FF() {}
 
 void CMedicAI_FF::UpdateUberChargeLevel() {
-    // Conceptual: This would query m_pBotPlayer->GetUberChargeLevel();
-    // Simulating for now:
-    float gameTime = 0.0f; // Conceptual: GetCurrentWorldTime();
-    static float lastTimeUpdate = 0.0f;
-    if (lastTimeUpdate == 0.0f) lastTimeUpdate = gameTime;
-    float deltaTime = gameTime - lastTimeUpdate;
-    lastTimeUpdate = gameTime;
-
+    float gameTime = GetMedicConceptualWorldTime();
+    // In real scenario: m_fUberChargePercentage = m_pBotPlayer->GetUberChargePercent();
+    // Simulation:
     if (m_bIsUberDeployed) {
-        if (gameTime > m_flUberExpireTime) {
+        if (gameTime >= m_flUberExpireTime) {
             m_bIsUberDeployed = false;
-            m_fUberChargePercentage = 0.0f; // Uber wears off
+            // Uber is expended, game would set charge to 0. Bot will read it next frame.
+            // std::cout << "Medic Uber expired naturally." << std::endl;
         }
-    } else if (m_fUberChargePercentage < 1.0f) {
-        float chargeRate = UBER_CHARGE_PER_SECOND_NOT_HEALING;
-        // if (m_pHealTarget && m_pBotPlayer && m_pBotPlayer->IsActivelyHealing()) { // Conceptual
-        //     chargeRate = UBER_CHARGE_PER_SECOND_HEALING;
-        // }
-        m_fUberChargePercentage += chargeRate * deltaTime;
-        if (m_fUberChargePercentage > 1.0f) {
-            m_fUberChargePercentage = 1.0f;
+    } else { // Not deployed, try to build charge
+        if (m_fUberChargePercentage < 1.0f) {
+            float chargeRate = MEDIC_UBER_CHARGE_PER_SEC_NOT_HEALING_SIM;
+            // Conceptual: if (m_pBotPlayer && m_pBotPlayer->IsActivelyHealingWithMedigun()) {
+            //    chargeRate = MEDIC_UBER_CHARGE_PER_SEC_HEALING_SIM;
+            // }
+            // Use a fixed delta time for simulation if gameTime is not advancing properly
+            float deltaTime = 0.015f; // Assuming ~66 ticks per second for simulation rate
+            m_fUberChargePercentage += chargeRate * deltaTime;
+            if (m_fUberChargePercentage > 1.0f) {
+                m_fUberChargePercentage = 1.0f;
+            }
         }
     }
 }
 
 CBaseEntity* CMedicAI_FF::FindBestHealTarget() {
-    if (!m_pBotPlayer || !m_pKnowledgeBase /* || !m_pKnowledgeBase->visibleTeammates */) return nullptr;
+    if (!m_pBotPlayer || !m_pKnowledgeBase) return nullptr;
 
-    CBaseEntity* bestTarget = nullptr;
-    float highestScore = -1.0f;
+    CBaseEntity* pBestTarget = nullptr;
+    float highestScore = -1000.0f;
     Vector myPos = m_pBotPlayer->GetPosition();
+    int myTeam = m_pBotPlayer->GetTeamNumber();
 
-    // Conceptual: Iterate through m_pKnowledgeBase->visibleTeammates
-    // std::vector<CBaseEntity*> visibleTeammates = m_pKnowledgeBase->GetTeammatesNear(myPos, MEDIC_MAX_HEAL_TARGET_SEARCH_RANGE);
+    for (const auto& allyInfo : m_pKnowledgeBase->GetTrackedAllies()) {
+        if (!allyInfo.pEdict) continue;
+        // CBaseEntity* pAlly = reinterpret_cast<CBaseEntity*>(allyInfo.pEdict); // Highly conceptual and unsafe without proper casting/entity system
+        // For now, create a temporary conceptual CBaseEntity to use its methods for scoring, using allyInfo data
+        CBaseEntity conceptualAlly; // This is problematic, as it's not the real entity.
+                                    // We should primarily use allyInfo's direct fields.
+        // if (allyInfo.pEdict == m_pBotPlayer->GetEdict()) continue; // Don't heal self with this logic
+        if (allyInfo.health <= 0) continue;
 
-    // --- Placeholder Teammate List for demonstration ---
-    static CBaseEntity dummyAlly1, dummyAlly2; // Static to have stable addresses for this example
-    // In a real game, these would come from the engine/perception system.
-    // dummyAlly1.SetHealth(50); dummyAlly1.SetMaxHealth(150); dummyAlly1.SetPosition(myPos + Vector(100,0,0)); dummyAlly1.SetClassId(CLASS_SOLDIER);
-    // dummyAlly2.SetHealth(120); dummyAlly2.SetMaxHealth(125); dummyAlly2.SetPosition(myPos + Vector(0,100,0)); dummyAlly2.SetClassId(CLASS_SCOUT);
-    std::vector<CBaseEntity*> visibleTeammates = {&dummyAlly1, &dummyAlly2}; // Example
-    // --- End Placeholder ---
+        float allyHealthPercent = (allyInfo.maxHealth > 0) ? (float)allyInfo.health / allyInfo.maxHealth : 1.0f;
+        if (allyHealthPercent >= 0.99f /* && !allyInfo.isOverhealed() */) continue;
 
-
-    for (CBaseEntity* pAlly : visibleTeammates) {
-        if (!pAlly || !pAlly->IsAlive() || pAlly == reinterpret_cast<CBaseEntity*>(m_pBotPlayer)) continue;
-
-        // float allyHealthPercent = pAlly->GetHealth() / (float)pAlly->GetMaxHealth(); // Conceptual
-        float allyHealthPercent = 0.5f; // Placeholder
-        if (allyHealthPercent >= 0.99f /* && !pAlly->NeedsBuff() */) continue; // Full health, no buff needed
-
-        float distSq = (myPos.x - pAlly->GetPosition().x)*(myPos.x - pAlly->GetPosition().x) + (myPos.y - pAlly->GetPosition().y)*(myPos.y - pAlly->GetPosition().y);
+        float distSq = (myPos.x - allyInfo.lastKnownPosition.x)*(myPos.x - allyInfo.lastKnownPosition.x) +
+                       (myPos.y - allyInfo.lastKnownPosition.y)*(myPos.y - allyInfo.lastKnownPosition.y);
         if (distSq > MEDIC_MAX_HEAL_TARGET_SEARCH_RANGE_SQ) continue;
 
-        float score = 100.0f * (1.0f - allyHealthPercent); // Prioritize lower health
-        // if (pAlly->IsInCombat()) score += 50.0f; // Conceptual
-        // if (pAlly->IsClass(CLASS_HEAVY) || pAlly->IsClass(CLASS_SOLDIER) || pAlly->IsClass(CLASS_DEMOMAN)) score += 30.0f;
-        score -= sqrt(distSq) * 0.1f; // Penalize distance
+        float score = 100.0f * (1.0f - allyHealthPercent);
+        // if (allyInfo.isInCombat_conceptual_flag) score += 50.0f;
+        // if (allyInfo.className == "Heavy" || allyInfo.className == "Soldier") score += 30.0f;
+        score -= sqrt(distSq) * 0.05f;
 
         if (score > highestScore) {
             highestScore = score;
-            bestTarget = pAlly;
+            // pBestTarget = pAlly; // This requires pAlly to be a valid, persistent CBaseEntity*
+            // For now, we can't return a CBaseEntity* reliably from TrackedEntityInfo without an entity manager.
+            // This function's purpose is more to identify *which* TrackedEntityInfo is best.
+            // The actual CBaseEntity* would be obtained via its edict_t* when needed.
+            // For this example, let's assume TrackedEntityInfo could store a CBaseEntity* if available from perception.
+            // If not, this function might return the edict_t* or ID.
         }
     }
-    return bestTarget;
+    // This is where we'd convert the best TrackedEntityInfo's edict to CBaseEntity*. For now, returning null.
+    return nullptr;
 }
 
 CBaseEntity* CMedicAI_FF::SelectTarget() {
-    float currentTime = 0.0f; // Conceptual: GetCurrentWorldTime();
+    float currentTime = GetMedicConceptualWorldTime();
 
-    // Self-preservation: if directly attacked, fight back or flee.
-    // if (m_pBotPlayer && m_pBotPlayer->IsTakingHeavyDamage()) { // Conceptual
-    //     CBaseEntity* attacker = m_pBotPlayer->GetLastAttacker();
-    //     if (attacker && attacker->IsAlive()) {
-    //         m_pHealTarget = nullptr; // Stop healing
-    //         m_pCurrentTarget = attacker; // Set combat target
-    //         return m_pCurrentTarget;
-    //     }
+    // High priority: Self-defense if directly attacked
+    // Conceptual: if (m_pBotPlayer && m_pBotPlayer->IsTakingSignificantDamage()) {
+    //    CBaseEntity* pLastAttacker = m_pBotPlayer->GetLastAttacker();
+    //    if (pLastAttacker && pLastAttacker->IsAlive() && pLastAttacker->GetTeamNumber() != m_pBotPlayer->GetTeamNumber()) {
+    //        m_pHealTarget = nullptr; // Stop healing
+    //        m_pCurrentTarget = pLastAttacker; // This is an enemy
+    //        return m_pCurrentTarget;
+    //    }
     // }
 
-    // Periodically re-evaluate the best heal target
-    if (currentTime - m_flLastHealTargetCheckTime > MEDIC_ALLY_EVAL_INTERVAL || !m_pHealTarget || !m_pHealTarget->IsAlive()) {
+    bool needsNewHealTarget = false;
+    if (!m_pHealTarget || !m_pHealTarget->IsAlive()) {
+        needsNewHealTarget = true;
+    } else if (m_pBotPlayer) {
+        float distToHealTargetSq = (m_pBotPlayer->GetPosition().x - m_pHealTarget->GetPosition().x)*(m_pBotPlayer->GetPosition().x - m_pHealTarget->GetPosition().x) + (m_pBotPlayer->GetPosition().y - m_pHealTarget->GetPosition().y)*(m_pBotPlayer->GetPosition().y - m_pHealTarget->GetPosition().y);
+        if (distToHealTargetSq > MEDIC_HEAL_BEAM_RANGE_SQ * 1.8f * 1.8f) { // If target is way too far (beam definitely broken)
+            needsNewHealTarget = true;
+        }
+        // Conceptual: float healTargetHealthPercent = m_pHealTarget->GetHealth() / (float)m_pHealTarget->GetMaxHealth();
+        // if (healTargetHealthPercent >= 0.99f /* && !m_pHealTarget->IsOverhealed() */) {
+        //    needsNewHealTarget = true; // Current target is fully healed
+        // }
+    }
+    if (currentTime - m_flLastHealTargetCheckTime > MEDIC_ALLY_EVAL_INTERVAL_SECONDS) {
+        needsNewHealTarget = true;
+    }
+
+    if (needsNewHealTarget) {
         m_pHealTarget = FindBestHealTarget();
         m_flLastHealTargetCheckTime = currentTime;
     }
 
     if (m_pHealTarget && m_pHealTarget->IsAlive()) {
-        // Check if heal target is still in range
-        // if (m_pBotPlayer && (m_pBotPlayer->GetPosition() - m_pHealTarget->GetPosition()).LengthSqr() > MEDIC_HEAL_RANGE_SQ * 1.2f*1.2f) { // Lost beam
-        //     m_pHealTarget = nullptr; // Find new one next cycle
-        // } else {
-            m_pCurrentTarget = nullptr; // Clear combat target if we have a heal target
-            return m_pHealTarget; // This target will be passed to AttackTarget, which will call HealAlly
-        // }
+        m_pCurrentTarget = nullptr;
+        return m_pHealTarget; // This will be interpreted as "heal this target" by AttackTarget
     }
 
-    // If no heal target, or current one is invalid, maybe look for an enemy for self-defense
-    // This uses the base class CFFBaseAI::SelectTarget() which should find generic enemies
-    // m_pCurrentTarget = CFFBaseAI::SelectTarget(); // This is pure virtual, should not be called directly.
-    // Instead, implement generic enemy selection here or in a common utility if needed.
-    // For now, if no heal target, Medic won't select an enemy unless attacked.
-    m_pCurrentTarget = nullptr; // No combat target unless self-defense overrides
+    // Fallback: No heal target, scan for enemies for self-defense if appropriate.
+    // This would use a generic enemy scanning logic from CFFBaseAI or here.
+    // m_pCurrentTarget = CFFBaseAI::SelectTarget(); // This is pure virtual.
+    // For now, Medic only fights if forced by self-defense (handled above) or if AttackTarget gets an enemy.
+    m_pCurrentTarget = nullptr;
     return nullptr;
 }
 
 void CMedicAI_FF::Update(CUserCmd* pCmd) {
-    if (!m_pBotPlayer || !m_pBotPlayer->IsAlive() || !pCmd || !m_pObjectivePlanner) {
-        if(pCmd) { pCmd->buttons = 0; pCmd->forwardmove = 0; pCmd->sidemove = 0;}
+    if (!m_pBotPlayer || !m_pBotPlayer->IsValid() || !m_pBotPlayer->IsAlive() || !pCmd || !m_pObjectivePlanner) {
+        if(pCmd) {pCmd->buttons = 0; pCmd->forwardmove = 0; pCmd->sidemove = 0;}
         return;
     }
-
+    AdvanceMedicConceptualTime(); // For internal timers if GetMedicConceptualWorldTime is used
     UpdateUberChargeLevel();
-    m_pCurrentTarget = SelectTarget(); // Sets m_pHealTarget or m_pCurrentTarget (enemy)
 
-    // --- Movement logic for following heal target ---
+    // SelectTarget will set m_pHealTarget if a suitable ally is found,
+    // or m_pCurrentTarget (enemy) if self-defending.
+    // The target passed to AttackTarget by ExecuteSubTask will be this.
+    // For a Medic, CFFBaseAI::Update will call ExecuteSubTask. If the subtask is ATTACK_TARGET,
+    // it will use the result of this class's SelectTarget().
+
+    // --- Follow Heal Target Logic ---
+    // This logic needs to influence the m_vCurrentMoveToTarget used by CFFBaseAI::MoveTo/FollowPath
+    // when a movement subtask is active.
+    const SubTask* currentSubTask = m_pObjectivePlanner->GetCurrentSubTask();
     if (m_pHealTarget && m_pHealTarget->IsAlive()) {
-        const SubTask* currentSubTask = m_pObjectivePlanner->GetCurrentSubTask();
-        bool needsToMoveCloserToHealTarget = (m_pBotPlayer->GetPosition().x - m_pHealTarget->GetPosition().x) * (m_pBotPlayer->GetPosition().x - m_pHealTarget->GetPosition().x) +
-                                             (m_pBotPlayer->GetPosition().y - m_pHealTarget->GetPosition().y) * (m_pBotPlayer->GetPosition().y - m_pHealTarget->GetPosition().y)
-                                             > (MEDIC_HEAL_RANGE_SQ * 0.64f); // (heal range * 0.8)^2, try to stay closer
+        Vector myPos = m_pBotPlayer->GetPosition();
+        Vector healTargetPos = m_pHealTarget->GetPosition();
+        float distToHealTargetSq = (myPos.x-healTargetPos.x)*(myPos.x-healTargetPos.x) + (myPos.y-healTargetPos.y)*(myPos.y-healTargetPos.y);
 
-        if (currentSubTask && (currentSubTask->type == SubTaskType::MOVE_TO_POSITION || currentSubTask->type == SubTaskType::MOVE_TO_ENTITY) &&
-            !needsToMoveCloserToHealTarget) {
-            // If current subtask is movement towards an objective, but we are close enough to heal target,
-            // let the base AI handle moving towards objective, but we'll still heal.
-            // The medic will prioritize healing over exact objective positioning if heal target is valid.
-        } else if (needsToMoveCloserToHealTarget) {
-            // Override current path/movement to follow heal target
-            Vector followPos = m_pHealTarget->GetPosition();
-            // Potentially add offset logic: followPos -= m_pHealTarget->GetForwardVector() * 50.0f;
-            ClearCurrentPath(); // Clear any objective-based path
-            MoveTo(followPos, pCmd); // Path to heal target's current position
+        bool shouldFollowCloser = distToHealTargetSq > (MEDIC_HEAL_BEAM_RANGE_SQ * 0.49f); // (range * 0.7)^2, try to stay well within range
+
+        if (currentSubTask &&
+            (currentSubTask->type == SubTaskType::MOVE_TO_POSITION || currentSubTask->type == SubTaskType::MOVE_TO_ENTITY)) {
+
+            if (shouldFollowCloser || currentSubTask->pTargetEntity == m_pHealTarget) { // If task is to follow heal target, or we need to get closer for healing
+                Vector desiredFollowPos = healTargetPos;
+                // Conceptual offset to stay behind the heal target
+                // Vector healTargetForward = m_pHealTarget->GetForwardVector();
+                // desiredFollowPos.x -= healTargetForward.x * MEDIC_FOLLOW_HEAL_TARGET_DISTANCE * 0.5f;
+                // desiredFollowPos.y -= healTargetForward.y * MEDIC_FOLLOW_HEAL_TARGET_DISTANCE * 0.5f;
+
+                // Check if current high-level move target needs to be updated
+                if ((m_vCurrentMoveToTarget.x - desiredFollowPos.x)*(m_vCurrentMoveToTarget.x - desiredFollowPos.x) +
+                    (m_vCurrentMoveToTarget.y - desiredFollowPos.y)*(m_vCurrentMoveToTarget.y - desiredFollowPos.y) > 32.0f*32.0f ) { // If desired follow pos changed significantly
+                     ClearCurrentPath(); // Force re-plan in CFFBaseAI::ExecuteSubTask
+                     m_vCurrentMoveToTarget = desiredFollowPos; // CFFBaseAI::ExecuteSubTask will use this for MoveTo
+                }
+            }
         }
     }
-    // --- End Movement Logic ---
+    // --- End Follow Heal Target Logic ---
 
-    // Call base class Update to handle current subtask from planner
-    // This will call ExecuteSubTask, which for Medic's AttackTarget, will call HealAlly or fight.
-    CFFBaseAI::Update(pCmd);
+    CFFBaseAI::Update(pCmd); // Base class handles subtask execution using current targets & m_vCurrentMoveToTarget
 
-    // If no subtask is actively causing button presses (e.g. if subtask was just MOVE and it finished, or IDLE)
-    // and we have a heal target, ensure we are healing.
-    if (m_pHealTarget && m_pHealTarget->IsAlive() && !(pCmd->buttons & IN_ATTACK)) {
-        if ((m_pBotPlayer->GetPosition().x - m_pHealTarget->GetPosition().x) * (m_pBotPlayer->GetPosition().x - m_pHealTarget->GetPosition().x) +
-            (m_pBotPlayer->GetPosition().y - m_pHealTarget->GetPosition().y) * (m_pBotPlayer->GetPosition().y - m_pHealTarget->GetPosition().y)
-            < MEDIC_HEAL_RANGE_SQ) {
-            HealAlly(m_pHealTarget, pCmd); // Ensure heal beam is on if in range and no other action is pressing buttons
+    // After base Update (which might have set IN_ATTACK for combat against an enemy),
+    // ensure Medigun is still active and healing if m_pHealTarget is set and no direct enemy threat.
+    if (m_pHealTarget && m_pHealTarget->IsAlive() && m_pCurrentTarget == nullptr) { // No current *enemy* target
+        bool isActivelyHealingBeam = (pCmd->buttons & IN_ATTACK) &&
+                                   (m_pBotPlayer && /* m_pBotPlayer->GetActiveWeaponId() == WEAPON_ID_MEDIC_MEDIGUN */ true);
+
+        if (!isActivelyHealingBeam) { // If base::Update didn't result in healing (e.g. subtask was not ATTACK_TARGET)
+             Vector myPos = m_pBotPlayer->GetPosition();
+             Vector healTargetPos = m_pHealTarget->GetPosition();
+             if ((myPos.x-healTargetPos.x)*(myPos.x-healTargetPos.x) + (myPos.y-healTargetPos.y)*(myPos.y-healTargetPos.y) < MEDIC_HEAL_BEAM_RANGE_SQ) {
+                HealAlly(m_pHealTarget, pCmd); // This will set IN_ATTACK and aim
+            }
         }
     }
 }
 
 bool CMedicAI_FF::HealAlly(CBaseEntity* pAlly, CUserCmd* pCmd) {
     if (!pAlly || !pAlly->IsAlive() || !m_pBotPlayer || !pCmd) {
-        m_pHealTarget = nullptr; // Clear if target invalid
+        if (m_pHealTarget == pAlly) m_pHealTarget = nullptr;
         return false;
     }
-    m_pHealTarget = pAlly; // Set/confirm current heal target
+    m_pHealTarget = pAlly;
 
-    // Conceptual: SwitchToWeapon(WEAPON_ID_MEDIC_MEDIGUN, pCmd);
-    // if (m_pBotPlayer->GetActiveWeaponId() != WEAPON_ID_MEDIC_MEDIGUN) {
-    //     return true; // Waiting for weapon switch, action ongoing
+    SwitchToWeapon(WEAPON_ID_MEDIC_MEDIGUN, pCmd);
+    // if (m_pBotPlayer->GetActiveWeaponId_Placeholder() != WEAPON_ID_MEDIC_MEDIGUN) {
+    //     return true;
     // }
 
     AimAt(pAlly->GetWorldSpaceCenter(), pCmd);
 
-    float distSq = (m_pBotPlayer->GetPosition().x - pAlly->GetPosition().x)*(m_pBotPlayer->GetPosition().x - pAlly->GetPosition().x) +
-                   (m_pBotPlayer->GetPosition().y - pAlly->GetPosition().y)*(m_pBotPlayer->GetPosition().y - pAlly->GetPosition().y);
+    Vector myPos = m_pBotPlayer->GetPosition();
+    Vector allyPos = pAlly->GetPosition();
+    float distSq = (myPos.x - allyPos.x)*(myPos.x - allyPos.x) + (myPos.y - allyPos.y)*(myPos.y - allyPos.y);
 
-    if (distSq > MEDIC_HEAL_RANGE_SQ) {
-        // std::cout << "Medic: Heal target out of range." << std::endl;
-        // Movement to get in range should be handled by Update()/MoveTo()/FollowPath()
-        // If we are here, it means we *should* be healing, so if out of range, something else should move us.
-        // Don't clear m_pHealTarget here, let SelectTarget handle losing target over time.
-        return true; // Still "trying" to heal, but movement needs to occur.
+    if (distSq > MEDIC_HEAL_BEAM_RANGE_SQ * 1.05f*1.05f) { // Small tolerance before beam breaks
+        // Movement should handle getting closer. Don't clear m_pHealTarget here immediately.
+        // Stop pressing attack if out of range to prevent "dry firing" beam.
+        // But the "intent" to heal is ongoing.
+        return true;
     }
 
-    pCmd->buttons |= IN_ATTACK; // Hold primary fire to heal
-    // std::cout << "Medic: Healing ally." << std::endl;
-
-    AttemptUberCharge(pCmd); // Check if Uber should be deployed while healing
-    return true; // Healing is ongoing (or attempting to)
+    pCmd->buttons |= IN_ATTACK;
+    AttemptUberCharge(pCmd);
+    return true;
 }
 
 bool CMedicAI_FF::AttackTarget(CBaseEntity* pTarget, CUserCmd* pCmd) {
     if (!pTarget || !pTarget->IsAlive() || !m_pBotPlayer || !pCmd) {
-        m_pCurrentTarget = nullptr; // Clear combat target
-        m_pHealTarget = FindBestHealTarget(); // Maybe find a heal target instead
+        if (m_pCurrentTarget == pTarget) m_pCurrentTarget = nullptr;
+        if (m_pHealTarget == pTarget) m_pHealTarget = nullptr;
         return false;
     }
 
-    // If the designated pTarget (from planner or self-defense) is an ally, heal them.
-    // Conceptual: if (pTarget->GetTeamNumber() == m_pBotPlayer->GetTeamNumber()) {
-    if (pTarget == m_pHealTarget || (pTarget->GetTeamNumber() != 0 && pTarget->GetTeamNumber() == m_pBotPlayer->GetTeamNumber()) ) { // Second check is very basic team check
+    if (pTarget->GetTeamNumber() != 0 && pTarget->GetTeamNumber() == m_pBotPlayer->GetTeamNumber()) {
+        // Target is an ally, switch to healing.
+        m_pCurrentTarget = nullptr; // Clear combat target
         return HealAlly(pTarget, pCmd);
     }
 
     // Target is an enemy
-    m_pCurrentTarget = pTarget; // Ensure combat target is set
-    m_pHealTarget = nullptr;  // Stop healing if engaging an enemy
+    m_pCurrentTarget = pTarget;
+    if (m_pHealTarget == pTarget) m_pHealTarget = nullptr; // Cannot heal an enemy target
 
-    // Conceptual: Weapon choice (Syringe or Bonesaw)
     int desiredWeapon = WEAPON_ID_MEDIC_SYRINGEGUN;
     // float distSq = (m_pBotPlayer->GetPosition() - pTarget->GetPosition()).LengthSqr();
-    // if (distSq < MELEE_RANGE_SQ_MEDIC) { // Assuming a MELEE_RANGE_SQ_MEDIC
-    //    desiredWeapon = WEAPON_ID_MEDIC_MELEE;
-    // }
+    // if (distSq < MELEE_RANGE_SQ_MEDIC_CONCEPTUAL) { desiredWeapon = WEAPON_ID_MEDIC_MELEE; }
 
-    // SwitchToWeapon(desiredWeapon, pCmd);
-    // if (m_pBotPlayer->GetActiveWeaponId() != desiredWeapon) {
+    SwitchToWeapon(desiredWeapon, pCmd);
+    // if (m_pBotPlayer->GetActiveWeaponId_Placeholder() != desiredWeapon) {
     //    return true; // Waiting for weapon switch
     // }
 
     AimAt(pTarget->GetWorldSpaceCenter(), pCmd);
     pCmd->buttons |= IN_ATTACK;
-    // std::cout << "Medic: Attacking enemy with " << desiredWeapon << std::endl;
-    return true; // Combat ongoing
+    return true;
 }
 
-bool CMedicAI_FF::ShouldDeployUber(CBaseEntity* currentEnemy) const {
-    if (m_fUberChargePercentage < 0.99f || !m_pHealTarget || !m_pHealTarget->IsAlive() || !m_pBotPlayer) {
+bool CMedicAI_FF::ShouldDeployUber(CBaseEntity* currentEnemyContext) const {
+    if (m_fUberChargePercentage < 0.99f || !m_pBotPlayer || !m_pBotPlayer->IsAlive()) {
         return false;
     }
+    if (!m_pHealTarget || !m_pHealTarget->IsAlive()) return false;
 
-    // Example conditions (highly conceptual):
-    // 1. Offensive: Pushing with a key teammate into an objective or multiple enemies.
-    // float healTargetHealthPercent = m_pHealTarget->GetHealth() / (float)m_pHealTarget->GetMaxHealth();
-    // if (healTargetHealthPercent > 0.7f && m_pObjectivePlanner->IsPushingObjective()) { // Conceptual planner state
-    //    if (m_pKnowledgeBase->CountNearbyEnemies(m_pHealTarget->GetPosition(), 500.0f) >= 1) return true;
-    // }
-    // 2. Defensive: Save self or heal target if critical and under heavy fire.
-    // if (m_pHealTarget->GetHealthPercentage() < 0.3f && m_pHealTarget->IsTakingDamage()) return true;
-    // if (m_pBotPlayer->GetHealthPercentage() < 0.3f && m_pBotPlayer->IsTakingDamage()) return true;
-    // 3. Counter Sentry
-    // if (currentEnemy && currentEnemy->IsSentry()) return true;
+    // Example conditions:
+    // 1. Heal target is critical and in combat.
+    // if (m_pHealTarget->GetHealthPercent() < 0.5f && m_pHealTarget->IsInCombat()) return true;
+    // 2. Pushing into a Sentry Gun.
+    // if (currentEnemyContext && currentEnemyContext->IsSentryGun()) return true;
+    // 3. Multiple allies nearby are low health / in combat.
+    // if (m_pKnowledgeBase->CountNearbyCriticallyInjuredAllies(m_pHealTarget->GetPosition()) >= 1) return true;
 
-    // For testing, let's say deploy if Uber is full and healing someone.
-    if (m_pHealTarget) return true;
-
-    return false;
+    // For testing, if Uber is full and healing an alive target that is not fully overhealed.
+    // float healTargetHPPercent = m_pHealTarget->GetHealth() / (float)m_pHealTarget->GetMaxHealth();
+    // if (m_pHealTarget && m_pHealTarget->IsAlive() && healTargetHPPercent < 1.4f) return true;
+    return true; // Simplified: pop if full and has heal target
 }
 
 bool CMedicAI_FF::AttemptUberCharge(CUserCmd* pCmd) {
-    if (m_bIsUberDeployed) return false; // Already deployed
+    if (!pCmd) return false;
+    float gameTime = GetMedicConceptualWorldTime();
 
-    if (ShouldDeployUber(m_pCurrentTarget /* can be null */)) {
-        // Conceptual: if (m_pBotPlayer->GetActiveWeaponId() == WEAPON_ID_MEDIC_MEDIGUN) {
-            pCmd->buttons |= IN_ATTACK2; // Secondary fire for Uber
-            m_fUberChargePercentage = 0.0f; // Resets after pop
+    if (m_bIsUberDeployed) {
+         if (gameTime >= m_flUberExpireTime) {
+             m_bIsUberDeployed = false;
+         }
+        return false;
+    }
+
+    if (ShouldDeployUber(m_pCurrentTarget /* enemy context for decision, can be null */)) {
+        // if (m_pBotPlayer->GetActiveWeaponId_Placeholder() == WEAPON_ID_MEDIC_MEDIGUN) {
+            pCmd->buttons |= IN_ATTACK2;
             m_bIsUberDeployed = true;
-            m_flUberExpireTime = 0.0f /*GetCurrentWorldTime()*/ + MEDIC_UBER_DURATION;
-            std::cout << "CMedicAI_FF: UBERCHARGE DEPLOYED!" << std::endl;
-            return true; // Uber popped this frame
+            m_flUberExpireTime = gameTime + MEDIC_UBER_DURATION_SECONDS;
+            // std::cout << "CMedicAI_FF: UBERCHARGE DEPLOYED! Expires at " << m_flUberExpireTime << std::endl;
+            return true;
         // }
     }
-    return false; // Uber not deployed or conditions not met
+    return false;
 }
 
 bool CMedicAI_FF::UseAbility(int abilitySlot, CBaseEntity* pTarget, CUserCmd* pCmd) {
-    // Assuming abilitySlot 0 for Medic is Ubercharge
-    if (abilitySlot == 0) {
-        // pTarget might be used to make sure we are healing someone relevant before ubering.
-        // For now, AttemptUberCharge uses m_pHealTarget internally.
+    if (!pCmd) return false;
+    if (abilitySlot == 0) { // Assuming slot 0 is Uber for Medic
         return AttemptUberCharge(pCmd);
     }
-    return CFFBaseAI::UseAbility(abilitySlot, pTarget, pCmd); // Call base if not handled
+    return CFFBaseAI::UseAbility(abilitySlot, pTarget, pCmd);
 }
 
 void CMedicAI_FF::SwitchToWeapon(int weaponId, CUserCmd* pCmd) {
+    if (!pCmd) return;
     // Conceptual
-    // if (m_pBotPlayer && m_pBotPlayer->GetActiveWeaponId() != weaponId) {
+    // if (m_pBotPlayer && m_pBotPlayer->GetActiveWeaponId_Placeholder() != weaponId) {
     //    pCmd->weaponselect = weaponId;
-    //    std::cout << "Medic: Attempting to switch to weapon ID: " << weaponId << std::endl;
     // }
 }
