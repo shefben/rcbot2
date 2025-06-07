@@ -22,9 +22,16 @@ bool BotKnowledgeBase::LoadNavMesh(const char* mapName) { /* ... (same as Task 1
 bool BotKnowledgeBase::LoadMapObjectiveData(lua_State* L, const char* mapName, const std::vector<std::string>& cpTableNames) { /* ... (same as Task 16, Step 1) ... */ return true;}
 void BotKnowledgeBase::UpdateControlPointState(int cpId, int newOwnerTeam, float newCaptureProgress, bool newIsLocked) { /* ... (same as Task 16, Step 1) ... */ }
 void BotKnowledgeBase::UpdateTrackedEntities(const std::vector<TrackedEntityInfo>& currentTrackedEntities, int botTeamId) { /* ... (same as Task 16, Step 1) ... */ }
+
+void BotKnowledgeBase::UpdateTrackedProjectiles(const std::vector<ReflectableProjectileInfo>& currentProjectiles) {
+    m_TrackedProjectiles = currentProjectiles; // Simple overwrite for now
+    // More advanced logic could involve merging, tracking disappearance, etc.
+}
+
 void BotKnowledgeBase::ClearDynamicMapData() { /* ... (same as Task 16, Step 1, ensure m_TrackedBuildings.clear() is added) ... */
     m_ControlPoints.clear(); m_PayloadPaths.clear();
     m_TrackedEnemies.clear(); m_TrackedAllies.clear();
+    m_TrackedProjectiles.clear(); // Clear projectiles as well
     // m_TrackedEntityMap.clear(); // If using map
     m_TrackedBuildings.clear(); // Added
     m_NavGraph.Clear();
@@ -38,6 +45,9 @@ const ClassConfigInfo* BotKnowledgeBase::GetClassConfigByName(const std::string&
 const ClassConfigInfo* BotKnowledgeBase::GetClassConfigById(int classId) const { /* ... */ return nullptr;}
 const TrackedEntityInfo* BotKnowledgeBase::GetTrackedEntity(edict_t* pEdict) const { /* ... */ return nullptr;}
 const TrackedEntityInfo* BotKnowledgeBase::GetTrackedEntityById(int entityId) const { /* ... */ return nullptr;}
+const std::vector<ReflectableProjectileInfo>& BotKnowledgeBase::GetTrackedProjectiles() const {
+    return m_TrackedProjectiles;
+}
 
 
 // --- Building Information Management ---
@@ -187,3 +197,48 @@ std::vector<const BuildingInfo*> BotKnowledgeBase::GetOwnBuildings(int botPlayer
 // bool BotKnowledgeBase::IsAreaNearObjective(unsigned int navAreaId, const HighLevelTask* currentTask) const { return false; }
 // bool BotKnowledgeBase::IsPathToObjective(unsigned int navAreaId) const { return false; }
 // bool BotKnowledgeBase::IsTeamWinning() const { return false; }
+
+// --- New implementations for Perception Data ---
+
+// Conceptual: Assume this global or a member is set reflecting the bot's current team.
+// This is needed to correctly categorize players.
+// This would ideally be passed into UpdateTrackedPlayers_Conceptual or be a member of BotKnowledgeBase
+// if it's a shared KB, or obtained from the bot instance if it's a per-bot KB.
+static int g_bots_own_team_id_conceptual = 2; // Example: Bot is on RED team.
+
+void BotKnowledgeBase::UpdateTrackedPlayers_Conceptual(const std::vector<TrackedEntityInfo>& perceivedPlayers) {
+    m_TrackedEnemies.clear();
+    m_TrackedAllies.clear();
+
+    // A more robust system would get the bot's actual team ID rather than using a static global.
+    // For instance, if this KB instance is tied to a specific bot, or if the team ID is passed in.
+    // For now, we use the conceptual global g_bots_own_team_id_conceptual.
+
+    for (const auto& playerInfo : perceivedPlayers) {
+        if (playerInfo.team == 0) { // Skip neutral or unassigned players for these lists
+            continue;
+        }
+
+        // Use the actual team for hostility check, not displayedTeam for spies
+        if (playerInfo.team == g_bots_own_team_id_conceptual) {
+            m_TrackedAllies.push_back(playerInfo);
+        } else {
+            m_TrackedEnemies.push_back(playerInfo);
+        }
+    }
+    // More advanced: Update existing entries if possible, to preserve history or smooth data.
+    // This simple version just rebuilds the lists each time.
+}
+
+void BotKnowledgeBase::UpdateTrackedBuildings_Conceptual(const std::vector<BuildingInfo>& perceivedBuildings) {
+    // Simplistic update: Overwrite the entire list.
+    // This means buildings that disappear from perception are immediately gone from KB.
+    // A more robust system might:
+    // 1. Mark all existing m_TrackedBuildings as "not seen this frame".
+    // 2. Iterate perceivedBuildings:
+    //    - If building exists in m_TrackedBuildings, update it and mark as "seen".
+    //    - If new, add to m_TrackedBuildings and mark as "seen".
+    // 3. Remove any buildings from m_TrackedBuildings still marked "not seen this frame".
+    // For now, keeping it simple:
+    m_TrackedBuildings = perceivedBuildings;
+}

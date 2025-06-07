@@ -72,6 +72,12 @@ public:
     bool CanCloak_Conceptual() const;       // Checks energy, cooldowns, conditions
     bool CanDisguise_Conceptual() const;    // Checks cooldowns, conditions
 
+    // --- Pyro Specific Getters (conceptual) ---
+    bool IsOnFire_Conceptual() const;
+    bool IsTargetOnFire_Conceptual(edict_t* pTargetEdict) const;
+    int GetAirblastAmmo_Conceptual() const;
+    bool CanAirblast_Conceptual() const;
+
 
     // --- Action Methods (filling UserCmd) ---
     void SetViewAngles(CUserCmd* pCmd, const Vector& angles);

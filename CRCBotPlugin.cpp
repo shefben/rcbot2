@@ -44,6 +44,51 @@ EXPOSE_SINGLE_INTERFACE_GLOBALVAR_IMPLEMENTED(CRCBotPlugin, "IServerPluginCallba
 //     // printf("\n");
 // }
 
+// --- Conceptual Helper Functions for Perception ---
+// CBaseEntity* Ed_GetBaseEntity_Conceptual(edict_t* pEdict) {
+    // if (!pEdict || !g_pEngineServer_conceptual_global) return nullptr; // Assuming g_pEngineServer_conceptual_global is set
+    // return g_pEngineServer_conceptual_global->GetIServerUnknown_Conceptual(pEdict)->GetBaseEntity_Conceptual();
+    // Or if using a direct edict to entity map/function:
+    // return SomeGlobalEdictToBaseEntityFunction(pEdict);
+//     return nullptr; // Placeholder
+// }
+
+// bool IsBuildingClassName_Conceptual(const char* className) {
+//     if (!className) return false;
+//     return strstr(className, "obj_") != nullptr || strcmp(className, CLASSNAME_SENTRYGUN_CONCEPTUAL) == 0 ||
+//            strcmp(className, CLASSNAME_DISPENSER_CONCEPTUAL) == 0 || strcmp(className, CLASSNAME_TELEPORTER_CONCEPTUAL) == 0;
+// }
+
+// BuildingType_FF GetBuildingTypeFromClassName_Conceptual(const char* className) {
+//     if (!className) return BuildingType_FF::UNKNOWN;
+//     if (strcmp(className, CLASSNAME_SENTRYGUN_CONCEPTUAL) == 0) return BuildingType_FF::SENTRY_GUN;
+//     if (strcmp(className, CLASSNAME_DISPENSER_CONCEPTUAL) == 0) return BuildingType_FF::DISPENSER;
+//     if (strcmp(className, CLASSNAME_TELEPORTER_CONCEPTUAL) == 0) return BuildingType_FF::TELEPORTER_ENTRANCE; // Or decide based on other props
+    // Could also check for specific teleporter exit classname if different
+//     return BuildingType_FF::UNKNOWN;
+// }
+
+// bool IsReflectableProjectileClassName_Conceptual(const char* className) {
+//     if (!className) return false;
+//     return strcmp(className, CLASSNAME_PROJECTILE_ROCKET_CONCEPTUAL) == 0 ||
+//            strcmp(className, CLASSNAME_PROJECTILE_GRENADE_CONCEPTUAL) == 0 ||
+//            strcmp(className, CLASSNAME_PROJECTILE_PIPEBOMB_CONCEPTUAL) == 0;
+    // Note: Stickybombs might be reflectable but behave differently. Arrows also.
+// }
+
+// std::string GetClassNameFromId_Conceptual(int classId) {
+    // Conceptual: Map class ID to string name
+    // static const std::map<int, std::string> classIdToName = {
+    //     {CLASS_ID_SCOUT_FF_CONCEPTUAL, "Scout"}, {CLASS_ID_SOLDIER_FF_CONCEPTUAL, "Soldier"}, /* ... all classes ... */
+    // };
+    // auto it = classIdToName.find(classId);
+    // return it != classIdToName.end() ? it->second : "";
+//     return "UnknownClass";
+// }
+
+// std::string ClassNameForDisplay_Conceptual(const TrackedEntityInfo& info) {
+//     return info.isDisguised_conceptual ? info.displayedClassName_conceptual : info.className;
+// }
 
 // --- CRCBotPlugin Implementation ---
 CRCBotPlugin::CRCBotPlugin() :
@@ -51,7 +96,8 @@ CRCBotPlugin::CRCBotPlugin() :
     m_pLuaState_member(nullptr),
     m_bLuaInitialized(false),
     m_bPluginLoaded(false),
-    m_CommandClientIndex(-1) {
+    m_CommandClientIndex(-1),
+    m_fNextFullPerceptionScanTime_conceptual(0.0f) { // Initialize new member
     // ConMsg("CRCBotPlugin: Constructor called.");
 }
 
@@ -593,10 +639,110 @@ void CRCBotPlugin::SaveTaskLogsToFile() {
 
 // Placeholder for actual perception updates
 void CRCBotPlugin::UpdatePerceptionSystem_Conceptual() {
-    // For each bot:
-    //   - Scan for nearby entities (players, projectiles, objectives)
-    //   - Update BotKnowledgeBase with TrackedEntityInfo
-    //   - Handle visibility checks, FOV, etc.
+    // Conceptual: Need access to engine server, globals, and trace client for a real implementation.
+    // For now, assume they are available as m_pEngineServer_member, g_pGlobals_conceptual, m_pEngineTrace_member.
+    // if (!m_pEngineServer_member || !g_pGlobals_conceptual || !m_pKnowledgeBase || !m_pEngineTrace_member) return;
+
+    // float currentTime = 0.0f; // Conceptual: g_pGlobals_conceptual->curtime;
+    // Throttle full scans if necessary
+    // if (currentTime < m_fNextFullPerceptionScanTime_conceptual) return;
+    // m_fNextFullPerceptionScanTime_conceptual = currentTime + FULL_PERCEPTION_SCAN_INTERVAL_FF;
+
+    std::vector<TrackedEntityInfo> perceivedPlayers;
+    std::vector<BuildingInfo> perceivedBuildings;
+    std::vector<ReflectableProjectileInfo> perceivedProjectiles;
+
+    // --- Iterate Entities (Conceptual) ---
+    // int maxEdicts = 0; // Conceptual: m_pEngineServer_member->GetMaxEdicts();
+    // for (int i = 1; i <= maxEdicts; ++i) {
+    //    edict_t* pEdict = nullptr; // Conceptual: m_pEngineServer_member->PEntityOfEntIndex(i);
+    //    if (!pEdict /* || m_pEngineServer_member->IsEdictFree(pEdict) */ ) continue;
+
+    //    CBaseEntity* pEntity = nullptr; // Conceptual: Ed_GetBaseEntity_Conceptual(pEdict);
+    //    if (!pEntity /* || pEntity->IsMarkedForDeletion_Conceptual() || !pEntity->IsNetworkable_Conceptual() */) continue;
+
+        // Conceptual: Skip self if this is a global perception system for all bots.
+        // if (pEdict == SomeWayToGetLocalPlayerEdict_Conceptual()) continue;
+
+    //    const char* entityClassName = ""; // Conceptual: pEntity->GetClassName_Conceptual();
+    //    Vector entityOrigin = Vector(); // Conceptual: pEntity->GetAbsOrigin_Conceptual();
+    //    int entityTeam = 0; // Conceptual: pEntity->GetTeamNumber_Conceptual();
+
+        // --- Player Processing ---
+    //    if (strcmp(entityClassName, CLASSNAME_PLAYER_CONCEPTUAL) == 0 /* || pEntity->IsPlayer_Conceptual() */) {
+    //        TrackedEntityInfo playerInfo(pEdict, i);
+    //        CFFPlayer tempPlayerWrapper(pEdict, this); // Pass 'this' if CFFPlayer constructor needs plugin ptr
+
+    //        playerInfo.lastKnownPosition = entityOrigin;
+    //        playerInfo.velocity = tempPlayerWrapper.GetVelocity(); // Uses actual CFFPlayer getter
+    //        playerInfo.health = tempPlayerWrapper.GetHealth();
+    //        playerInfo.maxHealth = tempPlayerWrapper.GetMaxHealth();
+    //        playerInfo.team = tempPlayerWrapper.GetTeam();
+            // playerInfo.className = tempPlayerWrapper.GetPlayerClassName_Conceptual(); // Needs mapping from ID or direct string
+
+    //        playerInfo.isOnFire = tempPlayerWrapper.IsOnFire_Conceptual();
+            // playerInfo.fireExpireTime = playerInfo.isOnFire ? (currentTime + GetRemainingFireDuration_Conceptual(pEntity)) : 0.0f;
+
+    //        if (playerInfo.className == "Spy") { // Conceptual: Use actual class name string
+    //            if (tempPlayerWrapper.IsDisguised_Conceptual()) {
+    //                playerInfo.isDisguised_conceptual = true;
+    //                playerInfo.displayedTeam_conceptual = tempPlayerWrapper.GetDisguiseTeam_Conceptual();
+                    // playerInfo.displayedClassName_conceptual = GetClassNameFromId_Conceptual(tempPlayerWrapper.GetDisguiseClass_Conceptual());
+    //            }
+    //        }
+
+    //        playerInfo.isVisible = true; // Placeholder: Assume all iterated players are "known"
+    //        playerInfo.lastSeenTime = playerInfo.isVisible ? currentTime : 0.f;
+
+    //        perceivedPlayers.push_back(playerInfo);
+    //    }
+        // --- Building Processing ---
+    //    else if (IsBuildingClassName_Conceptual(entityClassName)) {
+    //        BuildingInfo buildingInfo;
+    //        buildingInfo.pEdict = pEdict;
+    //        buildingInfo.uniqueId = i; // Use edict index as unique ID
+    //        buildingInfo.type = GetBuildingTypeFromClassName_Conceptual(entityClassName);
+    //        buildingInfo.position = entityOrigin;
+    //        buildingInfo.teamId = entityTeam;
+            // buildingInfo.health = pEntity->GetHealth_Conceptual();
+            // buildingInfo.maxHealth = pEntity->GetMaxHealth_Conceptual();
+            // buildingInfo.level = pEntity->GetBuildingLevel_Conceptual();
+            // buildingInfo.isSapped = pEntity->IsSapped_Conceptual();
+            // buildingInfo.isBuildingInProgress = pEntity->IsBuilding_Conceptual();
+            // buildingInfo.builderPlayerId = pEntity->GetBuilderUserID_Conceptual();
+    //        perceivedBuildings.push_back(buildingInfo);
+    //    }
+        // --- Projectile Processing ---
+    //    else if (IsReflectableProjectileClassName_Conceptual(entityClassName)) {
+            // Conceptual: Determine actual bot team for hostility check
+            // int myBotsTeam = TEAM_ID_NONE;
+            // if (!m_ManagedBots.empty() && m_ManagedBots[0]->pPlayer) myBotsTeam = m_ManagedBots[0]->pPlayer->GetTeam();
+
+    //        if (entityTeam != myBotsTeam && entityTeam != TEAM_ID_NONE) { // Hostile projectile
+    //            ReflectableProjectileInfo projInfo;
+    //            projInfo.pEntity = pEdict;
+    //            projInfo.projectileId = i;
+    //            projInfo.position = entityOrigin;
+                // projInfo.velocity = pEntity->GetAbsVelocity_Conceptual();
+    //            projInfo.isHostile = true;
+                // projInfo.projectileType = GetProjectileTypeFromClassName_Conceptual(entityClassName);
+                // projInfo.creationTime = pEntity->GetCreationTime_Conceptual();
+                // projInfo.estimatedImpactTime = PredictImpactTime_Conceptual(projInfo);
+    //            perceivedProjectiles.push_back(projInfo);
+    //        }
+    //    }
+    // } // End entity iteration
+
+    // --- Update BotKnowledgeBase ---
+    if (m_pKnowledgeBase) {
+        // The UpdateTrackedPlayers_Conceptual function in BotKnowledgeBase will need
+        // the bot's own team ID to separate players into allies and enemies.
+        // This could be passed in, or KB could fetch it if it has a reference to the bot/plugin.
+        // For simplicity, UpdateTrackedPlayers_Conceptual uses a static conceptual team ID for now.
+        m_pKnowledgeBase->UpdateTrackedPlayers_Conceptual(perceivedPlayers);
+        m_pKnowledgeBase->UpdateTrackedBuildings_Conceptual(perceivedBuildings);
+        m_pKnowledgeBase->UpdateTrackedProjectiles(perceivedProjectiles);
+    }
 }
 
 // Placeholder for direct game state polling (if events are not sufficient)

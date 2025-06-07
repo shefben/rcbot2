@@ -4,7 +4,8 @@
 #include "FFMedicAI.h"      // For CMedicAI_FF
 #include "FFDemomanAI.h"    // For CDemomanAI_FF
 #include "FFEngineerAI.h"   // For CEngineerAI_FF
-#include "FFSpyAI.h"        // For CSpyAI_FF (New)
+#include "FFSpyAI.h"        // For CSpyAI_FF
+#include "FFPyroAI.h"       // For CPyroAI_FF (New)
 
 #include "FFStateStructs.h" // For ClassConfigInfo definition
 #include <iostream>
@@ -43,8 +44,10 @@ namespace AIFactory {
             return std::make_unique<CDemomanAI_FF>(pBotPlayer, pPlanner, pKB, pClassCfg);
         } else if (determinedClassName == "Engineer" || determinedClassName == "engineer") {
             return std::make_unique<CEngineerAI_FF>(pBotPlayer, pPlanner, pKB, pClassCfg);
-        } else if (determinedClassName == "Spy" || determinedClassName == "spy") { // Added Spy
+        } else if (determinedClassName == "Spy" || determinedClassName == "spy") {
             return std::make_unique<CSpyAI_FF>(pBotPlayer, pPlanner, pKB, pClassCfg);
+        } else if (determinedClassName == "Pyro" || determinedClassName == "pyro") { // Added Pyro
+            return std::make_unique<CPyroAI_FF>(pBotPlayer, pPlanner, const_cast<BotKnowledgeBase*>(pKB), pClassCfg); // Cast away const for KB if non-const in PyroAI constructor
         }
         // Add other classes here:
         // else if (determinedClassName == "Scout") {

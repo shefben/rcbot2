@@ -120,6 +120,48 @@ bool CFFPlayer::CanDisguise_Conceptual() const {
     return true; // Simplified
 }
 
+// --- Pyro Specific Getters (Implementations) ---
+bool CFFPlayer::IsOnFire_Conceptual() const {
+    // CBaseEntity* pEnt = GetBaseEntityFromEdict(m_pEdict); // Conceptual: Get CBaseEntity for self
+    // return pEnt && (pEnt->GetCondBits_Conceptual() & COND_FF_ONFIRE);
+    // Placeholder:
+    // For testing, let's assume there's a placeholder member or a way to toggle this.
+    // For now, returning false as no direct mechanism to set this placeholder is in CFFPlayer.
+    return false;
+}
+
+bool CFFPlayer::IsTargetOnFire_Conceptual(edict_t* pTargetEdict) const {
+    // if (!pTargetEdict) return false;
+    // CBaseEntity* pTargetEnt = GetBaseEntityFromEdict(pTargetEdict); // Conceptual
+    // return pTargetEnt && (pTargetEnt->GetCondBits_Conceptual() & COND_FF_ONFIRE);
+    return false; // Placeholder
+}
+
+int CFFPlayer::GetAirblastAmmo_Conceptual() const {
+    // Assuming Flamethrower primary ammo is used for airblast.
+    // The ammo ID/index needs to be correctly defined in BotDefines.h (e.g., AMMO_ID_FLAMETHROWER_FF_CONCEPTUAL)
+    // return GetAmmo(AMMO_ID_FLAMETHROWER_FF_CONCEPTUAL);
+    return GetAmmo(AMMO_FLAMETHROWER_FF); // Using the alias from BotDefines.h for now
+}
+
+bool CFFPlayer::CanAirblast_Conceptual() const {
+    // if (!IsValid()) return false;
+    // Conceptual: Check if flamethrower is active, or if any weapon can airblast.
+    // For now, assume flamethrower must be active.
+    // if (!IsWeaponActive_Conceptual(WEAPON_NAME_FLAMETHROWER_FF)) return false;
+
+    // Check ammo cost
+    // return GetAirblastAmmo_Conceptual() >= AIRBLAST_AMMO_COST_FF_CONCEPTUAL;
+
+    // Also, consider game-specific airblast cooldown (might be a netprop on the weapon or player)
+    // float nextAirblastReadyTime = GetNetProp_Conceptual<float>("m_flNextAirblastTime_conceptual", 0.0f);
+    // return GetAirblastAmmo_Conceptual() >= AIRBLAST_AMMO_COST_FF_CONCEPTUAL &&
+    //        g_pGlobals->curtime >= nextAirblastReadyTime; // Conceptual g_pGlobals
+
+    // Simplified placeholder:
+    return GetAirblastAmmo_Conceptual() >= AIRBLAST_AMMO_COST_FF_CONCEPTUAL;
+}
+
 
 // --- Action Methods ---
 void CFFPlayer::SetViewAngles(CUserCmd* pCmd, const Vector& angles) { if(pCmd) pCmd->viewangles = angles; }

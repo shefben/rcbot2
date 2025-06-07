@@ -32,13 +32,22 @@ struct TrackedEntityInfo {
     // bool isTeleporter;
     // bool isProjectile;
     // bool isPlayer; // More robust check than just className
+    bool isOnFire;          // True if the entity is currently burning
+    float fireExpireTime;   // Game time when the fire effect is expected to expire
+
+    // Spy specific perception fields
+    bool isDisguised_conceptual;
+    int displayedTeam_conceptual;      // Team the spy appears to be on
+    std::string displayedClassName_conceptual; // Class the spy appears to be
 
     // Conceptual: CBaseEntity* pActiveWeapon; // If it's a player and we know their weapon
 
     TrackedEntityInfo(edict_t* ed = nullptr, int id = -1) :
         pEdict(ed), entityId(id),
         isVisible(false), lastSeenTime(0.0f),
-        health(0), maxHealth(0), team(0)
+        health(0), maxHealth(0), team(0),
+        isOnFire(false), fireExpireTime(0.0f),
+        isDisguised_conceptual(false), displayedTeam_conceptual(0), displayedClassName_conceptual("")
         // isSentryGun(false), isDispenser(false), isTeleporter(false), isProjectile(false), isPlayer(false)
         {}
 

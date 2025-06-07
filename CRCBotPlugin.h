@@ -150,6 +150,7 @@ private:
     bool m_bLuaInitialized = false;
     bool m_bPluginLoaded = false; // Tracks if Load was successful
     int m_CommandClientIndex = -1; // For SetCommandClient
+    float m_fNextFullPerceptionScanTime_conceptual = 0.0f; // For throttling perception scans
 };
 
 // Global pointer to the plugin instance (for ConCommand callback and other global access if needed)

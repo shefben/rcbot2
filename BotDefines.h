@@ -55,6 +55,7 @@ const int   ENGINEER_MAX_METAL = 200;
 #define COND_FF_CLOAKED         (1 << 0) // Example bit for standard cloak
 #define COND_FF_DEADRINGER      (1 << 1) // Example bit for Dead Ringer cloak
 #define COND_FF_DISGUISED       (1 << 2) // Example bit for being disguised
+#define COND_FF_ONFIRE          (1 << 3) // Example bit for being on fire (general condition)
 
 const float SPY_CLOAK_ABILITY_COOLDOWN_FF = 1.0f;
 const float SPY_DECLOAK_TIME_FF = 0.5f;
@@ -79,6 +80,36 @@ const float KNIFE_SWING_RATE_FF = 0.8f;
 // ... other class IDs ...
 
 
+// --- Pyro Specific Constants ---
+#define WEAPON_NAME_FLAMETHROWER_FF "weapon_flamethrower_pyro_ff_conceptual"
+#define WEAPON_NAME_SHOTGUN_PYRO_FF "weapon_shotgun_pyro_ff_conceptual"
+#define WEAPON_NAME_AXE_PYRO_FF "weapon_axe_pyro_ff_conceptual" // Or FireAxe
+
+#define AMMO_ID_FLAMETHROWER_FF_CONCEPTUAL 1 // Conceptual ammo ID/index for flamethrower's primary resource
+#define AMMO_FLAMETHROWER_FF AMMO_ID_FLAMETHROWER_FF_CONCEPTUAL // Alias for existing usage
+#define AMMO_SHOTGUN_FF 2      // Conceptual ammo type index for secondary (shared by Soldier, Engi, Heavy)
+// #define AMMO_AIRBLAST_FF 20    // This was a value, not an ID. Replaced by AIRBLAST_AMMO_COST_FF_CONCEPTUAL for clarity.
+
+const float FLAMETHROWER_EFFECTIVE_RANGE_FF = 300.0f; // Effective range for flame particles
+const float FLAMETHROWER_EFFECTIVE_RANGE_SQR_FF = FLAMETHROWER_EFFECTIVE_RANGE_FF * FLAMETHROWER_EFFECTIVE_RANGE_FF;
+const float FLAMETHROWER_FLAME_SPEED_FF = 1000.0f; // Conceptual speed of flame particles for prediction
+const float FLAMETHROWER_FIRE_INTERVAL_FF = 0.05f; // Time between "puffs" of flame
+const float SHOTGUN_EFFECTIVE_RANGE_FF = 800.0f; // Further than flames, but less effective at max range
+const float SHOTGUN_EFFECTIVE_RANGE_SQR_FF = SHOTGUN_EFFECTIVE_RANGE_FF * SHOTGUN_EFFECTIVE_RANGE_FF;
+const float SHOTGUN_FIRE_INTERVAL_FF = 0.625f; // Standard shotgun fire rate
+const float AXE_RANGE_FF = 70.0f; // Melee range
+const float AXE_RANGE_SQR_FF = AXE_RANGE_FF * AXE_RANGE_FF;
+const float AXE_FIRE_INTERVAL_FF = 0.8f; // Standard melee swing rate
+
+const float AIRBLAST_COOLDOWN_FF = 0.75f; // Cooldown between airblasts
+const float AIRBLAST_RANGE_FF = 200.0f; // Effective range of airblast puff
+const float AIRBLAST_FOV_DEG_FF = 60.0f; // Cone for airblasting projectiles/enemies
+
+// Conceptual: How much ammo an airblast costs, from the flamethrower's primary ammo pool
+const int AIRBLAST_AMMO_COST_FF_CONCEPTUAL = 20;
+// const int AIRBLAST_AMMO_COST_FF = AIRBLAST_AMMO_COST_FF_CONCEPTUAL; // Alias if needed, but direct use of new name is better.
+
+
 // Conceptual IDs
 #define ENEMY_FLAG_ID_CONCEPTUAL 1
 #define OUR_FLAG_ID_CONCEPTUAL   2
@@ -88,6 +119,20 @@ const float DEFAULT_ARRIVAL_TOLERANCE_FF         = 50.0f;
 const float DEFAULT_ARRIVAL_TOLERANCE_SQR_FF   = DEFAULT_ARRIVAL_TOLERANCE_FF * DEFAULT_ARRIVAL_TOLERANCE_FF;
 const float PATH_RECALC_TARGET_MOVED_DIST_FF   = 100.0f;
 const float PATH_RECALC_TARGET_MOVED_DIST_SQR_FF = PATH_RECALC_TARGET_MOVED_DIST_FF * PATH_RECALC_TARGET_MOVED_DIST_FF;
+
+// --- Perception System Constants ---
+const float FULL_PERCEPTION_SCAN_INTERVAL_FF = 0.1f; // How often to do a full entity scan (e.g., 10 Hz)
+
+// Conceptual Class Names (engine/game specific - for string comparisons in perception)
+#define CLASSNAME_PLAYER_CONCEPTUAL "player"
+#define CLASSNAME_SENTRYGUN_CONCEPTUAL "obj_sentrygun" // Example, could be "obj_sentrygun_ff"
+#define CLASSNAME_DISPENSER_CONCEPTUAL "obj_dispenser"
+#define CLASSNAME_TELEPORTER_CONCEPTUAL "obj_teleporter"
+#define CLASSNAME_PROJECTILE_ROCKET_CONCEPTUAL "tf_projectile_rocket" // Example from TF2
+#define CLASSNAME_PROJECTILE_GRENADE_CONCEPTUAL "tf_projectile_grenade" // Example from TF2
+#define CLASSNAME_PROJECTILE_PIPEBOMB_CONCEPTUAL "tf_projectile_pipe" // Example for Demoman pipes
+#define CLASSNAME_PROJECTILE_STICKYBOMB_CONCEPTUAL "tf_projectile_pipe_remote" // Example for stickies
+// Add other relevant class names for projectiles or items if needed for perception.
 
 // --- Team IDs ---
 #define TEAM_ID_NONE      0

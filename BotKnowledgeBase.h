@@ -12,7 +12,21 @@
 #include "FFEngineerAI.h" // For BuildingType_FF (Ideally, BuildingType_FF is in a more general header if KB needs it)
 
 struct lua_State;
-// enum class GameModeType_KB { UNKNOWN, CONTROL_POINT, CAPTURE_THE_FLAG, PAYLOAD_ATTACK, PAYLOAD_DEFEND }; // Already here
+// enum class GameModeType_KB { UNKNOWN, CONTROL_POINT, CAPTURE_THE_FLAG, PAYLOAD_ATTACK, PAYLOAD_DEFEND };
+
+// --- Projectile Tracking (Conceptual) ---
+struct ReflectableProjectileInfo {
+    edict_t* pEntity = nullptr;    // Pointer to the projectile's game entity
+    int projectileId = -1;         // Unique ID if available
+    Vector position;
+    Vector velocity;
+    float creationTime = 0.0f;     // Game time when projectile was created or first seen
+    float estimatedImpactTime = -1.0f; // Estimated time to reach a critical target or area
+    int projectileType = 0;        // Conceptual: e.g., ROCKET, GRENADE, STICKYBOMB
+    bool isHostile = false;        // True if it's an enemy projectile
+    // Potentially: edict_t* pPredictedTargetEdict; // If we can predict what it's aiming for
+};
+
 
 // New enum and struct for building information
 enum class BuildingStatus_FF {
@@ -61,10 +75,13 @@ public:
     bool LoadMapObjectiveData(lua_State* L, const char* mapName, const std::vector<std::string>& cpTableNames);
 
     void UpdateControlPointState(int cpId, int newOwnerTeam, float newCaptureProgress, bool newIsLocked);
-    void UpdateTrackedEntities(const std::vector<TrackedEntityInfo>& currentTrackedEntities, int botTeamId);
+    void UpdateTrackedEntities(const std::vector<TrackedEntityInfo>& currentTrackedEntities, int botTeamId); // May be deprecated by UpdateTrackedPlayers_Conceptual
+    void UpdateTrackedPlayers_Conceptual(const std::vector<TrackedEntityInfo>& perceivedPlayers);     // New
+    void UpdateTrackedBuildings_Conceptual(const std::vector<BuildingInfo>& perceivedBuildings); // New
+    void UpdateTrackedProjectiles(const std::vector<ReflectableProjectileInfo>& currentProjectiles);
 
     // Building specific updates
-    void UpdateOrAddBuilding(const BuildingInfo& newBuildingInfo);
+    void UpdateOrAddBuilding(const BuildingInfo& newBuildingInfo); // May be wrapped or replaced by UpdateTrackedBuildings_Conceptual
     void RemoveBuilding(edict_t* pEdict); // Or by uniqueId
     void UpdateBuildingHealth(edict_t* pEdict, int newHealth, bool isStillBuilding); // Also updates isBuildingInProgress
     void UpdateBuildingSapped(edict_t* pEdict, bool isSapped);
@@ -87,6 +104,7 @@ public:
     const std::vector<TrackedEntityInfo>& GetTrackedAllies() const { return m_TrackedAllies; }
     const TrackedEntityInfo* GetTrackedEntity(edict_t* pEdict) const;
     const TrackedEntityInfo* GetTrackedEntityById(int entityId) const;
+    const std::vector<ReflectableProjectileInfo>& GetTrackedProjectiles() const; // New
 
     // Building specific accessors
     const BuildingInfo* GetBuildingInfo(edict_t* pEdict) const;
@@ -110,6 +128,7 @@ private:
     std::vector<ClassConfigInfo> m_ClassConfigs;
     std::vector<TrackedEntityInfo> m_TrackedEnemies;
     std::vector<TrackedEntityInfo> m_TrackedAllies;
+    std::vector<ReflectableProjectileInfo> m_TrackedProjectiles; // New
     // std::map<edict_t*, TrackedEntityInfo*> m_TrackedEntityMap; // Pointers to entities within the above vectors
 
     std::vector<BuildingInfo> m_TrackedBuildings; // Stores all known buildings on map
