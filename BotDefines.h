@@ -94,6 +94,11 @@ const float PATH_RECALC_TARGET_MOVED_DIST_SQR_FF = PATH_RECALC_TARGET_MOVED_DIST
 #define TEAM_ID_SPECTATOR 1
 #define TEAM_ID_RED       2
 #define TEAM_ID_BLUE      3
+// Conceptual constants for callback
+#define TEAM_ID_AUTO_CONCEPTUAL 0
+#define TEAM_ID_RED_CONCEPTUAL 2
+#define TEAM_ID_BLUE_CONCEPTUAL 3
+
 
 // --- Conceptual LookAtTask types ---
 enum LookAtTaskType_Conceptual {

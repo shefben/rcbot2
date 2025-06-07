@@ -1,188 +1,160 @@
-#ifndef CRC_BOT_PLUGIN_H
-#define CRC_BOT_PLUGIN_H
+#ifndef CRCBOTPLUGIN_H
+#define CRCBOTPLUGIN_H
 
-#ifdef _WIN32
-#pragma once
-#endif
+#include "GameDefines_Placeholder.h" // For CCommand, edict_t, engine interface versions etc.
+#include "FFStateStructs.h"      // For BotInfo, TeamID, ClassID, etc.
+#include "BotKnowledgeBase.h"    // For m_pKnowledgeBase
+#include "FFLuaBridge.h"         // For Lua state and functions
+#include "ObjectivePlanner.h"    // For CObjectivePlanner
+#include "AIFactory.h"           // For CreateAIModule
+#include "CFFPlayer.h"           // For CFFPlayer
 
 #include <vector>
 #include <string>
 #include <memory> // For std::unique_ptr
 #include <map>    // For m_PendingBots
 
-// Conceptual Source SDK includes - actual paths/names might vary
-#include "public/eiface.h"           // For IServerPluginCallbacks, CreateInterfaceFn, PLUGIN_RESULT
-// #include "public/edict.h"         // For edict_t (often included by eiface.h)
-#include "public/engine/iserverplugin.h" // For PLUGIN_INTERFACE_VERSION (or define it if missing)
-#include "public/igameevents.h"      // For IGameEventListener2, IGameEvent
-
-// Forward declarations from our framework
-struct CUserCmd;        // Conceptual, or from GameDefines_Placeholder.h / BotTasks.h
-class CFFBaseAI;
-class CObjectivePlanner;
-class CFFPlayer;        // Added forward declaration
-struct BotKnowledgeBase;
-struct ClassConfigInfo;
-struct TaskOutcomeLog;
-struct lua_State;
-// class IGameEvent; // From SDK's gameeventmanager.h, included above
-
-// Conceptual forward declarations for engine interfaces
+// Forward declare engine interfaces (conceptual, actual SDK headers would provide these)
 class IVEngineServer;
-class IPlayerInfoManager;
-class IServerGameClients;
-class IBotManager;
-// class IGameEventManager2; // Included above
-class IEngineTrace;
-class ICvar;
-class CGlobalVarsBase;
-// class INavMesh; // For NavMesh loading
+class IPlayerInfoManager_Conceptual; // Assuming a conceptual name
+class IServerGameClients_Conceptual;
+class IBotManager_Conceptual;        // For CreateBot
+class IGameEventManager2_Conceptual;
+class ICvar_Conceptual;              // Using a distinct name if different from GameDefines
+class IEngineTrace_Conceptual;
 
+// Define from plugin_define.h or here if specific
 #ifndef INTERFACEVERSION_ISERVERPLUGINCALLBACKS
-#define INTERFACEVERSION_ISERVERPLUGINCALLBACKS "ISERVERPLUGINCALLBACKS003" // Common version
+#define INTERFACEVERSION_ISERVERPLUGINCALLBACKS INTERFACEVERSION_ISERVERPLUGINCALLBACKS_CURRENT
 #endif
-#ifndef PLUGIN_INTERFACE_VERSION // If not in iserverplugin.h
-#define PLUGIN_INTERFACE_VERSION INTERFACEVERSION_ISERVERPLUGINCALLBACKS
-#endif
+
+// Interface for the plugin to expose
+class IServerPluginCallbacks {
+public:
+    virtual ~IServerPluginCallbacks() {};
+    virtual bool Load(void* (*interfaceFactory)(const char *pName, int *pReturnCode), void* (*gameServerFactory)(const char *pName, int *pReturnCode)) = 0;
+    virtual void Unload(void) = 0;
+    virtual void Pause(void) = 0;
+    virtual void UnPause(void) = 0;
+    virtual const char* GetPluginDescription(void) = 0;
+    virtual void LevelInit(char const *pMapName) = 0;
+    virtual void ServerActivate(edict_t *pEdictList, int edictCount, int clientMax) = 0;
+    virtual void GameFrame(bool simulating) = 0;
+    virtual void LevelShutdown(void) = 0;
+    virtual void ClientActive(edict_t *pEntity) = 0;
+    virtual void ClientDisconnect(edict_t *pEntity) = 0;
+    virtual void ClientPutInServer(edict_t *pEntity, char const *playername) = 0;
+    virtual void SetCommandClient(int index) = 0;
+    virtual void ClientSettingsChanged(edict_t *pEdict) = 0;
+    virtual int  ClientConnect(bool *bAllowConnect, edict_t *pEntity, const char *pszName, const char *pszAddress, char *reject, int maxrejectlen) = 0;
+    virtual void ClientCommand(edict_t *pEntity, const CCommand &args) = 0;
+    virtual void NetworkIDValidated(const char *pszUserName, const char *pszNetworkID) = 0;
+    virtual void OnQueryCvarValueFinished(int iCookie, edict_t *pPlayerEntity, int eStatus, const char *pCvarName, const char *pCvarValue) = 0;
+    virtual void OnEdictAllocated(edict_t *edict) = 0;
+    virtual void OnEdictFreed(edict_t *edict) = 0;
+    // For IGameEventManager2
+    virtual void FireGameEvent(void *event_conceptual /* IGameEvent *event */) = 0;
+};
 
 
 struct BotInfo {
-    edict_t* pEdict;
-    int botId;
+    edict_t* pEdict = nullptr;
+    int userId = 0; // Conceptual UserID from engine event or player info
     std::string name;
+    int requestedTeamId = 0;
+    std::string requestedClassName;
+    int skill = 3;
+    bool isActive = false; // Becomes true after ClientPutInServer and full setup
 
-    int teamId;
-    std::string className;
-    int classIdInternal;
+    std::unique_ptr<CFFPlayer> pPlayer;
+    std::unique_ptr<CObjectivePlanner> pPlanner;
+    std::unique_ptr<CFFBaseAI> pAIModule;
 
-    bool isPendingPlayerSlot;
-    std::string nameRequest;
-    int teamIdRequest;
-    std::string classNameRequest;
-    int skillLevel;
-
-    std::unique_ptr<CFFPlayer> playerWrapper; // Owns the CFFPlayer instance
-    std::unique_ptr<CFFBaseAI> aiModule;
-    std::unique_ptr<CObjectivePlanner> objectivePlanner;
-
-    bool isActive;
-
-    // Constructor for pending state
-    BotInfo(int id, const std::string& reqName, int reqTeam, const std::string& reqClass, int skill)
-        : pEdict(nullptr), botId(id), name(reqName), // name is reqName initially
-          teamId(0), className(""), classIdInternal(0),
-          isPendingPlayerSlot(true), nameRequest(reqName), teamIdRequest(reqTeam),
-          classNameRequest(reqClass), skillLevel(skill),
-          playerWrapper(nullptr), aiModule(nullptr), objectivePlanner(nullptr),
-          isActive(false) {}
-
-    // Constructor for when edict is known (used by emplace_back in m_ManagedBots if needed)
-    BotInfo(edict_t* ed, int id) :
-        pEdict(ed), botId(id), teamId(0), classIdInternal(0),
-        isPendingPlayerSlot(false), teamIdRequest(0), skillLevel(0), // These might be set later if needed
-        playerWrapper(nullptr), aiModule(nullptr), objectivePlanner(nullptr),
-        isActive(false) {}
-
-
-    // Default constructor for map/vector convenience if strictly needed (though emplace_back is better)
-    BotInfo() : pEdict(nullptr), botId(-1), teamId(0), classIdInternal(0),
-                isPendingPlayerSlot(false), teamIdRequest(0), skillLevel(0),
-                playerWrapper(nullptr), aiModule(nullptr), objectivePlanner(nullptr),
-                isActive(false) {}
-
-    BotInfo(BotInfo&& other) noexcept = default;
-    BotInfo& operator=(BotInfo&& other) noexcept = default;
-    BotInfo(const BotInfo&) = delete;
-    BotInfo& operator=(const BotInfo&) = delete;
+    BotInfo(const std::string& _name, int team, const std::string& className, int _skill)
+        : name(_name), requestedTeamId(team), requestedClassName(className), skill(_skill) {}
 };
 
-class CRCBotPlugin : public IServerPluginCallbacks, public IGameEventListener2 {
+class CRCBotPlugin : public IServerPluginCallbacks /*, public IGameEventListener2_Conceptual_if_needed */ {
 public:
     CRCBotPlugin();
-    virtual ~CRCBotPlugin();
+    ~CRCBotPlugin() override;
 
-    // IServerPluginCallbacks
-    virtual bool Load(CreateInterfaceFn interfaceFactory, CreateInterfaceFn gameServerFactory) override;
-    virtual void Unload() override;
-    virtual void Pause() override;
-    virtual void UnPause() override;
-    virtual const char *GetPluginDescription() override;
-    virtual void LevelInit(char const *pMapName) override;
-    virtual void ServerActivate(edict_t *pEdictList, int edictCount, int clientMax) override;
-    virtual void GameFrame(bool simulating) override;
-    virtual void LevelShutdown() override;
-    virtual void ClientActive(edict_t *pEntity) override;
-    virtual void ClientDisconnect(edict_t *pEntity) override;
-    virtual void ClientPutInServer(edict_t *pEntity, char const *playername) override;
-    virtual void SetCommandClient(int index) override;
-    virtual void ClientSettingsChanged(edict_t *pEdict) override;
-    virtual PLUGIN_RESULT ClientConnect(bool *bAllowConnect, edict_t *pEntity, const char *pszName, const char *pszAddress, char *reject, int maxrejectlen) override;
-    virtual PLUGIN_RESULT ClientCommand(edict_t *pEntity, const void*& args /*const CCommand& args*/) override;
-    virtual PLUGIN_RESULT NetworkIDValidated(const char *pszUserName, const char *pszNetworkID) override;
-    virtual void OnQueryCvarValueFinished(int iCookie, edict_t *pPlayerEntity, int eStatus, const char *pCvarName, const char *pCvarValue) override;
-    virtual void OnEdictAllocated(edict_t *edict) override;
-    virtual void OnEdictFreed(const edict_t *edict) override;
+    // IServerPluginCallbacks implementation
+    bool Load(void* (*interfaceFactory)(const char *pName, int *pReturnCode), void* (*gameServerFactory)(const char *pName, int *pReturnCode)) override;
+    void Unload(void) override;
+    void Pause(void) override;
+    void UnPause(void) override;
+    const char* GetPluginDescription(void) override;
+    void LevelInit(char const *pMapName) override;
+    void ServerActivate(edict_t *pEdictList, int edictCount, int clientMax) override;
+    void GameFrame(bool simulating) override;
+    void LevelShutdown(void) override;
+    void ClientActive(edict_t *pEntity) override;
+    void ClientDisconnect(edict_t *pEntity) override;
+    void ClientPutInServer(edict_t *pEntity, char const *playername) override;
+    void SetCommandClient(int index) override;
+    void ClientSettingsChanged(edict_t *pEdict) override;
+    int  ClientConnect(bool *bAllowConnect, edict_t *pEntity, const char *pszName, const char *pszAddress, char *reject, int maxrejectlen) override;
+    void ClientCommand(edict_t *pEntity, const CCommand &args) override;
+    void NetworkIDValidated(const char *pszUserName, const char *pszNetworkID) override;
+    void OnQueryCvarValueFinished(int iCookie, edict_t *pPlayerEntity, int eStatus, const char *pCvarName, const char *pCvarValue) override;
+    void OnEdictAllocated(edict_t *edict) override;
+    void OnEdictFreed(edict_t *edict) override;
 
-    // IGameEventListener2
-    virtual void FireGameEvent(IGameEvent *event) override;
-    virtual int GetEventDebugID(void) override { return 42; }
+    // For IGameEventManager2 (conceptual, actual event type is IGameEvent*)
+    virtual void FireGameEvent(void *event_conceptual);
 
-    // Bot Management
-    int RequestBot(const std::string& name, int team, const std::string& className, int skill);
-    void RemoveBot(edict_t* pBotEdict);
+    // RCBot specific functions
+    bool RequestBot(const std::string& name, int teamId, const std::string& className, int skill);
+    void RemoveBot(const std::string& nameOrIndex); // Can be name or stringified edict index
+    void UpdateAllBots(CUserCmd* usercmds_output_array, int max_usercmds_capacity);
+
+    BotKnowledgeBase* GetKnowledgeBase() { return m_pKnowledgeBase.get(); }
+    IVEngineServer* GetEngineServer() { return m_pEngineServer_member; } // Getter for internal use
+    lua_State* GetLuaState() { return m_pLuaState_member; }
 
     void StoreTaskLog(const TaskOutcomeLog& log);
+    void SaveTaskLogsToFile();
 
-    // Accessors
-    IVEngineServer* GetEngineServer_Instance() const { return m_pEngineServer_member; }
-    CGlobalVarsBase* GetGlobals_Instance() const { return m_pGlobals_member; }
-    BotKnowledgeBase* GetKnowledgeBase() const { return m_pGlobalKnowledgeBase.get(); }
-    lua_State* GetLuaState() const { return m_pLuaState; }
-    ICvar* GetCVar_Instance() const { return m_pCVar_member; }
-
+    // Static callback for ConCommand
+    static void RCBot_Add_Cmd_Callback(const CCommand& args);
 
 private:
-    void FinalizeBotAddition(edict_t* pBotEdict, BotInfo& botInfoFromPending); // Changed signature
-    void UpdateAllBots();
-
     bool InitializeLuaBridge();
     void ShutdownLuaBridge();
     void RegisterLuaFunctionsWithPlugin();
-    void LoadMapDataFromLua(const char* pMapName);
+    bool LoadMapDataFromLua(const std::string& mapName);
+    bool LoadGlobalClassConfigsFromLua();
 
-    void SaveTaskLogsToFile();
+    void FinalizeBotAddition(BotInfo& botInfo, edict_t* pEdict);
+    void UpdatePerceptionSystem_Conceptual(); // Placeholder for world state updates
+    void PollGameState_Conceptual();          // Placeholder for direct game state polling
 
-    void UpdatePerceptionSystem_Conceptual();
-    void PollGameState_Conceptual();
+    // Member engine interfaces (conceptual)
+    IVEngineServer* m_pEngineServer_member = nullptr;
+    IPlayerInfoManager_Conceptual* m_pPlayerInfoManager_member = nullptr;
+    IServerGameClients_Conceptual* m_pServerGameClients_member = nullptr;
+    IGameEventManager2_Conceptual* m_pGameEventManager_member = nullptr;
+    ICvar_Conceptual* m_pCVar_member = nullptr;
+    IBotManager_Conceptual* m_pBotManager_member = nullptr; // For engine's CreateBot if used
+    IEngineTrace_Conceptual* m_pEngineTrace_member = nullptr; // For raycasts etc.
 
-    std::vector<BotInfo> m_ManagedBots;
-    std::map<std::string, BotInfo> m_PendingBots; // Keyed by requested name
-    int m_NextBotIdCounter;
+    std::unique_ptr<BotKnowledgeBase> m_pKnowledgeBase;
+    std::vector<std::unique_ptr<BotInfo>> m_ManagedBots;
+    std::map<std::string, std::unique_ptr<BotInfo>> m_PendingBots; // Keyed by a temporary ID or name until edict is known
 
-    // Engine Interfaces
-    IVEngineServer*       m_pEngineServer_member;
-    IPlayerInfoManager*   m_pPlayerInfoManager_member;
-    IServerGameClients* m_pServerGameClients_member;
-    IBotManager*          m_pBotManager_member;
-    IGameEventManager2*   m_pGameEventManager_member;
-    IEngineTrace*         m_pEngineTraceClient_member;
-    ICvar*                m_pCVar_member;
-    CGlobalVarsBase*      m_pGlobals_member;
-    // INavMesh*             m_pEngineNavMeshInterface_member;
-
-    lua_State* m_pLuaState;
-    bool m_bLuaStateCreatedByPlugin;
-
-    std::unique_ptr<BotKnowledgeBase> m_pGlobalKnowledgeBase;
-    // ClassConfigs and map objective data are now stored within BotKnowledgeBase
+    lua_State* m_pLuaState_member = nullptr; // Lua state for configuration and scripting
 
     std::vector<TaskOutcomeLog> m_CompletedTaskLogs;
-    bool m_bRegisteredForEvents;
-
-    // Helper
-    BotInfo* GetPendingBotByName_Internal(const std::string& name);
+    std::string m_CurrentMapName_Log;
+    bool m_bLuaInitialized = false;
+    bool m_bPluginLoaded = false; // Tracks if Load was successful
+    int m_CommandClientIndex = -1; // For SetCommandClient
 };
 
-extern CRCBotPlugin g_CRCBotPlugin; // For EXPOSE_PLUGIN if that's the pattern
+// Global pointer to the plugin instance (for ConCommand callback and other global access if needed)
+// This is often set in Load() or through the EXPOSE macro.
+extern CRCBotPlugin g_CRCBotPlugin;
 
-#endif // CRC_BOT_PLUGIN_H
+
+#endif // CRCBOTPLUGIN_H
