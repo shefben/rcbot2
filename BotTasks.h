@@ -18,14 +18,21 @@ enum class SubTaskType {
     SECURE_AREA,
     USE_ABILITY_ON_TARGET,
     USE_ABILITY_AT_POSITION,
-    CAPTURE_OBJECTIVE,
-    STAND_ON_POINT,
-    HOLD_POSITION,
+    CAPTURE_OBJECTIVE,      // Generic for standing on CP or interacting with objective
+    STAND_ON_POINT,         // More specific for CPs
+    HOLD_POSITION,          // Stay in an area and defend
+
+    // FF Class Specific examples
     PLANT_STICKY_TRAP_FF,
     ATTEMPT_BACKSTAB_FF,
-    HEAL_ALLY_FF,
+    HEAL_ALLY_FF,           // Could also use ATTACK_TARGET with special Medic logic to heal ally
     DEPLOY_UBERCHARGE_FF,
-    ROCKET_JUMP_FF
+    ROCKET_JUMP_FF,
+
+    // CTF Specific SubTaskTypes (New)
+    PICKUP_FLAG_FF,             // pTargetEntity (the flag item), targetPosition (flag's location)
+    CAPTURE_FLAG_AT_POINT_FF,   // pTargetEntity (the capture zone entity), targetPosition (capture zone location). Bot must be carrying flag.
+    MOVE_TO_ENTITY_DYNAMIC_FF   // pTargetEntity (entity to follow, e.g. flag carrier), targetPosition (is dynamically updated to pTargetEntity's pos)
 };
 
 struct SubTask {
@@ -45,31 +52,26 @@ struct SubTask {
           desiredDuration(0.0f), radiusParam(0.0f),
           isCompleted(false), canBeInterrupted(true) {}
 
-    // Constructor for simple position-based tasks (e.g. MOVE_TO_POSITION)
     SubTask(SubTaskType t, const Vector& pos)
         : type(t), targetPosition(pos), pTargetEntity(nullptr), abilitySlot(-1),
           desiredDuration(0.0f), radiusParam(0.0f),
           isCompleted(false), canBeInterrupted(true) {}
 
-    // Constructor for entity-based tasks (e.g. MOVE_TO_ENTITY, ATTACK_TARGET)
     SubTask(SubTaskType t, CBaseEntity* entity)
         : type(t), pTargetEntity(entity), abilitySlot(-1),
           desiredDuration(0.0f), radiusParam(0.0f),
           isCompleted(false), canBeInterrupted(true) {}
 
-    // Constructor for tasks with position, entity, duration, and radius (SECURE_AREA, HOLD_POSITION, STAND_ON_POINT)
     SubTask(SubTaskType t, const Vector& pos, CBaseEntity* entity, float duration, float radius)
         : type(t), targetPosition(pos), pTargetEntity(entity), abilitySlot(-1),
           desiredDuration(duration), radiusParam(radius),
           isCompleted(false), canBeInterrupted(true) {}
 
-    // Constructor for ability on entity
     SubTask(SubTaskType t, CBaseEntity* entity, int slot)
         : type(t), pTargetEntity(entity), abilitySlot(slot),
           desiredDuration(0.0f), radiusParam(0.0f),
           isCompleted(false), canBeInterrupted(true) {}
 
-    // Constructor for ability at position
     SubTask(SubTaskType t, const Vector& pos, int slot)
         : type(t), targetPosition(pos), pTargetEntity(nullptr), abilitySlot(slot),
           desiredDuration(0.0f), radiusParam(0.0f),
@@ -82,9 +84,16 @@ enum class HighLevelTaskType {
     DEFEND_POINT_FF,
     ESCORT_PAYLOAD_FF,
     STOP_PAYLOAD_FF,
-    CAPTURE_FLAG_FF,
-    RETRIEVE_FLAG_FF,
-    DEFEND_FLAG_FF,
+
+    // CTF HLTs (already added from Task 17)
+    CAPTURE_ENEMY_FLAG_FF,          // Go to enemy flag base, pick it up, bring to our base
+    RETURN_OUR_FLAG_FF,             // Our flag is dropped, go get it and return to stand
+    DEFEND_FLAG_STAND_FF,           // Defend our flag at its base/stand
+    ESCORT_FLAG_CARRIER_FF,         // Escort our teammate who has the enemy flag
+    KILL_ENEMY_FLAG_CARRIER_FF,     // Specifically target enemy carrying our flag
+    CAMP_ENEMY_FLAG_SPAWN_FF,       // (Advanced) Camp near enemy flag spawn
+    INTERCEPT_ENEMY_FLAG_RUNNER_FF, // General interception of enemy with our flag
+
     ATTACK_ENEMY,
     SEEK_HEALTH,
     SEEK_AMMO,
@@ -97,7 +106,7 @@ struct HighLevelTask {
     Vector targetPosition;
     CBaseEntity* pTargetEntity;
     std::string description;
-    std::string targetNameOrId_Logging; // For logging convenience if pTargetEntity is not enough
+    std::string targetNameOrId_Logging;
 
     std::vector<SubTask> subTasks;
     int currentSubTaskIndex;
@@ -105,48 +114,38 @@ struct HighLevelTask {
     HighLevelTask(HighLevelTaskType t = HighLevelTaskType::NONE, float prio = 0.0f)
         : type(t), priority(prio), pTargetEntity(nullptr), currentSubTaskIndex(-1) {}
 
-    bool IsValid() const { return type != HighLevelTaskType::NONE; } // Simplified: valid if it has a type
+    bool IsValid() const { return type != HighLevelTaskType::NONE; }
     bool HasPendingSubTasks() const {
         if (type == HighLevelTaskType::NONE || subTasks.empty() || currentSubTaskIndex < 0) return false;
-        if (currentSubTaskIndex >= (int)subTasks.size()) return false; // Index out of bounds (all done)
-        // If current subtask is not completed, then it's pending.
-        // If currentSubTaskIndex points to a valid task, it's considered pending until completed/advanced.
+        if (currentSubTaskIndex >= (int)subTasks.size()) return false;
         return currentSubTaskIndex < (int)subTasks.size();
     }
 
+    void AddSubTask(const SubTask& sub) { subTasks.push_back(sub); }
 
-    void AddSubTask(const SubTask& sub) {
-        subTasks.push_back(sub);
-    }
-
-    const SubTask* GetCurrentSubTask() const {
+    const SubTask* GetCurrentSubTask() const { /* ... (same as before) ... */
         if (type != HighLevelTaskType::NONE && currentSubTaskIndex >= 0 && currentSubTaskIndex < (int)subTasks.size()) {
             return &subTasks[currentSubTaskIndex];
         }
         return nullptr;
     }
-
-    SubTask* GetCurrentSubTaskMutable() {
+    SubTask* GetCurrentSubTaskMutable() { /* ... (same as before) ... */
         if (type != HighLevelTaskType::NONE && currentSubTaskIndex >= 0 && currentSubTaskIndex < (int)subTasks.size()) {
             return &subTasks[currentSubTaskIndex];
         }
         return nullptr;
     }
-
-    bool AdvanceToNextSubTask() {
+    bool AdvanceToNextSubTask() { /* ... (same as before) ... */
         if (type == HighLevelTaskType::NONE || subTasks.empty()) return false;
-
         currentSubTaskIndex++;
         if (currentSubTaskIndex < (int)subTasks.size()) {
-            // When advancing, the new current subtask's startTime should be set.
             subTasks[currentSubTaskIndex].isCompleted = false;
             subTasks[currentSubTaskIndex].startTime = std::chrono::system_clock::now();
             return true;
         }
         return false;
     }
-
-    void StartFirstSubTask() { // Call this after DecomposeTask
+    void StartFirstSubTask() { /* ... (same as before) ... */
         if (!subTasks.empty()) {
             currentSubTaskIndex = 0;
             subTasks[0].isCompleted = false;
@@ -155,8 +154,7 @@ struct HighLevelTask {
             currentSubTaskIndex = -1;
         }
     }
-
-    void Reset() {
+    void Reset() { /* ... (same as before) ... */
         type = HighLevelTaskType::NONE; priority = 0.0f; targetPosition = Vector();
         pTargetEntity = nullptr; description = ""; targetNameOrId_Logging = "";
         subTasks.clear(); currentSubTaskIndex = -1;
