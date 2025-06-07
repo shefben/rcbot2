@@ -861,6 +861,7 @@ void CBotTF2 ::init(bool bVarInit) { CBotFortress::init(bVarInit); }
 #define BOT_UTIL_FF_ENGRI_BUILD_MANCANNON 1012
 #define BOT_UTIL_FF_DEMO_LAY_PIPE_TRAP 1013
 #define BOT_UTIL_FF_SPY_USE_TRANQ 1014
+#define BOT_UTIL_FF_SCOUT_USE_CALTROPS 1015
 
 
 #define SCHED_FF_PRIME_THROW_GRENADE 2001
@@ -869,6 +870,7 @@ void CBotTF2 ::init(bool bVarInit) { CBotFortress::init(bVarInit); }
 #define SCHED_FF_HUNTED_GUARD_VIP 2004
 #define SCHED_FF_ENGRI_BUILD_MANCANNON 2005
 #define SCHED_FF_DEMO_LAY_PIPE_TRAP 2006
+#define SCHED_FF_MEDIC_HEAL_TEAMMATE 2007
 
 
 // FF Engineer Buildable Defines (local for now)
@@ -1058,6 +1060,56 @@ void CTaskFFDemoLaySinglePipe::execute(CBot* pBot) {
 bool CTaskFFDemoLaySinglePipe::isTaskComplete(CBot* pBot) { return m_bTaskComplete; }
 const char* CTaskFFDemoLaySinglePipe::getTaskName() { return "CTaskFFDemoLaySinglePipe"; }
 
+// --- CTaskFFMedicAimAndHeal ---
+CTaskFFMedicAimAndHeal::CTaskFFMedicAimAndHeal(edict_t* pTarget) : m_hTarget(NULL) {
+    setTaskName("CTaskFFMedicAimAndHeal");
+    m_bTaskComplete = false;
+    if (pTarget) {
+       m_hTarget.Set(pTarget);
+    }
+}
+
+void CTaskFFMedicAimAndHeal::init(CBot* pBot) {
+    CBotTask::init(pBot);
+    if (!m_hTarget.Get()) {
+       CBotFF* pFFBot = static_cast<CBotFF*>(pBot);
+       if (pFFBot && pFFBot->m_pHeal.Get()) {
+           m_hTarget.Set(pFFBot->m_pHeal.Get());
+       }
+    }
+     if (!m_hTarget.Get() && m_pTaskDataTargetEdict) {
+        m_hTarget.Set(m_pTaskDataTargetEdict);
+    }
+}
+
+void CTaskFFMedicAimAndHeal::execute(CBot* pBot) {
+    CBotFF* pFFBot = static_cast<CBotFF*>(pBot);
+    if (!pFFBot) {
+        setTaskStatus(TASK_FAILED);
+        m_bTaskComplete = true;
+        return;
+    }
+
+    edict_t* pTarget = m_hTarget.Get();
+
+    if (pTarget && CBotGlobals::entityIsValid(pTarget) && CBotGlobals::entityIsAlive(pTarget) &&
+        pFFBot->getTeam() == CBotGlobals::getTeam(pTarget) &&
+        CClassInterface::getPlayerHealth(pTarget) < CClassInterface::getPlayerMaxHealth(pTarget) &&
+        pFFBot->isVisible(pTarget) && pFFBot->distanceFrom(pTarget) < 800.0f)
+    {
+        pFFBot->setLookAt(pTarget);
+        pFFBot->setLookAtTask(LOOK_EDICT_PRIORITY);
+        pFFBot->m_pButtons->hold(IN_ATTACK);
+        setTaskStatus(TASK_CONTINUE);
+    } else {
+        pFFBot->m_pButtons->letGo(IN_ATTACK);
+        setTaskStatus(TASK_COMPLETE);
+        m_bTaskComplete = true;
+    }
+}
+bool CTaskFFMedicAimAndHeal::isTaskComplete(CBot* pBot) { return m_bTaskComplete; }
+const char* CTaskFFMedicAimAndHeal::getTaskName() { return "CTaskFFMedicAimAndHeal"; }
+
 
 // --- CSchedFFPrimeThrowGrenade ---
 CSchedFFPrimeThrowGrenade::CSchedFFPrimeThrowGrenade(const Vector &vTargetPos, CBotWeapon* pGrenadeWeapon, float fPrimeTime)
@@ -1117,7 +1169,6 @@ CSchedFFDemoLayPipeTrap::CSchedFFDemoLayPipeTrap(CBotFF* pBot, CWaypoint* pTrapS
     }
 
     CBotWeapon* pPipeLauncher = pBot->getWeapons()->getWeaponByName("weapon_ff_pipebomblauncher");
-    // Ensure getAmmo is called with pBot context if it's a member function that needs it
     if (!pPipeLauncher || !pPipeLauncher->hasWeapon() || pPipeLauncher->getAmmo(pBot) < numPipes) {
         failSchedule();
         return;
@@ -1135,6 +1186,27 @@ CSchedFFDemoLayPipeTrap::CSchedFFDemoLayPipeTrap(CBotFF* pBot, CWaypoint* pTrapS
     }
 }
 const char* CSchedFFDemoLayPipeTrap::getScheduleName() { return "CSchedFFDemoLayPipeTrap"; }
+
+// --- CSchedFFMedicHealTeammate ---
+CSchedFFMedicHealTeammate::CSchedFFMedicHealTeammate(CBotFF* pBot, edict_t* pTargetTeammate) {
+    setID(SCHED_HEAL);
+    setScheduleName("CSchedFFMedicHealTeammate");
+
+    if (!pBot || !pTargetTeammate) {
+        failSchedule();
+        return;
+    }
+
+    CBotWeapon* pMedkit = pBot->getWeapons()->getWeaponByName("weapon_ff_medkit");
+    if (!pMedkit || !pMedkit->hasWeapon() || !pMedkit->getWeaponInfo()) {
+        failSchedule();
+        return;
+    }
+
+    addTask(new CSelectWeaponTask(pMedkit->getWeaponInfo()));
+    addTask(new CTaskFFMedicAimAndHeal(pTargetTeammate));
+}
+const char* CSchedFFMedicHealTeammate::getScheduleName() { return "CSchedFFMedicHealTeammate"; }
 
 
 // CBotFF Method Implementations
@@ -1210,6 +1282,18 @@ bool CBotFF::isEnemy ( edict_t *pEdict,bool bCheckWeapons )
 	if ( !CBotGlobals::entityIsValid(pEdict) || !CBotGlobals::entityIsAlive(pEdict) ) return false;
 	if ( CBotGlobals::getTeam(pEdict) == getTeam() && CBotGlobals::getTeam(pEdict) != 0 ) return false;
 	return true;
+}
+
+bool CBotFF::isZoomed() {
+    // FF specific check for zoom.
+    // Placeholder: Assumes similar mechanism to TF2's CClassInterface or FOV check.
+    CBotWeapon* pWep = getCurrentWeapon();
+    if (pWep && pWep->getWeaponInfo() && strcmp(pWep->getWeaponInfo()->getWeaponName(), "weapon_ff_sniperrifle") == 0) {
+        // Check if FOV is less than default, indicating zoom.
+        // m_fFov is a member of CBot, updated in CBot::think() by CPlayerInfo::GetFOV().
+        return m_fFov < m_pPlayerInfo->GetDefaultFOV();
+    }
+    return false;
 }
 
 void CBotFF::modAim(edict_t *pEntity, Vector &v_origin, Vector *v_desired_offset, Vector &v_size, float fDist, float fDist2D)
@@ -1408,7 +1492,7 @@ void CBotFF::getTasks(unsigned int iIgnore)
 
 	removeCondition(CONDITION_CHANGED);
 	CBotUtilities utils;
-	
+
 	m_pVIP = NULL;
 
 	if (CBotFF::s_IsHuntedModeForTesting)
@@ -1495,6 +1579,59 @@ void CBotFF::getTasks(unsigned int iIgnore)
             }
         }
 
+        if (getClass() == TF_CLASS_MEDIC && !m_bIsPrimingGrenade)
+        {
+            if (m_pHeal.Get() && CBotGlobals::entityIsValid(m_pHeal.Get()) && CBotGlobals::entityIsAlive(m_pHeal.Get()) &&
+                getTeam() == CBotGlobals::getTeam(m_pHeal.Get()) &&
+                CClassInterface::getPlayerHealth(m_pHeal.Get()) < CClassInterface::getPlayerMaxHealth(m_pHeal.Get()))
+            {
+                CBotWeapon* pMedkit = m_pWeapons->getWeaponByName("weapon_ff_medkit");
+                if (pMedkit && pMedkit->hasWeapon()) {
+                    ADD_UTILITY_WEAPON(BOT_UTIL_MEDIC_HEAL, true, 0.98f, pMedkit);
+                }
+            }
+        }
+
+        if (getClass() == TF_CLASS_SCOUT && !m_bIsPrimingGrenade)
+        {
+            CBotWeapon* pCaltrops = m_pWeapons->getWeaponByName("weapon_ff_gren_caltrop");
+            if (pCaltrops && pCaltrops->hasWeapon() && !pCaltrops->outOfAmmo(this))
+            {
+                bool shouldUseCaltrops = false;
+                Vector vTargetPos = m_vEmpty;
+                float utilityScore = 0.6f;
+
+                if (m_pEnemy && CBotGlobals::entityIsAlive(m_pEnemy) && isVisible(m_pEnemy) && distanceFrom(m_pEnemy) < 400.0f) {
+                    bool isFleeing = false;
+                    if (m_pNavigator && m_pNavigator->getPath()) {
+                        isFleeing = m_pNavigator->getPath()->isFlagSet(CPath::PATH_FLEE);
+                    }
+
+                    if (isFleeing || getHealthPercent() < 0.4f) {
+                        shouldUseCaltrops = true;
+                        Vector toEnemy = (CBotGlobals::entityOrigin(m_pEnemy) - getOrigin()).Normalized();
+                        vTargetPos = getOrigin() - toEnemy * 100.0f + Vector(0,0,10);
+                        utilityScore += 0.3f;
+                    }
+                }
+
+                if (!shouldUseCaltrops && m_pNavigator && m_pNavigator->getCurrentWaypoint()) {
+                    CWaypoint* pCurrentWpt = m_pNavigator->getCurrentWaypoint();
+                    if (pCurrentWpt->hasFlag(CWaypointTypes::W_FL_FF_CALTROP_SPOT)) {
+                         if (m_fLastSeeEnemyTime > 0 && engine->Time() - m_fLastSeeEnemyTime < 10.0f) {
+                           shouldUseCaltrops = true;
+                           vTargetPos = pCurrentWpt->getOrigin() + Vector(0,0,10);
+                           utilityScore += 0.2f;
+                         }
+                    }
+                }
+
+                if (shouldUseCaltrops && vTargetPos != m_vEmpty) {
+                    ADD_UTILITY_WEAPON_DATA_VECTOR(BOT_UTIL_FF_SCOUT_USE_CALTROPS, true, utilityScore, pCaltrops, 0, vTargetPos);
+                }
+            }
+        }
+
 
 		if (m_pEnemy && CBotGlobals::entityIsAlive(m_pEnemy) && isVisible(m_pEnemy) && !m_bIsPrimingGrenade)
 		{
@@ -1564,19 +1701,23 @@ bool CBotFF::executeAction(CBotUtility *util)
 	float primeTime = 1.0f;
 	Vector targetPos = m_vEmpty;
 
-	if (id >= BOT_UTIL_FF_USE_GRENADE_STD && id <= BOT_UTIL_FF_CONC_JUMP_MOBILITY) { // Includes conc jump for weapon choice
+	if (id >= BOT_UTIL_FF_USE_GRENADE_STD && id <= BOT_UTIL_FF_CONC_JUMP_MOBILITY) {
         pGrenadeWeapon = util->getWeaponChoice();
         if (!pGrenadeWeapon) return false;
-    } else if (id == BOT_UTIL_FF_SPY_USE_TRANQ) { // Spy tranq also passes weapon
+    } else if (id == BOT_UTIL_FF_SPY_USE_TRANQ) {
          pGrenadeWeapon = util->getWeaponChoice();
         if (!pGrenadeWeapon) return false;
+    } else if (id == BOT_UTIL_FF_SCOUT_USE_CALTROPS) {
+        pGrenadeWeapon = util->getWeaponChoice();
+        if (!pGrenadeWeapon) return false;
+        targetPos = util->getVectorData();
     }
 
 
 	if (id == BOT_UTIL_FF_USE_GRENADE_STD || (id == BOT_UTIL_FF_USE_GRENADE_CONC && id != BOT_UTIL_FF_CONC_JUMP_MOBILITY) || id == BOT_UTIL_FF_SPY_USE_TRANQ ) {
 		if (m_pEnemy && CBotGlobals::entityIsAlive(m_pEnemy)) {
 			targetPos = CBotGlobals::entityOrigin(m_pEnemy);
-		} else { // If no enemy, these utilities shouldn't have been chosen or are invalid now
+		} else if (id != BOT_UTIL_FF_CONC_JUMP_MOBILITY) {
 			return false;
 		}
 	}
@@ -1627,9 +1768,8 @@ bool CBotFF::executeAction(CBotUtility *util)
             }
             break;
         case BOT_UTIL_FF_SPY_USE_TRANQ:
-             if (pGrenadeWeapon && targetPos != m_vEmpty) { // pGrenadeWeapon is tranq gun here
+             if (pGrenadeWeapon && targetPos != m_vEmpty) {
                 CBotSchedule* pSpyTranqSched = new CBotSchedule();
-                // Ensure weapon info is valid before creating task
                 if(util->getWeaponChoice() && util->getWeaponChoice()->getWeaponInfo())
                 {
                     pSpyTranqSched->addTask(new CSelectWeaponTask(util->getWeaponChoice()->getWeaponInfo()));
@@ -1639,6 +1779,13 @@ bool CBotFF::executeAction(CBotUtility *util)
                 }
             }
             break;
+        case BOT_UTIL_FF_SCOUT_USE_CALTROPS:
+             if (pGrenadeWeapon && targetPos != m_vEmpty) {
+                 float caltropPrimeTime = 0.1f;
+                 m_pSchedules->add(new CSchedFFPrimeThrowGrenade(targetPos, pGrenadeWeapon, caltropPrimeTime));
+                 return true;
+             }
+             break;
 		case BOT_UTIL_FF_HUNTED_VIP_ESCAPE:
 			{
 				CWaypoint* pEscapeWpt = CWaypoints::randomWaypointGoal(CWaypointTypes::W_FL_VIP_ESCAPE_POINT, getTeam());
@@ -1668,6 +1815,19 @@ bool CBotFF::executeAction(CBotUtility *util)
 			   return true;
            }
            break;
+        case BOT_UTIL_MEDIC_HEAL:
+             {
+                 CBotWeapon* chosenWeapon = util->getWeaponChoice();
+                 if (chosenWeapon && chosenWeapon->getWeaponInfo() &&
+                     strcmp(chosenWeapon->getWeaponInfo()->getWeaponName(), "weapon_ff_medkit") == 0)
+                 {
+                     if (m_pHeal.Get() && CBotGlobals::entityIsValid(m_pHeal.Get())) {
+                         m_pSchedules->add(new CSchedFFMedicHealTeammate(this, m_pHeal.Get()));
+                         return true;
+                     }
+                 }
+             }
+             break;
 
         default:
             return CBot::executeAction(util);

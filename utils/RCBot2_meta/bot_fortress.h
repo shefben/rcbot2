@@ -639,6 +639,9 @@ public:
 	int      m_iPipesToLay;
 	Vector   m_vCurrentPipeTrapLocation;
 	float    m_fNextPipeLayTime;
+
+	// FF Sniper specific
+	virtual bool isZoomed();
 };
 
 
@@ -729,11 +732,51 @@ public:
     virtual const char* getScheduleName();
 };
 
+class CTaskFFSnipeAttackSequence : public CBotTask
+{
+public:
+    CTaskFFSnipeAttackSequence(edict_t* pTarget);
+    virtual void init(CBot* pBot);
+    virtual void execute(CBot* pBot);
+    virtual bool isTaskComplete(CBot* pBot);
+    virtual const char* getTaskName();
+private:
+    MyEHandle m_hTarget;
+    int m_iState; // 0: zoom, 1: fire, 2: unzoom
+    float m_fNextActionTime;
+};
+
+class CSchedFFSnipe : public CBotSchedule
+{
+public:
+    CSchedFFSnipe(CBotFF* pBot, edict_t* pTarget);
+    virtual const char* getScheduleName();
+};
+
 class CTaskFFMedicAimAndHeal : public CBotTask
 {
 public:
     CTaskFFMedicAimAndHeal(edict_t* pTarget);
     virtual void init(CBot* pBot);
+    virtual void execute(CBot* pBot);
+    virtual bool isTaskComplete(CBot* pBot);
+    virtual const char* getTaskName();
+private:
+    MyEHandle m_hTarget;
+};
+
+class CSchedFFMedicHealTeammate : public CBotSchedule
+{
+public:
+    CSchedFFMedicHealTeammate(CBotFF* pBot, edict_t* pTargetTeammate);
+    virtual const char* getScheduleName();
+};
+
+class CTaskFFMedicAimAndHeal : public CBotTask
+{
+public:
+    CTaskFFMedicAimAndHeal(edict_t* pTarget);
+    virtual void init(CBot* pBot); // Added init
     virtual void execute(CBot* pBot);
     virtual bool isTaskComplete(CBot* pBot);
     virtual const char* getTaskName();
