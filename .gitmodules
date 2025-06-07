@@ -10,6 +10,3 @@
 [submodule "fortressforever-gamedata"]
 	path = fortressforever-gamedata
 	url = https://github.com/fortressforever-2013/fortressforever-gamedata.git
-[submodule "fortressforever-src"]
-	path = fortressforever-src
-	url = https://github.com/fortressforever-2013/fortressforever-src.git
