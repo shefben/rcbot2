@@ -7,6 +7,3 @@
 [submodule "fortressforever-lua-repo"]
 	path = fortressforever-lua-repo
 	url = https://github.com/fortressforever-2013/fortressforever-lua-repo.git
-[submodule "fortressforever-gamedata"]
-	path = fortressforever-gamedata
-	url = https://github.com/fortressforever-2013/fortressforever-gamedata.git
