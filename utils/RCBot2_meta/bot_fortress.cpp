@@ -871,6 +871,7 @@ void CBotTF2 ::init(bool bVarInit) { CBotFortress::init(bVarInit); }
 #define SCHED_FF_ENGRI_BUILD_MANCANNON 2005
 #define SCHED_FF_DEMO_LAY_PIPE_TRAP 2006
 #define SCHED_FF_MEDIC_HEAL_TEAMMATE 2007
+// SCHED_SNIPE is 10 from base, BOT_UTIL_SNIPE is 20 from base
 
 
 // FF Engineer Buildable Defines (local for now)
@@ -1110,6 +1111,70 @@ void CTaskFFMedicAimAndHeal::execute(CBot* pBot) {
 bool CTaskFFMedicAimAndHeal::isTaskComplete(CBot* pBot) { return m_bTaskComplete; }
 const char* CTaskFFMedicAimAndHeal::getTaskName() { return "CTaskFFMedicAimAndHeal"; }
 
+// --- CTaskFFSnipeAttackSequence ---
+CTaskFFSnipeAttackSequence::CTaskFFSnipeAttackSequence(edict_t* pTarget) : m_hTarget(pTarget), m_iState(0), m_fNextActionTime(0.0f) {
+    setTaskName("CTaskFFSnipeAttackSequence");
+    m_bTaskComplete = false;
+}
+
+void CTaskFFSnipeAttackSequence::init(CBot* pBot) {
+    CBotTask::init(pBot);
+    if (m_pTaskDataTargetEdict) m_hTarget.Set(m_pTaskDataTargetEdict);
+    else if (!m_hTarget.Get()) m_hTarget.Set(pBot->getEnemy());
+
+    m_iState = 0;
+    m_fNextActionTime = 0.0f;
+}
+
+void CTaskFFSnipeAttackSequence::execute(CBot* pBot) {
+    CBotFF* pFFBot = static_cast<CBotFF*>(pBot);
+    if (!pFFBot) { setTaskStatus(TASK_FAILED); m_bTaskComplete = true; return; }
+
+    edict_t* pTarget = m_hTarget.Get();
+    if (!pTarget || !CBotGlobals::entityIsAlive(pTarget) || !pFFBot->isVisible(pTarget)) {
+        if (pFFBot->isZoomed()) { pFFBot->getButtons()->tap(IN_ATTACK2); }
+        setTaskStatus(TASK_COMPLETE); m_bTaskComplete = true; return;
+    }
+
+    pFFBot->setLookAt(pTarget);
+    pFFBot->setLookAtTask(LOOK_ENEMY_PRECISE);
+
+    if (engine->Time() < m_fNextActionTime) {
+        setTaskStatus(TASK_CONTINUE);
+        return;
+    }
+
+    switch (m_iState) {
+        case 0: // Zoom In
+            if (!pFFBot->isZoomed()) {
+                pFFBot->getButtons()->tap(IN_ATTACK2);
+            }
+            m_fNextActionTime = engine->Time() + 0.5f;
+            m_iState++;
+            setTaskStatus(TASK_CONTINUE);
+            break;
+        case 1: // Fire
+            pFFBot->getButtons()->tap(IN_ATTACK);
+            m_fNextActionTime = engine->Time() + 0.75f;
+            m_iState++;
+            setTaskStatus(TASK_CONTINUE);
+            break;
+        case 2: // Zoom Out
+            if (pFFBot->isZoomed()) {
+                pFFBot->getButtons()->tap(IN_ATTACK2);
+            }
+            setTaskStatus(TASK_COMPLETE);
+            m_bTaskComplete = true;
+            break;
+        default:
+            setTaskStatus(TASK_FAILED);
+            m_bTaskComplete = true;
+            break;
+    }
+}
+bool CTaskFFSnipeAttackSequence::isTaskComplete(CBot* pBot) { return m_bTaskComplete; }
+const char* CTaskFFSnipeAttackSequence::getTaskName() { return "CTaskFFSnipeAttackSequence"; }
+
 
 // --- CSchedFFPrimeThrowGrenade ---
 CSchedFFPrimeThrowGrenade::CSchedFFPrimeThrowGrenade(const Vector &vTargetPos, CBotWeapon* pGrenadeWeapon, float fPrimeTime)
@@ -1208,6 +1273,22 @@ CSchedFFMedicHealTeammate::CSchedFFMedicHealTeammate(CBotFF* pBot, edict_t* pTar
 }
 const char* CSchedFFMedicHealTeammate::getScheduleName() { return "CSchedFFMedicHealTeammate"; }
 
+// --- CSchedFFSnipe ---
+CSchedFFSnipe::CSchedFFSnipe(CBotFF* pBot, edict_t* pTarget) {
+    setID(SCHED_SNIPE);
+    setScheduleName("CSchedFFSnipe");
+
+    if (!pBot || !pTarget) { failSchedule(); return; }
+
+    CBotWeapon* pSniperRifle = pBot->getWeapons()->getWeaponByName("weapon_ff_sniperrifle");
+    if (!pSniperRifle || !pSniperRifle->hasWeapon() || !pSniperRifle->getWeaponInfo()) {
+        failSchedule(); return;
+    }
+    addTask(new CSelectWeaponTask(pSniperRifle->getWeaponInfo()));
+    addTask(new CTaskFFSnipeAttackSequence(pTarget));
+}
+const char* CSchedFFSnipe::getScheduleName() { return "CSchedFFSnipe"; }
+
 
 // CBotFF Method Implementations
 CBotFF::CBotFF()
@@ -1274,6 +1355,21 @@ void CBotFF::modThink ()
 	} else {
 		m_bIsVIP = false;
 	}
+    // Reset ideal move speed to class default, can be modified by other logic later
+    m_fIdealMoveSpeed = CClassInterface::getMaxSpeed(m_pEdict); // Or FF specific getMaxSpeed
+
+    CBotWeapon* currentWeapon = getCurrentWeapon();
+     if (getClass() == TF_CLASS_SNIPER && isZoomed()) // TF_CLASS_SNIPER should map to FF Sniper
+     {
+         m_fIdealMoveSpeed *= 0.5f; // Example: Snipers move slower when zoomed
+     }
+     else if (getClass() == TF_CLASS_HWGUY && currentWeapon &&
+         currentWeapon->getWeaponInfo() &&
+         strcmp(currentWeapon->getWeaponInfo()->getWeaponName(), "weapon_ff_assaultcannon") == 0 &&
+         (m_pButtons->holdingButton(IN_ATTACK) || (m_pEnemy && isVisible(m_pEnemy) && wantToShoot())) )
+     {
+         m_fIdealMoveSpeed *= 0.4f;
+     }
 }
 
 bool CBotFF::isEnemy ( edict_t *pEdict,bool bCheckWeapons )
@@ -1285,13 +1381,9 @@ bool CBotFF::isEnemy ( edict_t *pEdict,bool bCheckWeapons )
 }
 
 bool CBotFF::isZoomed() {
-    // FF specific check for zoom.
-    // Placeholder: Assumes similar mechanism to TF2's CClassInterface or FOV check.
     CBotWeapon* pWep = getCurrentWeapon();
     if (pWep && pWep->getWeaponInfo() && strcmp(pWep->getWeaponInfo()->getWeaponName(), "weapon_ff_sniperrifle") == 0) {
-        // Check if FOV is less than default, indicating zoom.
-        // m_fFov is a member of CBot, updated in CBot::think() by CPlayerInfo::GetFOV().
-        return m_fFov < m_pPlayerInfo->GetDefaultFOV();
+        if (m_pPlayerInfo) return m_fFov < m_pPlayerInfo->GetDefaultFOV();
     }
     return false;
 }
@@ -1632,6 +1724,19 @@ void CBotFF::getTasks(unsigned int iIgnore)
             }
         }
 
+        if (getClass() == TF_CLASS_SNIPER && !m_bIsPrimingGrenade) // Ensure sniper isn't priming a grenade
+        {
+            CBotWeapon* pSniperRifle = m_pWeapons->getWeaponByName("weapon_ff_sniperrifle");
+            if (pSniperRifle && pSniperRifle->hasWeapon() && !pSniperRifle->outOfAmmo(this))
+            {
+                if (m_pEnemy && CBotGlobals::entityIsAlive(m_pEnemy) && isVisible(m_pEnemy) &&
+                    distanceFrom(m_pEnemy) > 500.0f)
+                {
+                    ADD_UTILITY_WEAPON(BOT_UTIL_SNIPE, true, 0.85f, pSniperRifle);
+                }
+            }
+        }
+
 
 		if (m_pEnemy && CBotGlobals::entityIsAlive(m_pEnemy) && isVisible(m_pEnemy) && !m_bIsPrimingGrenade)
 		{
@@ -1825,6 +1930,16 @@ bool CBotFF::executeAction(CBotUtility *util)
                          m_pSchedules->add(new CSchedFFMedicHealTeammate(this, m_pHeal.Get()));
                          return true;
                      }
+                 }
+             }
+             break;
+        case BOT_UTIL_SNIPE: // Reusing TF2's BOT_UTIL_SNIPE
+             if (util->getWeaponChoice() && util->getWeaponChoice()->getWeaponInfo() &&
+                 strcmp(util->getWeaponChoice()->getWeaponInfo()->getWeaponName(), "weapon_ff_sniperrifle") == 0)
+             {
+                 if (m_pEnemy && CBotGlobals::entityIsValid(m_pEnemy.Get())) {
+                     m_pSchedules->add(new CSchedFFSnipe(this, m_pEnemy.Get()));
+                     return true;
                  }
              }
              break;
