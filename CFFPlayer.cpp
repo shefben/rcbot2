@@ -1,171 +1,209 @@
 #include "CFFPlayer.h"
+#include "EngineInterfaces.h" // For g_pEngineServer, g_pPlayerInfoManager, g_pGlobals, etc.
 
-// Conceptual includes for engine/game specifics.
-// These would provide actual definitions for edict_t, CUserCmd,
-// and functions to interact with game entities.
-// For this standalone implementation, we rely on placeholders.
-// #include "engine_interfaces.h" // For g_pEngineServer or similar
-// #include "game_entity_access.h" // For functions like GetEntityOrigin, GetEntityHealth
+// Conceptual SDK includes that would define IPlayerInfo, CBaseEntity details, edict_t internals
+// #include "server/iplayerinfo.h"
+// #include "game/server/cbaseentity.h" // Or similar path for CBaseEntity
+// #include "public/edict.h"
 
 #include <iostream> // For placeholder debug output
 
-// --- Conceptual Placeholder for CUserCmd if not in CFFPlayer.h or SDK ---
+// --- Conceptual Placeholder for CUserCmd (if not in CFFPlayer.h or SDK) ---
 #ifndef CUSERCMD_CONCEPTUAL_DEF_CFFPLAYER_CPP
 #define CUSERCMD_CONCEPTUAL_DEF_CFFPLAYER_CPP
 struct CUserCmd {
-    int buttons = 0;
-    float forwardmove = 0.0f;
-    float sidemove = 0.0f;
-    float upmove = 0.0f; // For jumping, etc.
-    Vector viewangles;
-    int weaponselect = 0;
-    // Minimal UserCmd.
+    int buttons = 0; float forwardmove = 0.0f; float sidemove = 0.0f; float upmove = 0.0f;
+    Vector viewangles; int weaponselect = 0;
 };
 #endif
 
-// --- Conceptual Placeholder for edict_t if not from SDK ---
-#ifndef EDICT_T_CONCEPTUAL_DEF_CFFPLAYER_CPP
-#define EDICT_T_CONCEPTUAL_DEF_CFFPLAYER_CPP
-// Assume edict_t is a struct that might have direct member access for some common properties
-// This is highly simplified and game-dependent.
-struct edict_t {
-    int id; // Unique server ID for the entity
-    bool isFree; // True if edict slot is not used
+// --- Conceptual Placeholder for edict_t (if not from SDK/eiface.h) ---
+// This is a simplified version. Real edict_t is often nearly opaque outside engine.
+#ifndef EDICT_T_CONCEPTUAL_INTERNAL_DEF
+#define EDICT_T_CONCEPTUAL_INTERNAL_DEF
+// struct edict_t {
+//     int id;
+//     bool isFree;
+//     void* pvPrivateData; // Points to game entity like CBaseEntity
+//     // Other engine-internal fields
+// };
+#endif
 
-    // Common placeholder fields (actual access is via engine functions or netprops)
-    Vector origin_placeholder;
-    Vector velocity_placeholder;
-    Vector viewangles_placeholder; // Current view angles
-    int health_placeholder;
-    int armor_placeholder;
-    int team_placeholder;
-    int flags_placeholder;
-    int ammo_placeholder[10]; // Max 10 ammo types for placeholder
+// --- Conceptual Engine/Game Interface Definitions (Placeholders for methods used) ---
+// These would be replaced by actual calls to the game engine via interfaces.
+// Minimal definition for IPlayerInfo if not available
+class IPlayerInfo {
+public:
+    virtual ~IPlayerInfo() {}
+    virtual int GetHealth() const = 0;
+    virtual int GetMaxHealth() const = 0;
+    virtual int GetArmorValue() const = 0; // Assuming this name
+    virtual int GetTeamIndex() const = 0;
+    // Other methods like GetName(), GetUserID(), IsConnected(), IsHLTV(), etc.
+};
 
-    edict_t(int _id = 0) : id(_id), isFree(false), health_placeholder(100), armor_placeholder(0), team_placeholder(0), flags_placeholder(0) {
-        for(int i=0; i<10; ++i) ammo_placeholder[i] = 0;
-    }
+// Minimal definition for CBaseEntity if not available (already in FFBaseAI.cpp, ensure consistency or centralize)
+#ifndef CBASEENTITY_CONCEPTUAL_DEF_CFFPLAYER_CPP
+#define CBASEENTITY_CONCEPTUAL_DEF_CFFPLAYER_CPP
+class CBaseEntity {
+public:
+    virtual ~CBaseEntity() {}
+    virtual const Vector& GetAbsOrigin() const { static Vector origin; return origin; }
+    virtual const Vector& GetAbsVelocity() const { static Vector vel; return vel; }
+    virtual const Vector& EyeAngles() const { static Vector angles; return angles; } // Using Vector for QAngle
+    virtual int GetFlags() const { return 0; }
+    virtual int GetHealth() const { return 100; }
+    virtual int GetMaxHealth() const { return 100; }
+    virtual int GetTeamNumber() const { return 0; }
+    virtual int GetAmmoCount(int iAmmoIndex) const { return 0; }
+    // virtual CBaseCombatWeapon* GetActiveWeapon() const { return nullptr; }
+    // virtual bool IsPlayer() const { return false; }
+    // virtual bool IsValid() const { return true;} // Is the entity usable
+    // int m_iHealth; // Direct member access is common in older Source games but not via interface
+    // int m_iTeamNum;
+    // int m_fFlags;
+    // Vector m_vecOrigin;
 };
 #endif
 
-// --- Conceptual Engine/Game Functions (Placeholders) ---
-// These would be replaced by actual calls to the game engine.
-namespace ConceptualEngine {
-    bool IsEdictValid(edict_t* pEdict) {
-        return pEdict != nullptr && !pEdict->isFree; // Simplified validity check
-    }
-    const Vector& GetEdictOrigin(edict_t* pEdict) {
-        static Vector dummy(0,0,0); if (!pEdict) return dummy; return pEdict->origin_placeholder;
-    }
-    const Vector& GetEdictVelocity(edict_t* pEdict) {
-        static Vector dummy(0,0,0); if (!pEdict) return dummy; return pEdict->velocity_placeholder;
-    }
-    const Vector& GetEdictViewAngles(edict_t* pEdict) { // Assuming Vector for angles
-        static Vector dummy(0,0,0); if (!pEdict) return dummy; return pEdict->viewangles_placeholder;
-    }
-    int GetEdictHealth(edict_t* pEdict) {
-        if (!pEdict) return 0; return pEdict->health_placeholder;
-    }
-    int GetEdictArmor(edict_t* pEdict) {
-        if (!pEdict) return 0; return pEdict->armor_placeholder;
-    }
-    int GetEdictTeam(edict_t* pEdict) {
-        if (!pEdict) return 0; return pEdict->team_placeholder;
-    }
-    int GetEdictFlags(edict_t* pEdict) {
-        if (!pEdict) return 0; return pEdict->flags_placeholder;
-    }
-    int GetEdictAmmo(edict_t* pEdict, int ammoTypeIndex) {
-        if (!pEdict || ammoTypeIndex < 0 || ammoTypeIndex >= 10) return 0;
-        return pEdict->ammo_placeholder[ammoTypeIndex];
-    }
-} // namespace ConceptualEngine
+// --- Global Interface Pointer Definitions (these are extern in EngineInterfaces.h) ---
+IVEngineServer*       g_pEngineServer = nullptr;
+IPlayerInfoManager*   g_pPlayerInfoManager = nullptr;
+IServerGameClients*   g_pServerGameClients = nullptr;
+CGlobalVarsBase*      g_pGlobals = nullptr;
+IEngineTrace*         g_pEngineTraceClient = nullptr;
+ICvar*                g_pCVar = nullptr;
+// --- End Global Interface Pointer Definitions ---
+
+
+// Helper to get CBaseEntity* from edict_t* using conceptual engine calls
+// This is often a more robust way to get entity properties than IPlayerInfo or direct edict access for some things.
+static CBaseEntity* Ed_GetBaseEntity(edict_t* pEdict) {
+    if (!g_pEngineServer || !pEdict) return nullptr;
+    // Conceptual: In Source 1, edict_t might have a GetUnknown() or GetIServerEntity()
+    // or you use engine->PEntityOfEntIndex(engine->IndexOfEdict(pEdict)).
+    // For this placeholder, we'll assume a direct cast or a helper can get it.
+    // This is highly game/engine dependent.
+    // return (CBaseEntity*)pEdict->pvPrivateData; // Example if edict stores it directly
+    // Or, if edict_t is just an index wrapper in some systems:
+    // return g_pEngineServer->GetEntityFromEdict(pEdict); // Made up function
+    return nullptr; // Placeholder until actual mechanism is known
+}
 
 
 // --- CFFPlayer Implementation ---
 
 CFFPlayer::CFFPlayer(edict_t* pEdict) : m_pEdict(pEdict) {
-    if (!m_pEdict) {
-        // std::cerr << "CFFPlayer Warning: Initialized with null edict." << std::endl;
-    }
+    // if (!m_pEdict) { std::cerr << "CFFPlayer Warning: Initialized with null edict." << std::endl; }
 }
 
 bool CFFPlayer::IsValid() const {
-    return ConceptualEngine::IsEdictValid(m_pEdict);
+    if (!m_pEdict || !g_pEngineServer) return false;
+    // Conceptual: return !g_pEngineServer->IsEdictFree(m_pEdict);
+    return true; // Placeholder: assume always valid if edict ptr exists
 }
 
 bool CFFPlayer::IsAlive() const {
     if (!IsValid()) return false;
-    return ConceptualEngine::GetEdictHealth(m_pEdict) > 0;
+    return GetHealth() > 0;
 }
 
+// Private helper to get IPlayerInfo (conceptual)
+IPlayerInfo* GetPlayerInfoFromEdict(edict_t* pEdict) {
+    if (!g_pPlayerInfoManager || !pEdict) return nullptr;
+    // Conceptual: return g_pPlayerInfoManager->GetPlayerInfo(pEdict);
+    return nullptr; // Placeholder
+}
+
+
 Vector CFFPlayer::GetOrigin() const {
-    if (!IsValid()) return Vector(0,0,0); // Or some other default
-    return ConceptualEngine::GetEdictOrigin(m_pEdict);
+    if (!IsValid()) return Vector(0,0,0);
+    CBaseEntity* pEnt = Ed_GetBaseEntity(m_pEdict);
+    // if (pEnt) return pEnt->GetAbsOrigin();
+    // Fallback if direct edict access or IPlayerInfo was used for this in specific game:
+    // if (m_pEdict) return m_pEdict->GetNetworkOrigin(); // Old SDK style
+    return Vector(10,10,10); // Placeholder from previous version
 }
 
 Vector CFFPlayer::GetVelocity() const {
     if (!IsValid()) return Vector(0,0,0);
-    return ConceptualEngine::GetEdictVelocity(m_pEdict);
+    CBaseEntity* pEnt = Ed_GetBaseEntity(m_pEdict);
+    // if (pEnt) return pEnt->GetAbsVelocity();
+    return Vector(0,0,0);
 }
 
 Vector CFFPlayer::GetEyeAngles() const { // Returning Vector as QAngle
     if (!IsValid()) return Vector(0,0,0);
-    return ConceptualEngine::GetEdictViewAngles(m_pEdict);
+    CBaseEntity* pEnt = Ed_GetBaseEntity(m_pEdict);
+    // if (pEnt) return pEnt->EyeAngles(); // Conceptual CBaseEntity method
+    return Vector(0,0,0);
 }
 
 int CFFPlayer::GetHealth() const {
     if (!IsValid()) return 0;
-    return ConceptualEngine::GetEdictHealth(m_pEdict);
+    IPlayerInfo* pInfo = GetPlayerInfoFromEdict(m_pEdict);
+    // if (pInfo) return pInfo->GetHealth();
+    // Fallback or alternative:
+    CBaseEntity* pEnt = Ed_GetBaseEntity(m_pEdict);
+    // if (pEnt) return pEnt->GetHealth(); // Or pEnt->m_iHealth if direct access
+    return 100; // Placeholder
 }
 
 int CFFPlayer::GetMaxHealth() const {
-    if (!IsValid()) return 100; // Default
-    // Conceptual: This would often come from ClassConfigInfo or a game-specific player property
-    // For now, assume a fixed value or that it's part of the edict placeholder if needed.
-    // Example: return GetPlayerProperty<int>("m_iMaxHealth");
+    if (!IsValid()) return 100;
+    IPlayerInfo* pInfo = GetPlayerInfoFromEdict(m_pEdict);
+    // if (pInfo) return pInfo->GetMaxHealth();
+    CBaseEntity* pEnt = Ed_GetBaseEntity(m_pEdict);
+    // if (pEnt) return pEnt->GetMaxHealth();
     return 150; // Placeholder
 }
 
 int CFFPlayer::GetArmor() const {
     if (!IsValid()) return 0;
-    return ConceptualEngine::GetEdictArmor(m_pEdict);
+    IPlayerInfo* pInfo = GetPlayerInfoFromEdict(m_pEdict);
+    // if (pInfo) return pInfo->GetArmorValue();
+    return 50; // Placeholder
 }
 
 int CFFPlayer::GetMaxArmor() const {
     if (!IsValid()) return 0;
-    // Conceptual: Similar to MaxHealth
+    // Conceptual: IPlayerInfo or CBaseEntity might have this
     return 100; // Placeholder
 }
 
 int CFFPlayer::GetTeam() const {
-    if (!IsValid()) return 0; // TEAM_UNASSIGNED or similar
-    return ConceptualEngine::GetEdictTeam(m_pEdict);
+    if (!IsValid()) return 0;
+    IPlayerInfo* pInfo = GetPlayerInfoFromEdict(m_pEdict);
+    // if (pInfo) return pInfo->GetTeamIndex();
+    CBaseEntity* pEnt = Ed_GetBaseEntity(m_pEdict);
+    // if (pEnt) return pEnt->GetTeamNumber();
+    return 2; // Placeholder (e.g. RED_TEAM_FF)
 }
 
 int CFFPlayer::GetFlags() const {
     if (!IsValid()) return 0;
-    return ConceptualEngine::GetEdictFlags(m_pEdict);
+    CBaseEntity* pEnt = Ed_GetBaseEntity(m_pEdict);
+    // if (pEnt) return pEnt->GetFlags(); // Or pEnt->m_fFlags
+    return FL_ONGROUND; // Placeholder
 }
 
 bool CFFPlayer::IsDucking() const {
-    if (!IsValid()) return false;
     return (GetFlags() & FL_DUCKING) != 0;
 }
 
 bool CFFPlayer::IsOnGround() const {
-    if (!IsValid()) return false; // Or true, depending on desired default for invalid entity
     return (GetFlags() & FL_ONGROUND) != 0;
 }
 
 int CFFPlayer::GetAmmo(int ammoTypeIndex) const {
     if (!IsValid()) return 0;
-    return ConceptualEngine::GetEdictAmmo(m_pEdict, ammoTypeIndex);
+    CBaseEntity* pEnt = Ed_GetBaseEntity(m_pEdict);
+    // if (pEnt) return pEnt->GetAmmoCount(ammoTypeIndex); // Conceptual CBaseEntity method
+    return 10; // Placeholder
 }
 
 // --- Action Methods ---
-
-void CFFPlayer::SetViewAngles(CUserCmd* pCmd, const Vector& angles) { // Using Vector as QAngle
+void CFFPlayer::SetViewAngles(CUserCmd* pCmd, const Vector& angles) {
     if (!pCmd) return;
     pCmd->viewangles = angles;
 }
@@ -186,15 +224,3 @@ void CFFPlayer::RemoveButton(CUserCmd* pCmd, int buttonFlag) {
     if (!pCmd) return;
     pCmd->buttons &= ~buttonFlag;
 }
-
-// void CFFPlayer::SelectWeapon(CUserCmd* pCmd, const std::string& weaponNameOrId) {
-//     if (!pCmd) return;
-//     // Conceptual: This would involve mapping weaponNameOrId to an engine weapon ID
-//     // and setting pCmd->weaponselect = engineWeaponId;
-//     // std::cout << "CFFPlayer: Conceptual SelectWeapon " << weaponNameOrId << std::endl;
-// }
-
-// void CFFPlayer::ReloadWeapon(CUserCmd* pCmd) {
-//     if (!pCmd) return;
-//     AddButton(pCmd, IN_RELOAD);
-// }

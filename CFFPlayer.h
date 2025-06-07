@@ -1,82 +1,87 @@
 #ifndef CFF_PLAYER_H
 #define CFF_PLAYER_H
 
-#include "FFStateStructs.h" // For Vector (assuming QAngle might also be here or is Vector for angles)
+#include "FFStateStructs.h" // For Vector (and QAngle if it were defined there)
 #include <string>
+// #include "EngineInterfaces.h" // Not strictly needed in .h if only .cpp uses globals
 
 // Forward declarations for engine/game types (conceptual)
 struct edict_t;
 struct CUserCmd;    // Represents player input
-class CBaseEntity;  // Represents a generic game entity (bot could be one)
+// class CBaseEntity;  // Not directly stored, but methods might return it conceptually
 
 // Conceptual: If QAngle is different from Vector for angles
+// For FFStateStructs.h, Vector is used for angles.
 // struct QAngle { float x, y, z; QAngle(float _x=0, float _y=0, float _z=0) : x(_x),y(_y),z(_z){} };
-// For simplicity, we'll use Vector for viewangles in CUserCmd for now if QAngle isn't in FFStateStructs.h
 
-// Conceptual Player Flags (replace with actual game defines)
+// Conceptual Player Flags (replace with actual game defines from e.g., const.h or player_const.h)
+#ifndef FL_ONGROUND
 #define FL_ONGROUND (1 << 0)
+#endif
+#ifndef FL_DUCKING
 #define FL_DUCKING  (1 << 1)
+#endif
 // ... other flags
 
-// Conceptual Button Flags (replace with actual game defines)
+// Conceptual Button Flags (replace with actual game defines from usercmd.h or similar)
+#ifndef IN_ATTACK
 #define IN_ATTACK   (1 << 0)
+#endif
+#ifndef IN_JUMP
 #define IN_JUMP     (1 << 1)
+#endif
+#ifndef IN_DUCK
 #define IN_DUCK     (1 << 2)
+#endif
+#ifndef IN_RELOAD
 #define IN_RELOAD   (1 << 3)
-#define IN_ATTACK2  (1 << 11) // Often used for secondary attack
+#endif
+#ifndef IN_ATTACK2
+#define IN_ATTACK2  (1 << 11)
+#endif
 // ... other buttons
+
 
 class CFFPlayer {
 public:
-    // Constructor typically takes a pointer to the game entity this CFFPlayer instance wraps.
-    // This could be an edict_t* or a CBaseEntity* depending on the engine/game architecture.
     CFFPlayer(edict_t* pEdict);
-    // virtual ~CFFPlayer(); // If managing specific resources tied to this wrapper
+    // virtual ~CFFPlayer(); // If CFFPlayer directly manages heap resources
 
-    bool IsValid() const; // Checks if the underlying game entity is valid
+    bool IsValid() const;
     bool IsAlive() const;
 
     // --- Getters for Game State ---
-    Vector GetOrigin() const;           // Current world position
-    Vector GetVelocity() const;         // Current velocity
-    Vector GetEyeAngles() const;        // Current view angles (Pitch, Yaw, Roll) - using Vector as QAngle
+    Vector GetOrigin() const;
+    Vector GetVelocity() const;
+    Vector GetEyeAngles() const;        // Using Vector as QAngle for view angles
     int GetHealth() const;
-    int GetMaxHealth() const;           // This might come from ClassConfigInfo or entity properties
+    int GetMaxHealth() const;
     int GetArmor() const;
-    int GetMaxArmor() const;            // Might come from ClassConfigInfo or entity properties
-    int GetTeam() const;                // Returns team ID (e.g., 2 for RED, 3 for BLUE - game specific)
-    int GetFlags() const;               // Player flags (FL_DUCKING, FL_ONGROUND etc.)
+    int GetMaxArmor() const;
+    int GetTeam() const;
+    int GetFlags() const;
 
     bool IsDucking() const;
     bool IsOnGround() const;
 
-    int GetAmmo(int ammoTypeIndex /* or string ammoName */) const; // Get ammo count for a type
-    // CBaseEntity* GetActiveWeapon() const; // Conceptual: returns current weapon entity
-    // std::string GetCurrentWeaponName() const; // Conceptual
+    int GetAmmo(int ammoTypeIndex /* or string ammoName for some games */) const;
+    // CBaseEntity* GetActiveWeaponEntity() const; // Conceptual: returns current weapon CBaseEntity
+    // int GetActiveWeaponId() const; // Conceptual: returns an enum/int ID for the weapon
 
     // --- Action Methods (filling UserCmd) ---
-    // These methods modify a CUserCmd structure passed by reference.
-    // The CUserCmd is then conceptually processed by the engine for this player's input for the frame.
     void SetViewAngles(CUserCmd* pCmd, const Vector& angles); // Using Vector as QAngle
     void SetMovement(CUserCmd* pCmd, float forwardMove, float sideMove, float upMove = 0.0f);
-    void AddButton(CUserCmd* pCmd, int buttonFlag);    // e.g., IN_ATTACK
-    void RemoveButton(CUserCmd* pCmd, int buttonFlag); // e.g., IN_ATTACK
-    // void SelectWeapon(CUserCmd* pCmd, const std::string& weaponNameOrId); // Conceptual
-    // void SelectWeaponSlot(CUserCmd* pCmd, int slot); // Conceptual
-    // void ReloadWeapon(CUserCmd* pCmd); // Adds IN_RELOAD
+    void AddButton(CUserCmd* pCmd, int buttonFlag);
+    void RemoveButton(CUserCmd* pCmd, int buttonFlag);
+    // void SelectWeaponById(CUserCmd* pCmd, int weaponId);
+    // void ReloadWeapon(CUserCmd* pCmd);
 
     edict_t* GetEdict() const { return m_pEdict; }
-    // CBaseEntity* GetBaseEntity() const { return m_pBaseEntity; } // If using CBaseEntity wrapper
+    // CBaseEntity* GetBaseEntity() const; // Helper to get CBaseEntity from m_pEdict using engine interface
 
 private:
-    edict_t* m_pEdict; // Pointer to the bot's game entity
-    // Alternatively, or additionally:
-    // CBaseEntity* m_pBaseEntity;
-    // EHANDLE m_hEdict; // If using Source SDK's EHANDLE for safety against dangling pointers
-
-    // Helper to get player property from edict or CBaseEntity (highly conceptual)
-    // template<typename T> T GetPlayerProperty(const char* propName) const;
-    // For example, in Source 1, this might involve datamaps or netprops.
+    edict_t* m_pEdict;
+    // EHANDLE m_hEdict; // If using Source SDK's EHANDLE for safety
 };
 
 #endif // CFF_PLAYER_H
