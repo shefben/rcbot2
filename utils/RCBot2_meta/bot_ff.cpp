@@ -65,18 +65,9 @@ void CBotFF::modThink() {
     FF_ClassID currentFFClass_modThink = CClassInterface::getFFClass(m_pEdict);
 
     // HWGuy Assault Cannon speed adjustment
-    // Ensure m_fIdealMoveSpeed is initialized to default for the class before this
-    CBotWeapon* currentWeapon_modThink = getCurrentWeapon();
-
-    if (currentFFClass_modThink == FF_CLASS_HWGUY && currentWeapon_modThink &&
-        currentWeapon_modThink->getWeaponInfo() &&
-        strcmp(currentWeapon_modThink->getWeaponInfo()->getWeaponName(), "weapon_ff_assaultcannon") == 0 &&
-        (m_pButtons->holdingButton(IN_ATTACK) || (m_pEnemy.Get() && isVisible(m_pEnemy.Get()) && wantToShoot())) )
-    {
-        m_fIdealMoveSpeed *= 0.4f; // Reduce speed by 60% when firing/winding up Assault Cannon
+    if (currentFFClass_modThink == FF_CLASS_HWGUY) {
+        this->hwguyModThink(); // Call to helper function
     }
-    // Note: If m_fIdealMoveSpeed is not reset elsewhere each frame, add an else to restore it.
-    // However, it's common for it to be set from playerinfo maxspeed each frame.
 
     // Example: Check if bot is VIP in Hunted mode
     if (g_pGameRules && CVAR_GET_FLOAT("mp_hunted_mode") > 0 || s_IsHuntedModeForTesting) { // s_IsHuntedModeForTesting for local tests
@@ -131,45 +122,9 @@ void CBotFF::modThink() {
     }
 
     // Airblast logic for Pyro
-    if (currentFFClass_modThink == FF_CLASS_PYRO && gpGlobals->time >= m_fNextAirblastTime) {
-        CBotWeapon* pFlamer = getWeapon(WEAPON_FF_FLAMETHROWER);
-        if (pFlamer && pFlamer->canUseSecondary()) { // Assuming secondary fire is airblast
-            // Check for projectiles to deflect
-            // This is a simplified check. Real projectile detection is complex.
-            // You'd iterate through entities, check classnames, velocity, etc.
-            edict_t* pProjectile = NULL;
-            // TODO: Implement actual projectile detection. For now, this is a placeholder.
-            // Example: CBaseEntity *pEnt = NULL; while ((pEnt = UTIL_FindEntityInSphere(pEnt, pev->origin, 200)) != NULL) { ... }
-
-            if (pProjectile && FVisible(pProjectile, edict())) {
-                // Check if projectile is moving towards bot or teammate
-                // Vector vProjVel = pProjectile->v.velocity.Normalize();
-                // Vector vToBot = (pev->origin - pProjectile->v.origin).Normalize();
-                // if (DotProduct(vProjVel, vToBot) > 0.7) { // Projectile coming towards bot
-                    m_bWantsToAirblast = true;
-                    setSchedule(new CSchedFFPyroAirblast(this, pProjectile));
-                    m_fNextAirblastTime = gpGlobals->time + 1.0f; // Cooldown
-                // }
-            } else {
-                 // Check for burning teammates to extinguish
-                for (int i = 1; i <= gpGlobals->maxClients; i++) {
-                    CBasePlayer *pPlayer = (CBasePlayer*)UTIL_PlayerByIndex(i);
-                    if (pPlayer && pPlayer->IsPlayer() && pPlayer->IsAlive() && pPlayer->pev->team == pev->team && (pPlayer->pev->effects & EF_ONFIRE)) {
-                        if (FVisible(ENT(pPlayer->pev), edict()) && (pPlayer->pev->origin - pev->origin).Length() < 300) {
-                             m_bWantsToAirblast = true;
-                             setSchedule(new CSchedFFPyroAirblast(this, ENT(pPlayer->pev))); // Target teammate to extinguish
-                             m_fNextAirblastTime = gpGlobals->time + 1.0f;
-                             break;
-                        }
-                    }
-                }
-            }
-        }
-        if (!m_bWantsToAirblast && m_pCurrentSchedule && m_pCurrentSchedule->getScheduleId() == SCHED_FF_PYRO_AIRBLAST_DEFEND) {
-            clearSchedule("Airblast condition no longer met");
-        }
+    if (currentFFClass_modThink == FF_CLASS_PYRO) {
+        this->pyroModThink(); // Call to helper function
     }
-
 
 }
 
@@ -179,17 +134,28 @@ bool CBotFF::isEnemy(edict_t *pEdict, bool bCheckWeapons) {
         return false;
     }
 
-    // FF specific: Check for Spy's disguise
-    if (pEdict->v.playerclass == FF_CLASS_SPY) { // Assuming playerclass stores current class/disguise
-        // If spy is disguised as own team, but bot has means to detect (e.g. pyro spy-check)
-        // This is a complex feature. For now, basic team check.
-        if (pEdict->v.team == m_iTeam && pEdict->v.effects & EF_DISGUISED) { // EF_DISGUISED is hypothetical
-            // Potentially treat as neutral or suspicious, not outright enemy unless revealed
-            // For simplicity, let's say if disguised as own team, not an enemy unless attacking.
-            return false;
+    // Call base class isEnemy first. If it considers the edict an enemy, then proceed with FF checks.
+    // If base class says it's NOT an enemy (e.g. same team, not disguised), then usually respect that.
+    // However, FF spy disguise can make an enemy appear as a teammate.
+
+    bool bBaseIsEnemy = CBotFortress::isEnemy(pEdict, bCheckWeapons);
+
+    FF_ClassID enemyFFClass = CClassInterface::getFFClass(pEdict);
+    if (enemyFFClass == FF_CLASS_SPY) {
+        if (CClassInterface::isFFSpyDisguised(pEdict) &&
+            CClassInterface::getFFSpyDisguiseTeam(pEdict) == getTeam()) {
+            // This is an enemy spy disguised as a friendly. Base check might say it's friendly.
+            // For FF, this should NOT be considered an enemy *for targeting* until revealed or suspicious.
+            // However, if the baseIsEnemy was true (e.g. due to FFA mode), a disguised spy is still an enemy.
+            // The logic here is tricky: if base says friendly, and it's a disguised spy on my team, it's NOT an enemy.
+            // If base says enemy, it's an enemy.
+            // If base says friendly, but it's a spy disguised as me, it's NOT an enemy to shoot.
+            return false; // Do not target spies disguised as friendlies.
         }
     }
-    return CBotFortress::isEnemy(pEdict, bCheckWeapons); // Fallback to base class
+
+    // If it's not a spy disguised as a teammate, rely on the base class determination.
+    return bBaseIsEnemy;
 }
 
 // Modified setVisible to include armor detection
@@ -231,98 +197,12 @@ void CBotFF::getTasks(unsigned int iIgnore) {
 
     // HWGuy tasks
     if (currentFFClass_getTasks == FF_CLASS_HWGUY) {
-        CBotWeapon* pAssaultCannon = m_pWeapons->getWeaponByName("weapon_ff_assaultcannon");
-        if (pAssaultCannon && pAssaultCannon->hasWeapon() && !pAssaultCannon->outOfAmmo(this)) {
-            float utility = 0.7f; // Base utility for Assault Cannon
-            if (m_pEnemy.Get() && CBotGlobals::entityIsAlive(m_pEnemy.Get())) {
-                // Check for multiple enemies near the primary target
-                // Assuming CTeamFortress2Mod::getEnemyTeam can be replaced by a generic function or FF specific one later
-                // Replaced CGame::getEnemyTeam with a more plausible BotSupport::getEnemyTeam
-                int enemiesNearbyTarget = CBotGlobals::countPlayersNearOrigin(CBotGlobals::entityOrigin(m_pEnemy.Get()), 300.0f, BotSupport::getEnemyTeam(getTeam()), m_pEdict, true);
-                if (enemiesNearbyTarget > 1) {
-                    utility += 0.2f; // Bonus for multiple enemies
-                }
-                // Bonus if defending a point/flag
-                if (hasSomeConditions(CONDITION_DEFEND_POINT | CONDITION_DEFEND_FLAG)) { // Assuming these conditions are relevant
-                    utility += 0.15f;
-                }
-            } else if (hasSomeConditions(CONDITION_DEFEND_POINT | CONDITION_DEFEND_FLAG)) {
-                // Higher utility for suppressive fire if defending, even without a direct enemy atm
-                utility += 0.10f;
-            }
-            // BOT_UTIL_ATTACK is a generic utility, the weapon choice directs the specifics
-            ADD_UTILITY_WEAPON(BOT_UTIL_ATTACK, true, utility, pAssaultCannon);
-        }
-        // ... (logic for other HWGuy weapons like shotgun can follow) ...
+        this->getHWGuyTasks(iIgnore); // Call to helper function
     }
 
     // Pyro tasks
     if (currentFFClass_getTasks == FF_CLASS_PYRO) {
-        CBotWeapon* pFlamer = m_pWeapons->getWeaponByName("weapon_ff_flamethrower");
-        CBotWeapon* pIC = m_pWeapons->getWeaponByName("weapon_ff_ic");
-        edict_t* pCurrentEnemy = m_pEnemy.Get(); // Use the member variable directly
-        bool enemyValidAndVisible = (pCurrentEnemy && CBotGlobals::entityIsAlive(pCurrentEnemy) && isVisible(pCurrentEnemy));
-        float enemyDist = enemyValidAndVisible ? distanceFrom(pCurrentEnemy) : 9999.0f;
-
-        // Airblast Logic
-        if (pFlamer && pFlamer->hasWeapon() && engine->Time() >= m_fNextAirblastTime) {
-            bool airblastConditionMet = false;
-            edict_t* airblastTargetEntity = NULL; // Store the entity to aim airblast at
-
-            // 1. Projectile Reflection
-            // Iterate through visible entities to find reflectable projectiles
-            // This assumes m_pVisibles holds relevant entities. A sphere check might be more robust.
-            for (int i = 0; i < m_pVisibles->numVisibles(); ++i) {
-                edict_t* pVisibleEnt = m_pVisibles->getVisible(i);
-                if (pVisibleEnt && pVisibleEnt != m_pEdict && CBotGlobals::entityIsValid(pVisibleEnt) && !(pVisibleEnt->v.flags & FL_CLIENT) && pVisibleEnt->v.movetype != MOVETYPE_NONE) { // Not a player, valid, and moving
-                    if (CClassInterface::isFFReflectableProjectile(pVisibleEnt)) {
-                        if (distanceFrom(pVisibleEnt) < 250.0f && isFacingEdict(pVisibleEnt, 0.7f)) {
-                            // Potentially check if projectile is hostile (e.g., by checking team of owner if available)
-                            airblastConditionMet = true;
-                            airblastTargetEntity = pVisibleEnt;
-                            break; // Found a projectile
-                        }
-                    }
-                }
-            }
-
-            // 2. Push enemy (defensive/environmental)
-            if (!airblastConditionMet && enemyValidAndVisible && enemyDist < 180.0f) { // Reduced range for pushing
-                airblastConditionMet = true;
-                airblastTargetEntity = pCurrentEnemy;
-            }
-
-            // 3. Extinguish Teammate
-            // if (!airblastConditionMet) {
-            //    edict_t* burningTeammate = findBurningTeammate(); // findBurningTeammate() needs implementation
-            //    if (burningTeammate && distanceFrom(burningTeammate) < 200.0f && isFacingEdict(burningTeammate, 0.8f)) {
-            //        airblastConditionMet = true; airblastTarget = burningTeammate;
-            //    }
-            // }
-
-            if (airblastConditionMet) {
-                // BOT_UTIL_FF_PYRO_AIRBLAST should be a defined enum
-                ADD_UTILITY_WEAPON_TARGET(BOT_UTIL_FF_PYRO_AIRBLAST, true, 0.9f, pFlamer, airblastTargetEntity);
-            }
-        }
-
-        // Incendiary Cannon (IC) Logic
-        if (pIC && pIC->hasWeapon() && !pIC->outOfAmmo(this)) {
-            if (enemyValidAndVisible && enemyDist > 250.0f && enemyDist < 1200.0f) { // IC for mid-range
-                 if (!m_pUtil->hasUtility(BOT_UTIL_FF_PYRO_AIRBLAST)) { // Don't use IC if already planning to airblast
-                    ADD_UTILITY_WEAPON(BOT_UTIL_FF_PYRO_USE_IC, true, 0.75f, pIC);
-                 }
-            }
-        }
-
-        // Flamethrower Primary Attack Logic
-        if (pFlamer && pFlamer->hasWeapon() && !pFlamer->outOfAmmo(this) && enemyValidAndVisible && enemyDist < 350.0f) { // FF Flamer range
-            // Don't primary fire if an airblast utility was already added for the flamer for this thinking cycle
-            if (!m_pUtil->hasUtility(BOT_UTIL_FF_PYRO_AIRBLAST)) {
-               // BOT_UTIL_ATTACK is a generic attack utility
-               ADD_UTILITY_WEAPON(BOT_UTIL_ATTACK, true, 0.8f, pFlamer); // High utility for close range
-            }
-        }
+        this->getPyroTasks(iIgnore); // Call to helper function
     }
 
     // Example: Hunted Mode VIP tasks
@@ -338,115 +218,22 @@ void CBotFF::getTasks(unsigned int iIgnore) {
 
     // Engineer tasks
     if (currentFFClass_getTasks == FF_CLASS_ENGINEER) {
-        // EMP Grenade Logic for Engineer
-        if (!m_bIsPrimingGrenade) { // Don't consider throwing another grenade if already priming one
-            CBotWeapon* pEMPGrenade = m_pWeapons->getWeaponByName("weapon_ff_gren_emp");
-            if (pEMPGrenade && pEMPGrenade->hasWeapon() && !pEMPGrenade->outOfAmmo(this)) {
-                edict_t* pCurrentEnemy = m_pEnemy.Get();
-                if (pCurrentEnemy && CBotGlobals::entityIsAlive(pCurrentEnemy) && isVisible(pCurrentEnemy) &&
-                    distanceFrom(pCurrentEnemy) < 1000.0f && distanceFrom(pCurrentEnemy) > 200.0f) { // Effective EMP range
-
-                    float utilityScore = 0.65f;
-                    // Potentially increase utility against certain classes if EMP is particularly effective
-                    // TF_Class enemyClass = (TF_Class)CClassInterface::getTF2Class(pCurrentEnemy); // Needs FF class detection
-                    // if (enemyClass == TF_CLASS_HWGUY || enemyClass == TF_CLASS_SPY) utilityScore += 0.1f;
-
-                    int enemiesNearbyTarget = CBotGlobals::countPlayersNearOrigin(CBotGlobals::entityOrigin(pCurrentEnemy), 250.0f, BotSupport::getEnemyTeam(getTeam()), m_pEdict, true);
-                    if (enemiesNearbyTarget > 1) {
-                        utilityScore += 0.2f; // Bonus for multiple enemies
-                    }
-
-                    // BOT_UTIL_FF_USE_GRENADE_EMP should be a defined enum
-                    ADD_UTILITY_WEAPON_TARGET(BOT_UTIL_FF_USE_GRENADE_EMP, true, utilityScore, pEMPGrenade, pCurrentEnemy);
-                }
-            }
-        }
-        // Refined Engineer Mancannon logic
-        if (engine->Time() >= m_fNextMancannonBuildTime && !m_hBuiltMancannon.Get()) { // Check cooldown and if bot already has one
-            // W_FL_FF_MANCANNON_SPOT is a conceptual waypoint flag
-            CWaypoint* pBuildSpot = CWaypoints::randomWaypointGoal(CWaypointTypes::W_FL_FF_MANCANNON_SPOT, getTeam(), 0, true, this);
-            if (pBuildSpot) {
-                // Check if a friendly mancannon is already very close to this spot by this bot (already handled by m_hBuiltMancannon check)
-                // or could iterate all friendly mancannons if a global list existed.
-                // For now, simply checking if this bot's mancannon isn't already there is sufficient.
-                ADD_UTILITY_DATA(BOT_UTIL_FF_ENGRI_BUILD_MANCANNON, true, 0.7f, CWaypoints::getWaypointIndex(pBuildSpot));
-            }
-        }
+        this->getEngineerTasks(iIgnore); // Call to helper function
     }
 
     // Demoman tasks
     if (currentFFClass_getTasks == FF_CLASS_DEMOMAN) {
-        CBotWeapon* pPipeLauncher = getWeapon(WEAPON_FF_PIPEBOMBLAUNCHER);
-        if (pPipeLauncher && pPipeLauncher->canUse()) {
-            if (!m_bHasActivePipes || m_iPipesToLay > 0) { // If no active trap or wants to lay more
-                 // Find strategic spot for pipe trap (e.g., chokepoint, near objective)
-                 // This is complex. For now, use a placeholder or last known good spot.
-                 CWaypoint* pTrapSpot = WaypointFindNearest(pev->origin, NULL, WAYPOINT_FLAG_CHOKEPOINT); // Example flag
-                 if (pTrapSpot) {
-                    addUtility(BOT_UTIL_FF_DEMO_LAY_PIPE_TRAP, BOT_UTIL_FF_DEMO_LAY_PIPE_TRAP, 50, (void*)pTrapSpot);
-                 }
-            }
-           if (m_bHasActivePipes) {
-                addUtility(BOT_UTIL_FF_DEMO_DETONATE_PIPES, BOT_UTIL_FF_DEMO_DETONATE_PIPES, 55); // Slightly higher than laying if pipes are ready
-           }
-        }
+        this->getDemomanTasks(iIgnore); // Call to helper function
     }
 
     // Spy tasks
     if (currentFFClass_getTasks == FF_CLASS_SPY) {
-        CBotWeapon* pTranqGun = getWeapon(WEAPON_FF_TRANQGUN);
-        if (pTranqGun && pTranqGun->canUse() && m_pCurrentEnemy && FVisible(m_pCurrentEnemy,edict())) {
-            if ((m_pCurrentEnemy->v.origin - pev->origin).Length() < pTranqGun->getMaxDistance()) {
-                 addUtility(BOT_UTIL_FF_SPY_USE_TRANQ, BOT_UTIL_FF_SPY_USE_TRANQ, 65); // High priority if enemy visible
-            }
-        }
+        this->getSpyTasks(iIgnore); // Call to helper function
     }
 
     // Scout tasks
     if (currentFFClass_getTasks == FF_CLASS_SCOUT) {
-        CBotWeapon* pCaltrops = getWeapon(WEAPON_FF_GREN_CALTROP); // Assuming caltrops are a weapon
-        if (pCaltrops && pCaltrops->canUse()) {
-            // Use caltrops defensively or in chokepoints
-            if (m_pCurrentEnemy && (m_pCurrentEnemy->v.origin - pev->origin).Length() < 300) { // If enemy is close
-                addUtility(BOT_UTIL_FF_SCOUT_USE_CALTROPS, BOT_UTIL_FF_SCOUT_USE_CALTROPS, 40);
-            }
-        }
-        // Conc jump for mobility (if has conc grenade)
-        CBotWeapon* pConcGrenade = getWeapon(WEAPON_FF_GREN_CONC);
-        if (pConcGrenade && pConcGrenade->canUse()) {
-            // Example: Use conc jump to reach high places or escape
-            // This requires pathfinding knowledge of conc jump spots.
-            // For now, a generic utility.
-             addUtility(BOT_UTIL_FF_CONC_JUMP_MOBILITY, BOT_UTIL_FF_CONC_JUMP_MOBILITY, 30);
-        }
-    }
-
-    // Pyro tasks
-    // This second Pyro block in getTasks is redundant as the primary Pyro logic is already above.
-    // This will be removed by the nature of the diff if the above Pyro block is the one kept and modified.
-    // For safety, explicitly removing it or ensuring the replacement block is comprehensive.
-    // The earlier, more detailed Pyro tasks block is the one being kept and enhanced.
-    /* if (currentFFClass_getTasks == FF_CLASS_PYRO) {
-        CBotWeapon* pIC = getWeapon(WEAPON_FF_IC); // Incendiary Cannon
-        if (pIC && pIC->canUse() && m_pCurrentEnemy) {
-    */
-    // Removing the search for this specific redundant block as it's complex to match if slightly varied.
-    // The main Pyro block above is the target for modifications.
-    // The following is the END of the second (redundant) Pyro block that should be gone after correct changes to the first Pyro block.
-//        if (pFlamer && pFlamer->canUseSecondary()) { // Airblast
-//            addUtility(BOT_UTIL_FF_PYRO_AIRBLAST, BOT_UTIL_FF_PYRO_AIRBLAST, 45); // General airblast utility
-//        }
-//    }
-
-    // Grenade throwing tasks (generic for all classes that can use them)
-            if (FVisible(m_pCurrentEnemy, edict()) && (m_pCurrentEnemy->v.origin - pev->origin).Length() < pIC->getMaxDistance()) {
-                addUtility(BOT_UTIL_FF_PYRO_USE_IC, BOT_UTIL_FF_PYRO_USE_IC, 50);
-            }
-        }
-        CBotWeapon* pFlamer = getWeapon(WEAPON_FF_FLAMETHROWER);
-        if (pFlamer && pFlamer->canUseSecondary()) { // Airblast
-            addUtility(BOT_UTIL_FF_PYRO_AIRBLAST, BOT_UTIL_FF_PYRO_AIRBLAST, 45); // General airblast utility
-        }
+        this->getScoutTasks(iIgnore); // Call to helper function
     }
 
     // Grenade throwing tasks (generic for all classes that can use them)
@@ -516,14 +303,10 @@ bool CBotFF::executeAction(CBotUtility *util) {
                 }
             }
             break;
-        case BOT_UTIL_FF_CONC_JUMP_MOBILITY:
-            {
-                 CBotWeapon* pConcGrenade = getWeapon(WEAPON_FF_GREN_CONC);
-                 if (pConcGrenade && pConcGrenade->canUse()) {
-                    setSchedule(new CSchedFFConcJumpSelf(this, pConcGrenade));
-                    return true;
-                 }
-            }
+        // Scout specific actions are handled by executeScoutAction
+        case BOT_UTIL_FF_CONC_JUMP_MOBILITY: // Fallthrough
+        case BOT_UTIL_FF_SCOUT_USE_CALTROPS:
+            if (this->executeScoutAction(util)) return true;
             break;
         case BOT_UTIL_FF_HUNTED_VIP_ESCAPE:
             // Simplified: Move to a far waypoint (escape point)
@@ -561,28 +344,12 @@ bool CBotFF::executeAction(CBotUtility *util) {
             }
             break;
         case BOT_UTIL_FF_ENGRI_BUILD_MANCANNON:
-            {
-                CWaypoint* pBuildSpot = (CWaypoint*)util->m_pVoidData;
-                if (pBuildSpot) {
-                    setSchedule(new CSchedFFBuildMancannon(this, pBuildSpot));
-                    return true;
-                }
-            }
+            if (this->executeEngineerAction(util)) return true;
             break;
-        case BOT_UTIL_FF_DEMO_LAY_PIPE_TRAP:
-            {
-                CWaypoint* pTrapSpotWpt = (CWaypoint*)util->m_pVoidData;
-                if (pTrapSpotWpt) {
-                     setSchedule(new CSchedFFDemoLayPipeTrap(this, pTrapSpotWpt, 3)); // Lay 3 pipes
-                     return true;
-                }
-            }
-            break;
+        // Demoman specific actions are now handled by executeDemomanAction
+        case BOT_UTIL_FF_DEMO_LAY_PIPE_TRAP: // Fallthrough
         case BOT_UTIL_FF_DEMO_DETONATE_PIPES:
-            {
-                setSchedule(new CSchedFFDemoDetonatePipes(this));
-                return true;
-            }
+            if (this->executeDemomanAction(util)) return true;
             break;
         case BOT_UTIL_FF_SPY_USE_TRANQ:
             if (m_pCurrentEnemy) {
@@ -591,59 +358,11 @@ bool CBotFF::executeAction(CBotUtility *util) {
                 return true;
             }
             break;
-        case BOT_UTIL_FF_SCOUT_USE_CALTROPS:
-            // This is like a grenade throw.
-            // For simplicity, assume it's thrown like a grenade at enemy's feet.
-            if (m_pCurrentEnemy) {
-                 CBotWeapon* pCaltrops = getWeapon(WEAPON_FF_GREN_CALTROP);
-                 if (pCaltrops) {
-                    setSchedule(new CSchedFFPrimeThrowGrenade(m_pCurrentEnemy->v.origin, pCaltrops, 0.1f)); // Short prime time
-                    return true;
-                 }
-            }
-            break;
-        case BOT_UTIL_FF_PYRO_AIRBLAST:
-            if (util->getWeaponChoice() && util->getWeaponChoice()->getWeaponInfo()->isWeaponName("weapon_ff_flamethrower")) {
-                m_bWantsToAirblast = true;
-                // The actual airblast IN_ATTACK2 will be triggered in handleAttack.
-                // We still might want to "attack" the target (e.g. a rocket) to ensure the bot faces it.
-                edict_t* airblastTarget = util->getTaskEdictTarget();
-                if (airblastTarget) {
-                    m_pSchedules->add(new CBotAttackSched(airblastTarget, 0.1f)); // Short schedule to face target
-                } else { // If no specific target (e.g. defensive airblast), just ensure state is set
-                    m_pSchedules->add(new CBotSchedule()); // Dummy schedule to process m_bWantsToAirblast
-                }
-                return true;
-            }
-            break;
-
+        // BOT_UTIL_FF_SCOUT_USE_CALTROPS handled above by executeScoutAction
+        // BOT_UTIL_FF_SCOUT_USE_CALTROPS handled above by executeScoutAction
+        case BOT_UTIL_FF_PYRO_AIRBLAST: // Fallthrough
         case BOT_UTIL_FF_PYRO_USE_IC:
-            if (util->getWeaponChoice() && util->getWeaponChoice()->getWeaponInfo()->isWeaponName("weapon_ff_ic")) {
-                if (m_pEnemy.Get() && CBotGlobals::entityIsAlive(m_pEnemy.Get())) {
-                    m_pSchedules->add(new CBotAttackSched(m_pEnemy.Get())); // Standard attack schedule
-                    return true;
-                }
-            }
-            break;
-        case BOT_UTIL_FF_PYRO_AIRBLAST:
-            if (util->getWeaponChoice() && util->getWeaponChoice()->getWeaponInfo()->isWeaponName("weapon_ff_flamethrower")) {
-                m_bWantsToAirblast = true;
-                edict_t* airblastTarget = util->getTaskEdictTarget();
-
-                // Use the new CSchedFFPyroAirblast
-                CBotSchedule* pAirblastSchedule = new CSchedFFPyroAirblast(this, airblastTarget);
-                m_pSchedules->add(pAirblastSchedule);
-                return true;
-            }
-            break;
-
-        case BOT_UTIL_FF_PYRO_USE_IC:
-            if (util->getWeaponChoice() && util->getWeaponChoice()->getWeaponInfo()->isWeaponName("weapon_ff_ic")) {
-                if (m_pEnemy.Get() && CBotGlobals::entityIsAlive(m_pEnemy.Get())) {
-                    m_pSchedules->add(new CBotAttackSched(m_pEnemy.Get()));
-                    return true;
-                }
-            }
+            if (this->executePyroAction(util)) return true;
             break;
         case BOT_UTIL_FF_USE_GRENADE_EMP: // Use actual enum value
             {
@@ -669,14 +388,8 @@ bool CBotFF::executeAction(CBotUtility *util) {
                 }
             }
             break;
-        case BOT_UTIL_MEDIC_HEAL: // Overriding base medic heal for FF specific
-            if (m_pPatient) { // m_pPatient would be set by findPatient or similar logic
-                CBotWeapon *pMedkit = getWeapon(WEAPON_FF_MEDKIT);
-                if (pMedkit && pMedkit->canUse()) {
-                    setSchedule(new CSchedFFMedicHealTeammate(this, m_pPatient));
-                    return true;
-                }
-            }
+        case BOT_UTIL_MEDIC_HEAL:
+            if (this->executeMedicAction(util)) return true;
             break;
         case BOT_UTIL_SNIPE: // Overriding base snipe for FF specific
             if (m_pCurrentEnemy) {
@@ -918,138 +631,12 @@ void CTaskFFThrowGrenade::execute(CBot* pBot) {
 bool CTaskFFThrowGrenade::isTaskComplete(CBot* pBot) { return true; } // Task is to initiate the throw
 const char* CTaskFFThrowGrenade::getTaskName() { return "TaskFFThrowGrenade"; }
 
-// CTaskFFExecuteConcJump
-CTaskFFExecuteConcJump::CTaskFFExecuteConcJump() {}
-void CTaskFFExecuteConcJump::execute(CBot* pBot) {
-    CBotFF* pFFBot = (CBotFF*)pBot;
-    CBotWeapon* pConc = pFFBot->getWeapon(WEAPON_FF_GREN_CONC);
-    if (pConc && pConc->canUse()) {
-        // Aim down (or specific angle for jump type)
-        Vector vAngle = pFFBot->pev->v_angle;
-        vAngle.x = 90; // Aim straight down (simplistic)
-        pFFBot->setIdealAngle(vAngle);
+// Implementations for Scout & Demoman specific Tasks/Schedules are now in their respective class files.
+// CTaskFFExecuteConcJump was moved to bot_ff_scout.cpp
+// CTaskFFDemoLaySinglePipe and CTaskFFDemoDetonatePipes were moved to bot_ff_demoman.cpp
 
-        // Could have a short prime task here if concs are primeable
-        pFFBot->pev->button |= IN_ATTACK; // Press attack
-        // After a very short delay (e.g. next frame or using a timer task), release IN_ATTACK
-        // And then press IN_JUMP at the right moment. This is complex timing.
-        // For simplicity, this task just presses attack. A schedule would manage the sequence.
-    }
-}
-bool CTaskFFExecuteConcJump::isTaskComplete(CBot* pBot) { return true; } // Task is to initiate
-const char* CTaskFFExecuteConcJump::getTaskName() { return "TaskFFExecuteConcJump"; }
-
-
-// CTaskFFEngineerBuild
-CTaskFFEngineerBuild::CTaskFFEngineerBuild(int buildableId, const Vector& buildPos) :
-    m_buildableId(buildableId), m_vBuildPos(buildPos), m_bCommandSent(false) {}
-void CTaskFFEngineerBuild::execute(CBot* pBot) {
-    CBotFF* pFFBot = (CBotFF*)pBot;
-    if (!m_bCommandSent) {
-        // Select build weapon (e.g., Spanner or a PDA)
-        // This depends on FF's Engineer mechanics. Assume Spanner for now.
-        CBotWeapon* pSpanner = pFFBot->getWeapon(WEAPON_FF_SPANNER_ENGI); // Or a generic build tool ID
-        if (pSpanner) {
-            pFFBot->selectWeapon(pSpanner->m_iWeaponID);
-            // Aim at build position (if required by game)
-            pFFBot->setIdealYaw(m_vBuildPos);
-
-            // Issue build command
-            // Format: "build <building_id>" or similar. FF_ENGIBUILD_MANCANNON is a placeholder for the actual ID.
-            char cmd[64];
-            sprintf(cmd, "build %d", m_buildableId); // m_buildableId should match game's internal ID for mancannon
-            BotSendCommand(pBot->edict(), cmd);
-            m_bCommandSent = true;
-            pFFBot->m_fNextMancannonBuildTime = gpGlobals->time + 30.0f; // Cooldown before trying again
-        }
-    }
-    // Bot might need to stay and "hit" the building with spanner. This task only sends the initial command.
-    // A follow-up schedule/task would handle the actual construction process if needed.
-}
-bool CTaskFFEngineerBuild::isTaskComplete(CBot* pBot) {
-    // Task is complete once command is sent. Construction is game-handled or by another task.
-    // Or, could check if building exists: pFFBot->m_hBuiltMancannon = findEntity(m_vBuildPos, "ff_mancannon_obj");
-    return m_bCommandSent;
-}
-const char* CTaskFFEngineerBuild::getTaskName() { return "TaskFFEngineerBuild"; }
-
-
-// CTaskFFDemoLaySinglePipe
-CTaskFFDemoLaySinglePipe::CTaskFFDemoLaySinglePipe(const Vector& vTargetPos) : m_vTargetPos(vTargetPos), m_bFired(false) {}
-void CTaskFFDemoLaySinglePipe::execute(CBot* pBot) {
-    CBotFF* pFFBot = (CBotFF*)pBot;
-    CBotWeapon* pPipeLauncher = pFFBot->getWeapon(WEAPON_FF_PIPEBOMBLAUNCHER);
-    if (pPipeLauncher && pPipeLauncher->canUsePrimary() && !m_bFired) {
-        pFFBot->selectWeapon(pPipeLauncher->m_iWeaponID);
-        pFFBot->setIdealYaw(m_vTargetPos); // Aim at the spot
-
-        // May need to account for projectile arc
-        // Vector aimPos = CalculatePipebombAim(pFFBot->pev->origin, m_vTargetPos, pPipeLauncher->getFloatData(BOT_WEAPON_DATA_PROJ_SPEED));
-        // pFFBot->setIdealYaw(aimPos);
-
-        pFFBot->pev->button |= IN_ATTACK; // Fire one pipe
-        m_bFired = true; // Only fire once per task execution
-        pFFBot->m_bHasActivePipes = true; // Assume at least one pipe is now active
-        pFFBot->m_vLastPipeTrapLocation = m_vTargetPos; // Update trap location (can be refined)
-        pFFBot->m_fNextPipeLayTime = gpGlobals->time + 0.8f; // Cooldown between pipes
-    }
-}
-bool CTaskFFDemoLaySinglePipe::isTaskComplete(CBot* pBot) {
-    if (m_bFired && !(pBot->pev->button & IN_ATTACK)) return true; // Complete once fired and button released
-    return false;
-}
-const char* CTaskFFDemoLaySinglePipe::getTaskName() { return "TaskFFDemoLaySinglePipe"; }
-
-// CTaskFFDemoDetonatePipes
-CTaskFFDemoDetonatePipes::CTaskFFDemoDetonatePipes() {}
-void CTaskFFDemoDetonatePipes::execute(CBot* pBot) {
-    CBotFF* pFFBot = (CBotFF*)pBot;
-    CBotWeapon* pPipeLauncher = pFFBot->getWeapon(WEAPON_FF_PIPEBOMBLAUNCHER);
-    if (pPipeLauncher && pPipeLauncher->canUseSecondary()) {
-        pFFBot->selectWeapon(pPipeLauncher->m_iWeaponID);
-        pFFBot->pev->button |= IN_SECONDARY_ATTACK; // Press secondary fire to detonate
-        pFFBot->m_bHasActivePipes = false; // Pipes are gone after detonation
-    }
-}
-bool CTaskFFDemoDetonatePipes::isTaskComplete(CBot* pBot) {
-    if (!(pBot->pev->button & IN_SECONDARY_ATTACK)) return true; // Complete once button released
-    return false;
-}
-const char* CTaskFFDemoDetonatePipes::getTaskName() { return "TaskFFDemoDetonatePipes"; }
-
-// CTaskFFMedicAimAndHeal
-CTaskFFMedicAimAndHeal::CTaskFFMedicAimAndHeal(edict_t* pTarget) : m_hTarget(pTarget) {}
-void CTaskFFMedicAimAndHeal::init(CBot* pBot) {
-    CBotFF* pFFBot = (CBotFF*)pBot;
-    CBotWeapon* pMedkit = pFFBot->getWeapon(WEAPON_FF_MEDKIT);
-    if (pMedkit) {
-        pFFBot->selectWeapon(pMedkit->m_iWeaponID);
-    }
-}
-void CTaskFFMedicAimAndHeal::execute(CBot* pBot) {
-    CBotFF* pFFBot = (CBotFF*)pBot;
-    edict_t* pTargetEdict = m_hTarget.Get();
-    if (pTargetEdict && pTargetEdict->v.deadflag == DEAD_NO && pTargetEdict->v.health < pTargetEdict->v.max_health) {
-        if (FVisible(pTargetEdict, pBot->edict())) {
-            pFFBot->setIdealYaw(pTargetEdict->v.origin);
-            pFFBot->pev->button |= IN_ATTACK; // Hold attack to heal
-        } else {
-            pFFBot->pev->button &= ~IN_ATTACK; // Stop healing if target not visible
-        }
-    } else {
-        pFFBot->pev->button &= ~IN_ATTACK; // Stop healing if target is dead or full health
-    }
-}
-bool CTaskFFMedicAimAndHeal::isTaskComplete(CBot* pBot) {
-    edict_t* pTargetEdict = m_hTarget.Get();
-    if (!pTargetEdict || pTargetEdict->v.deadflag != DEAD_NO || pTargetEdict->v.health >= pTargetEdict->v.max_health) {
-        pBot->pev->button &= ~IN_ATTACK; // Ensure button is released
-        return true; // Target gone, dead, or fully healed
-    }
-    // Could also have a timeout or if bot needs to do something else
-    return false;
-}
-const char* CTaskFFMedicAimAndHeal::getTaskName() { return "TaskFFMedicAimAndHeal"; }
+// Implementations for Scout, Demoman, Engineer & Pyro specific Tasks/Schedules are now in their respective class files.
+// Medic specific tasks/schedules moved to bot_ff_medic.cpp
 
 // CTaskFFSnipeAttackSequence
 CTaskFFSnipeAttackSequence::CTaskFFSnipeAttackSequence(edict_t* pTarget) : m_hTarget(pTarget), m_iState(0), m_fNextActionTime(0.0f) {}
@@ -1182,55 +769,12 @@ CSchedFFConcJumpSelf::CSchedFFConcJumpSelf(CBotFF* pBot, CBotWeapon* pConcGrenad
 }
 const char* CSchedFFConcJumpSelf::getScheduleName() { return "SchedFFConcJumpSelf"; }
 
-// CSchedFFBuildMancannon
-CSchedFFBuildMancannon::CSchedFFBuildMancannon(CBotFF* pBot, CWaypoint* pBuildSpot) :
-    CBotSchedule(SCHED_FF_ENGRI_BUILD_MANCANNON, BOT_UTIL_FF_ENGRI_BUILD_MANCANNON, PRIORITY_NORMAL) {
-    if (pBuildSpot) {
-        addTask(new CTaskMoveTo(pBuildSpot->m_vOrigin, BOT_UTIL_FF_ENGRI_BUILD_MANCANNON, 0.5f)); // Move to spot
-        addTask(new CTaskLookAt(pBuildSpot->m_vOrigin + Vector(0,0,50),0.3f)); // Look at general build area
-        addTask(new CTaskFFEngineerBuild(FF_ENGIBUILD_MANCANNON, pBuildSpot->m_vOrigin)); // Build it (FF_ENGIBUILD_MANCANNON is placeholder ID)
-        // Could add tasks to defend the spot while building if it takes time.
-    }
-}
-const char* CSchedFFBuildMancannon::getScheduleName() { return "SchedFFBuildMancannon"; }
+// CSchedFFConcJumpSelf was moved to bot_ff_scout.cpp
+// CSchedFFDemoLayPipeTrap and CSchedFFDemoDetonatePipes were moved to bot_ff_demoman.cpp
 
-// CSchedFFDemoLayPipeTrap
-CSchedFFDemoLayPipeTrap::CSchedFFDemoLayPipeTrap(CBotFF* pBot, CWaypoint* pTrapSpotWpt, int numPipes) :
-    CBotSchedule(SCHED_FF_DEMO_LAY_PIPE_TRAP, BOT_UTIL_FF_DEMO_LAY_PIPE_TRAP, PRIORITY_NORMAL) {
-    if (pTrapSpotWpt) {
-        pBot->m_iPipesToLay = numPipes;
-        addTask(new CTaskMoveTo(pTrapSpotWpt->m_vOrigin, BOT_UTIL_FF_DEMO_LAY_PIPE_TRAP, 0.5f));
-        for (int i=0; i < numPipes; ++i) {
-            // Slightly vary position for each pipe
-            Vector pipePos = pTrapSpotWpt->m_vOrigin + Vector(RANDOM_FLOAT(-30,30),RANDOM_FLOAT(-30,30), 10);
-            addTask(new CTaskFFDemoLaySinglePipe(pipePos));
-            if (i < numPipes -1) addTask(new CTaskDelay(0.8f)); // Delay between pipes (matches m_fNextPipeLayTime)
-        }
-        // After laying, bot might want to move away or guard the trap.
-    }
-}
-const char* CSchedFFDemoLayPipeTrap::getScheduleName() { return "SchedFFDemoLayPipeTrap"; }
-
-// CSchedFFDemoDetonatePipes
-CSchedFFDemoDetonatePipes::CSchedFFDemoDetonatePipes(CBotFF* pBot) :
-    CBotSchedule(SCHED_FF_DEMO_DETONATE_PIPES, BOT_UTIL_FF_DEMO_DETONATE_PIPES, PRIORITY_HIGH) {
-    addTask(new CTaskFFDemoDetonatePipes());
-    // Could add a task to quickly look away or take cover if detonation is dangerous to self.
-}
-const char* CSchedFFDemoDetonatePipes::getScheduleName() { return "SchedFFDemoDetonatePipes"; }
-
-// CSchedFFMedicHealTeammate
-CSchedFFMedicHealTeammate::CSchedFFMedicHealTeammate(CBotFF* pBot, edict_t* pTargetTeammate) :
-    CBotSchedule(SCHED_FF_MEDIC_HEAL_TEAMMATE, BOT_UTIL_MEDIC_HEAL, PRIORITY_MED) { // Using SCHED_HEAL from base for now if appropriate
-    if (pTargetTeammate) {
-        addTask(new CTaskMoveTo(pTargetTeammate->v.origin, BOT_UTIL_MEDIC_HEAL, 0.7f, true, 300.0f)); // Move within 300 units
-        addTask(new CTaskFFMedicAimAndHeal(pTargetTeammate));
-        // This schedule will loop as CTaskFFMedicAimAndHeal won't complete until target is healed/gone.
-        // Or, can add a CTaskFaceEntity(pTargetTeammate) if movement is separate from aiming.
-    }
-}
-const char* CSchedFFMedicHealTeammate::getScheduleName() { return "SchedFFMedicHealTeammate"; }
-
+// Implementations for Engineer specific Tasks/Schedules are now in bot_ff_engineer.cpp
+// Implementations for Pyro specific Tasks/Schedules are now in bot_ff_pyro.cpp
+// Medic specific tasks/schedules moved to bot_ff_medic.cpp
 
 // CSchedFFSnipe
 CSchedFFSnipe::CSchedFFSnipe(CBotFF* pBot, edict_t* pTarget) :
@@ -1274,236 +818,4 @@ const char* CSchedFFPyroAirblast::getScheduleName() { return "SchedFFPyroAirblas
 // Placeholder define for utility - this should go into bot_const.h eventually
 #define BOT_UTIL_FF_GET_ARMOR 10019 // Ensure this ID is unique (Using a new ID from the original plan)
 
-
-const CFFPlayerClassInfo* CBotFF::GetClassGameData() const {
-    if (!m_pEdict) return nullptr;
-
-    // This m_iBotClass needs to be the FF_ClassID enum type, not TF_ClassID from base.
-    // Assuming m_iBotClass is correctly populated with FF_ClassID during bot creation/class selection.
-    FF_ClassID currentClass = (FF_ClassID)m_iBotClass;
-    const char* className = nullptr;
-
-    switch (currentClass) {
-        case FF_CLASS_SCOUT:    className = "ff_playerclass_scout"; break;
-        case FF_CLASS_SNIPER:   className = "ff_playerclass_sniper"; break;
-        case FF_CLASS_SOLDIER:  className = "ff_playerclass_soldier"; break;
-        case FF_CLASS_DEMOMAN:  className = "ff_playerclass_demoman"; break;
-        case FF_CLASS_MEDIC:    className = "ff_playerclass_medic"; break;
-        case FF_CLASS_HWGUY:    className = "ff_playerclass_hwguy"; break;
-        case FF_CLASS_PYRO:     className = "ff_playerclass_pyro"; break;
-        case FF_CLASS_SPY:      className = "ff_playerclass_spy"; break;
-        case FF_CLASS_ENGINEER: className = "ff_playerclass_engineer"; break;
-        case FF_CLASS_CIVILIAN: className = "ff_playerclass_civilian"; break;
-        default: return nullptr;
-    }
-
-    if (!className) return nullptr;
-
-    int handle = LookupPlayerClassInfoSlot(className);
-    if (handle == -1) return nullptr;
-
-    return GetFilePlayerClassInfoFromHandle(handle);
-}
-
-int CBotFF::GetMaxHP() const {
-    const CFFPlayerClassInfo* pCD = GetClassGameData();
-    return pCD ? pCD->m_iHealth : 100; // Default 100 if data not found
-}
-
-int CBotFF::GetMaxAP() const {
-    const CFFPlayerClassInfo* pCD = GetClassGameData();
-    return pCD ? pCD->m_iMaxArmour : 0; // Default 0 if data not found
-}
-
-float CBotFF::GetMaxSpeed() const {
-    const CFFPlayerClassInfo* pCD = GetClassGameData();
-    return pCD ? (float)pCD->m_iSpeed : 320.0f; // Default 320 if data not found
-}
-
-weapon_t CBotFF::GetWeaponByIndex(int index) const {
-    const CFFPlayerClassInfo* pCD = GetClassGameData();
-    if (!pCD || index < 0 || index >= pCD->m_iNumWeapons) return WEAPON_NONE; // WEAPON_NONE or 0
-    return g_weaponDefs.getWeaponID(pCD->m_aWeapons[index]);
-}
-
-weapon_t CBotFF::GetGrenade1WeaponID() const {
-    const CFFPlayerClassInfo* pCD = GetClassGameData();
-    if (!pCD || strcmp(pCD->m_szPrimaryClassName, "None") == 0) return WEAPON_NONE;
-    return g_weaponDefs.getWeaponID(pCD->m_szPrimaryClassName);
-}
-
-weapon_t CBotFF::GetGrenade2WeaponID() const {
-    const CFFPlayerClassInfo* pCD = GetClassGameData();
-    if (!pCD || strcmp(pCD->m_szSecondaryClassName, "None") == 0) return WEAPON_NONE;
-    return g_weaponDefs.getWeaponID(pCD->m_szSecondaryClassName);
-}
-
-int CBotFF::GetMaxGren1() const {
-    const CFFPlayerClassInfo* pCD = GetClassGameData();
-    return pCD ? pCD->m_iPrimaryMax : 0;
-}
-
-int CBotFF::GetMaxGren2() const {
-    const CFFPlayerClassInfo* pCD = GetClassGameData();
-    return pCD ? pCD->m_iSecondaryMax : 0;
-}
-
-int CBotFF::GetInitialGren1() const {
-    const CFFPlayerClassInfo* pCD = GetClassGameData();
-    return pCD ? pCD->m_iPrimaryInitial : 0;
-}
-
-int CBotFF::GetInitialGren2() const {
-    const CFFPlayerClassInfo* pCD = GetClassGameData();
-    return pCD ? pCD->m_iSecondaryInitial : 0;
-}
-
-int CBotFF::GetMaxAmmo(int ammoIndex) const {
-    const CFFPlayerClassInfo* pCD = GetClassGameData();
-    if (!pCD) return 0;
-
-    // These ammo indices (m_iAmmoShells, etc.) are member variables of CBot (or CBotFortress)
-    // and should correspond to the game's internal ammo type indices.
-    // The CFFPlayerClassInfo struct uses its own names (m_iMaxShells, etc.)
-    if (ammoIndex == m_iAmmoShells) return pCD->m_iMaxShells;
-    if (ammoIndex == m_iAmmoNails) return pCD->m_iMaxNails;
-    if (ammoIndex == m_iAmmoCells) return pCD->m_iMaxCells;
-    if (ammoIndex == m_iAmmoRockets) return pCD->m_iMaxRockets;
-    if (ammoIndex == m_iAmmoDetpack) return pCD->m_iMaxDetpack; // Assuming m_iAmmoDetpack matches Detpack ammo index
-    // FF specific - if m_iAmmoMancannon is defined for Mancannon builder ammo type
-    // if (ammoIndex == m_iAmmoMancannon) return pCD->m_iMaxManCannon; // This field might not exist directly for all classes
-
-    // Fallback for other ammo types if not directly mapped above, or if they are not class-specific
-    // This might require looking up a global ammo definition if not in CFFPlayerClassInfo
-    return CBotFortress::GetMaxAmmo(ammoIndex); // Or a more generic lookup
-}
-
-
-// CTaskFFPyroAirblast
-// (Assuming CPlayer is base for CFFPlayer or self can be cast)
-#define self ( (CFFPlayer*)m_pPlayer ) // Macro for convenience if direct CFFPlayer access is needed and safe
-
-int CBotFF::GetCurrentHP() const {
-    if (!self) return 0;
-    return self->GetHealth(); // Standard CBasePlayer method
-}
-
-int CBotFF::GetCurrentAP() const {
-    if (!self) return 0;
-    return self->pev->armorvalue; // Standard CBasePlayer access
-}
-
-float CBotFF::GetCurrentSpeed() const {
-    if (!self) return 0.0f;
-    return self->pev->velocity.Length2D(); // Standard CBasePlayer access
-}
-
-int CBotFF::GetAmmoCount(int ammoIndex) const {
-    if (!self) return 0;
-    return self->m_rgAmmo[ammoIndex]; // Standard CBasePlayer access
-}
-
-int CBotFF::GetGrenade1Count() const {
-    if (!self) return 0;
-    // Assuming CFFPlayer specific member m_iPrimaryAmmo or similar for primary grenades
-    // and that GetGrenade1WeaponID() returns the weapon for which this ammo is relevant.
-    // This might need a more robust way if ammo types are not directly tied to grenade slots.
-    // For now, using the direct member access as hinted by the prompt's example.
-    // This requires self to be safely castable to CFFPlayer and m_iPrimary to be the count.
-    return self->m_iPrimary;
-}
-
-int CBotFF::GetGrenade2Count() const {
-    if (!self) return 0;
-    // Similar assumption as GetGrenade1Count for m_iSecondaryAmmo or m_iSecondary
-    return self->m_iSecondary;
-}
-
-bool CBotFF::IsPlayerCloaked() const {
-    if (!self) return false;
-    FF_ClassID currentClass = CClassInterface::getFFClass(self->edict());
-    if (currentClass != FF_CLASS_SPY) return false;
-    // Assuming CFFPlayer has an IsCloaked() method or a flag like m_bCloaked
-    return self->IsCloaked(); // This method needs to exist on CFFPlayer or its hierarchy
-}
-
-int CBotFF::GetPlayerJetpackFuel() const {
-    if (!self) return 0;
-    FF_ClassID currentClass = CClassInterface::getFFClass(self->edict());
-    if (currentClass != FF_CLASS_PYRO) return 0;
-    // Assuming CFFPlayer has m_iJetpackFuel or an accessor
-    return self->m_iJetpackFuel; // This member needs to exist on CFFPlayer
-}
-
-bool CBotFF::IsPlayerBuilding() const {
-    if (!self) return false;
-    FF_ClassID currentClass = CClassInterface::getFFClass(self->edict());
-    if (currentClass != FF_CLASS_ENGINEER) return false;
-    // Assuming CFFPlayer has an IsBuilding() method or a flag like m_bIsBuilding
-    return self->IsBuilding(); // This method needs to exist on CFFPlayer or its hierarchy
-}
-
-bool CBotFF::IsPlayerPrimingGrenade() const {
-    if (!self) return false;
-    // Assuming CFFPlayer has an IsGrenadePrimed() method or a flag like m_bIsPrimingGrenade
-    return self->IsGrenadePrimed(); // This method needs to exist on CFFPlayer or its hierarchy
-}
-
-#undef self // Undefine the macro to avoid conflicts elsewhere
-
-CTaskFFPyroAirblast::CTaskFFPyroAirblast(edict_t* pTarget) : m_hTargetEntity(pTarget) {
-    setTaskName("TaskFFPyroAirblast"); // Set a name for debugging
-    m_bTaskComplete = false; // Initialize completion status
-}
-void CTaskFFPyroAirblast::init(CBot* pBot) {
-    CBotTask::init(pBot); // Call base class init
-    // If target wasn't passed in constructor but is available from schedule data
-    if (!m_hTargetEntity.Get() && m_pTaskDataTargetEdict) {
-        m_hTargetEntity.Set(m_pTaskDataTargetEdict);
-    }
-}
-void CTaskFFPyroAirblast::execute(CBot* pBot) {
-    CBotFF* pFFBot = static_cast<CBotFF*>(pBot);
-    if (!pFFBot) {
-        failTask("Bot pointer is null"); // Use failTask for consistency
-        m_bTaskComplete = true;
-        return;
-    }
-
-    // The actual IN_ATTACK2 is now expected to be done by handleAttack when m_bWantsToAirblast is true.
-    // This task mainly ensures the bot is oriented if there's a target.
-    edict_t* pTarget = m_hTargetEntity.Get();
-    if (pTarget && CBotGlobals::entityIsValid(pTarget) && (CBotGlobals::entityIsAlive(pTarget) || !(pTarget->v.flags & FL_ONGROUND)))) { // Also aim at projectiles not on ground
-        pFFBot->setLookAt(pTarget);
-        pFFBot->setLookAtTask(LOOK_EDICT_PRIORITY);
-    } else {
-        pFFBot->setLookAtTask(LOOK_NONE);
-    }
-
-    // This task signals the intent to airblast for handleAttack.
-    // It completes quickly, letting handleAttack perform the action based on m_bWantsToAirblast.
-    // If m_bWantsToAirblast is not set by executeAction, it should be set here.
-    pFFBot->m_bWantsToAirblast = true;
-
-    setTaskStatus(TASK_COMPLETE);
-    m_bTaskComplete = true;
-}
-// isTaskComplete is inherited, or can be overridden if specific logic is needed beyond m_bTaskComplete
-// bool CTaskFFPyroAirblast::isTaskComplete(CBot* pBot) { return m_bTaskComplete; }
-// getTaskName is inherited
-
-// CSchedFFPyroAirblast
-CSchedFFPyroAirblast::CSchedFFPyroAirblast(CBotFF* pBot, edict_t* pTarget) {
-    setID(SCHED_FF_PYRO_AIRBLAST_DEFEND);
-    setScheduleName("SchedFFPyroAirblast"); // Set name for debugging
-    if (!pBot) { failSchedule(); return; } // Use failSchedule
-
-    CBotWeapon* pFlamer = pBot->getWeapons()->getWeaponByName("weapon_ff_flamethrower");
-    if (!pFlamer || !pFlamer->hasWeapon() || !pFlamer->getWeaponInfo()) {
-        failSchedule(); // Use failSchedule
-        return;
-    }
-    addTask(new CSelectWeaponTask(pFlamer->getWeaponInfo()));
-    addTask(new CTaskFFPyroAirblast(pTarget)); // This task will signal handleAttack
-}
-// getScheduleName is inherited
+// Implementations of CClassInterface methods have been moved to utils/RCBot2_meta/ff_bot/bot_ff_class_interface.cpp

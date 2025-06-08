@@ -96,6 +96,29 @@ public:
 
 private: // FF Specific Helper
     const CFFPlayerClassInfo* GetClassGameData() const;
+    // Scout specific logic helpers
+    void getScoutTasks(unsigned int iIgnore);
+    bool executeScoutAction(CBotUtility *util);
+    // Demoman specific logic helpers
+    void getDemomanTasks(unsigned int iIgnore);
+    bool executeDemomanAction(CBotUtility *util);
+    // Engineer specific logic helpers
+    void getEngineerTasks(unsigned int iIgnore);
+    bool executeEngineerAction(CBotUtility *util);
+    // Pyro specific logic helpers
+    void getPyroTasks(unsigned int iIgnore);
+    bool executePyroAction(CBotUtility *util);
+    void pyroModThink();
+    // HWGuy specific logic helpers
+    void getHWGuyTasks(unsigned int iIgnore);
+    void hwguyModThink();
+    // Medic specific logic helpers
+    bool executeMedicAction(CBotUtility *util);
+    // Sniper specific logic helpers
+    bool executeSniperAction(CBotUtility *util);
+    // Spy specific logic helpers
+    void getSpyTasks(unsigned int iIgnore);
+    bool executeSpyAction(CBotUtility *util);
 
 public: // CClassInterface Overrides
     virtual int GetMaxHP() const override;
