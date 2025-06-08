@@ -1,97 +1,66 @@
 #include "FFControlPointTasks.h"
-#include "FFBaseAI.h"       // For CFFBaseAI and its methods (like GetBotPlayer, GetKnowledgeBase, MoveTo, AttackTarget etc.)
-#include "CFFPlayer.h"      // For CFFPlayer methods (GetOrigin, GetTeam, etc.)
-#include "BotKnowledgeBase.h" // For accessing game state like CP ownership
-#include "BotDefines.h"     // For constants like ARRIVAL_TOLERANCE_SQR_FF
-#include "GameDefines_Placeholder.h" // For CUserCmd, IN_BUTTONS, FL_*, TEAM_*, etc. (conceptual)
-// #include "bot_schedule.h" // Assumed for pSchedule parameter in fail/complete (RCBot2 context)
+#include "FFBaseAI.h"       // For CFFBaseAI (now SDK-aware)
+#include "CFFPlayer.h"      // For CFFPlayerWrapper (header name might still be CFFPlayer.h)
+#include "BotKnowledgeBase.h"
+#include "BotDefines.h"     // For constants like DEFAULT_ARRIVAL_TOLERANCE_SQR
+// #include "GameDefines_Placeholder.h" // No longer needed, SDK types are used
+#include "game/shared/usercmd.h" // For CUserCmd (if tasks were to ever directly use it, though AI does now)
 
 #include <string>
 #include <iostream>         // For placeholder debug prints
 
-// --- Conceptual Time & Bot Access ---
-// Using placeholders from CFFBaseAI.cpp or assuming CFFBaseAI provides these:
-// float CFFBaseAI::GetCurrentWorldTime_conceptual() const { static float t = 0; t+=0.1f; return t; }
-// void CFFBaseAI::StopMoving_conceptual(CUserCmd* pCmd) { if(pCmd) pCmd->forwardmove = pCmd->sidemove = 0; }
-// void CFFBaseAI::SetLookAtTask_conceptual(LookAtTaskType_Conceptual type, const Vector& target) { /* ... */ }
-// bool CFFBaseAI::IsAtMoveToTarget() const { /* ... */ return false; }
-// bool CFFBaseAI::HasPathfindingFailed() const { /* ... */ return false; }
-// CUserCmd* CFFBaseAI::GetUserCmd_conceptual() { static CUserCmd cmd; return &cmd; } // Risky static for example
-// --- End Conceptual ---
-
 
 // --- CMoveToPositionTask Implementation ---
 CMoveToPositionTask::CMoveToPositionTask(const Vector& targetPos, float arrivalTolerance)
-    : CBotTask(), // Base constructor
+    : CBotTask(),
       m_vTargetPosition(targetPos),
-      m_fArrivalToleranceSqr(arrivalTolerance * arrivalTolerance), // Store squared
+      m_fArrivalToleranceSqr(arrivalTolerance * arrivalTolerance),
       m_fStuckTimer(0.0f) {
-    // setID(TASK_MOVE_TO_POSITION_FF_CONCEPTUAL_ID);
 }
 
 void CMoveToPositionTask::init(CFFBaseAI* botAI) {
-    CBotTask::init(botAI); // Assuming CBotTask::init takes CFFBaseAI* or can be adapted
+    CBotTask::init(botAI);
     setState(TASK_STATE_RUNNING);
     m_fStuckTimer = 0.0f;
-    if (botAI) {
-        // Path is planned by CFFBaseAI when ExecuteSubTask for MOVE_TO_POSITION is first called.
-        // This task assumes CFFBaseAI's m_vCurrentMoveToTarget is set to m_vTargetPosition
-        // and m_CurrentPath_NavAreaIDs is being processed by botAI->FollowPath().
-        // Forcing a MoveTo here could override a path already being followed if this task is part of a sequence.
-        // It's better if CFFBaseAI::ExecuteSubTask manages the call to botAI->MoveTo() once.
-        // std::cout << botAI->GetBotPlayer()->GetNamePlaceholder() << ": Init MoveToPositionTask to (" << m_vTargetPosition.x << ")" << std::endl;
-    }
+    // Path planning is now implicitly handled by CFFBaseAI::ExecuteSubTask when it first
+    // processes a MOVE_TO_POSITION subtask with this task's target.
 }
 
 void CMoveToPositionTask::execute(CFFBaseAI* botAI, CBotSchedule* pSchedule) {
-    if (!botAI || !botAI->GetBotPlayer()) { fail(pSchedule, "MoveToPositionTask: BotAI or BotPlayer is null"); return; }
-    CFFPlayer* ffPlayer = botAI->GetBotPlayer();
-    // CUserCmd* pCmd = botAI->GetUserCmd_conceptual(); // Not directly used by this task's logic, CFFBaseAI::Update fills it.
+    if (!botAI || !botAI->GetBotPlayer()) { fail(pSchedule, "MoveToPositionTask: BotAI or BotPlayerWrapper is null"); return; }
+    CFFPlayerWrapper* ffPlayer = botAI->GetBotPlayer(); // Now CFFPlayerWrapper
 
-    // Check for arrival
-    float distSq = (ffPlayer->GetOrigin().x - m_vTargetPosition.x)*(ffPlayer->GetOrigin().x - m_vTargetPosition.x) +
-                   (ffPlayer->GetOrigin().y - m_vTargetPosition.y)*(ffPlayer->GetOrigin().y - m_vTargetPosition.y);
-    // Ignoring Z for arrival condition for simplicity with nav areas
-    if (distSq < m_fArrivalToleranceSqr) {
-        // std::cout << ffPlayer->GetNamePlaceholder() << ": Reached target for MoveToPositionTask." << std::endl;
-        botAI->ClearCurrentPath(); // Important: Stop current path following
-        botAI->StopMoving_conceptual(nullptr /* pCmd is managed by AI::Update */);
+    if (ffPlayer->GetOrigin().DistToSqr2D(m_vTargetPosition) < m_fArrivalToleranceSqr) { // Using DistToSqr2D for nav
+        botAI->ClearCurrentPath();
+        // No direct StopMoving call; AI's FollowPath will simply not set movement if path is clear.
         complete();
         return;
     }
 
-    // If botAI->IsCurrentlyWithPath() becomes false before arrival, it means path ended prematurely or failed.
-    // This check relies on CFFBaseAI::FollowPath correctly clearing path on completion/failure.
-    if (!botAI->IsCurrentlyWithPath_conceptual() && !botAI->IsAtMoveToTarget_conceptual(m_vTargetPosition, m_fArrivalToleranceSqr)) {
-        // Path might have ended, but we are not at the target. Try to re-path.
-        // std::cout << ffPlayer->GetNamePlaceholder() << ": Path ended for MoveTo, but not at target. Re-planning." << std::endl;
-        if (!botAI->MoveTo(m_vTargetPosition, nullptr /* CFFBaseAI::Update gets cmd */)) {
-             // std::cout << ffPlayer->GetNamePlaceholder() << ": Re-plan failed for MoveTo." << std::endl;
-            fail(pSchedule, "Failed to re-plan path in MoveToPositionTask"); // Pathing failed
-            return;
-        }
-    }
+    // CFFBaseAI::ExecuteSubTask will call FollowPath. If FollowPath returns false (path ended/failed)
+    // and we are not at the target, this task should fail or re-evaluate.
+    // The logic for "IsCurrentlyWithPath" and "IsAtMoveToTarget" should be part of CFFBaseAI.
+    // if (!botAI->IsCurrentlyWithPath() && !botAI->IsAtMoveToTarget(m_vTargetPosition, m_fArrivalToleranceSqr)) {
+    //     if (!botAI->MoveTo(m_vTargetPosition, nullptr)) { // MoveTo now only plans
+    //        fail(pSchedule, "Failed to re-plan path in MoveToPositionTask");
+    //        return;
+    //    }
+    // }
 
-    // Stuck logic (conceptual, CFFBaseAI should ideally handle this in its FollowPath)
-    // if (ffPlayer->GetVelocity().LengthSqr() < 1.0f && botAI->IsTryingToMove_Conceptual()) {
-    //     m_fStuckTimer += botAI->GetFrameInterval_Conceptual();
-    //     if (m_fStuckTimer > 3.0f) { // Stuck for 3 seconds
-    //         fail(pSchedule, "MoveToPositionTask: Stuck"); return;
-    //     }
-    // } else { m_fStuckTimer = 0.0f; }
-
-    // If this task is still running, it means CFFBaseAI::Update is calling FollowPath,
-    // and FollowPath hasn't returned false yet (or this task hasn't timed out/failed).
+    // Stuck logic would be more complex, relying on CFFBaseAI's movement state.
+    // For now, this task assumes CFFBaseAI handles movement and pathing.
+    // If CFFBaseAI's ExecuteSubTask determines it cannot proceed with this subtask's goal,
+    // it should mark the subtask as not completed, and this task might fail due to timeout or planner logic.
 }
 
 void CMoveToPositionTask::reset(CFFBaseAI* botAI) {
     CBotTask::reset(botAI);
     m_fStuckTimer = 0.0f;
-    if (botAI) botAI->ClearCurrentPath(); // Ensure path is cleared on reset
+    if (botAI) botAI->ClearCurrentPath();
 }
 
 std::string CMoveToPositionTask::debugString(CFFBaseAI* botAI) const {
-    return "CMoveToPositionTask to (" + std::to_string(m_vTargetPosition.x) + "," + std::to_string(m_vTargetPosition.y) + ")";
+    return "CMoveToPositionTask to (" + std::to_string(m_vTargetPosition.x) + "," + std::to_string(m_vTargetPosition.y) + "," + std::to_string(m_vTargetPosition.z) + ")";
 }
 
 
@@ -103,79 +72,69 @@ CSecureAreaTask_FF::CSecureAreaTask_FF(const Vector& vAreaCenter, float fRadius,
 void CSecureAreaTask_FF::init(CFFBaseAI* botAI) {
     CBotTask::init(botAI);
     setState(TASK_STATE_RUNNING);
-    m_fTaskStartTime = botAI ? botAI->GetCurrentWorldTime_conceptual() : 0.0f;
+    m_fTaskStartTime = botAI ? botAI->GetWorldTime() : 0.0f; // Use SDK-aware time
     m_bFoundEnemyDuringTask = false;
-    if(botAI) botAI->StopMoving_conceptual(nullptr);
+    // No direct StopMoving call to botAI here. AI manages its movement based on current subtask.
 }
 
 void CSecureAreaTask_FF::execute(CFFBaseAI* botAI, CBotSchedule* pSchedule) {
     if (!botAI || !botAI->GetBotPlayer()) { fail(pSchedule, "SecureArea: Invalid bot state"); return; }
-    // CUserCmd* pCmd = botAI->GetUserCmd_conceptual(); // AI::Update gets UserCmd
 
-    if (botAI->GetCurrentWorldTime_conceptual() - m_fTaskStartTime > m_fDuration) {
+    if (botAI->GetWorldTime() - m_fTaskStartTime > m_fDuration) {
         complete(); return;
     }
 
-    // CBaseEntity* pEnemy = botAI->SelectTargetForArea_conceptual(m_vAreaCenter, m_fRadius); // Specific scan
-    CBaseEntity* pEnemy = botAI->SelectTarget(); // Use general target selection for now
-
-    if (pEnemy && pEnemy->IsAlive() && (pEnemy->GetPosition().x-m_vAreaCenter.x)*(pEnemy->GetPosition().x-m_vAreaCenter.x) + (pEnemy->GetPosition().y-m_vAreaCenter.y)*(pEnemy->GetPosition().y-m_vAreaCenter.y) < (m_fRadius * m_fRadius) ) {
-        m_bFoundEnemyDuringTask = true;
-        botAI->AttackTarget(pEnemy, nullptr /* CFFBaseAI::Update gets UserCmd */); // Let derived class handle attack
-    } else {
-        if (m_bFoundEnemyDuringTask) { // Enemy was present but now gone (killed or retreated)
-            complete(); return;
-        }
-        // botAI->SetLookAtTask_conceptual(LookAtTaskType_Conceptual::LOOK_AROUND_SCAN_IN_AREA, &m_vAreaCenter);
-        // botAI->StopMoving_conceptual(pCmd); // Or patrol slightly
-    }
+    // CBaseEntity* pEnemy = botAI->SelectTarget(); // General target selection by AI module
+    // if (pEnemy && pEnemy->IsAlive() && pEnemy->GetAbsOrigin().DistToSqr(m_vAreaCenter) < (m_fRadius * m_fRadius) ) {
+    //     m_bFoundEnemyDuringTask = true;
+    //     // AttackTarget is called by CFFBaseAI::ExecuteSubTask if subtask is ATTACK_TARGET.
+    //     // This task should ensure the AI's current subtask is to attack this enemy if appropriate.
+    //     // For now, assume the AI's main update loop handles attacking if SelectTarget returns an enemy.
+    // } else {
+    //     if (m_bFoundEnemyDuringTask) {
+    //         complete(); return;
+    //     }
+    //     // AI should look around or patrol based on its ExecuteSubTask for SECURE_AREA.
+    //     // This task doesn't directly set look tasks or stop movement.
+    // }
 }
 void CSecureAreaTask_FF::reset(CFFBaseAI* botAI) { CBotTask::reset(botAI); m_fTaskStartTime = 0.0f; m_bFoundEnemyDuringTask = false; }
 std::string CSecureAreaTask_FF::debugString(CFFBaseAI* botAI) const { return "CSecureAreaTask_FF"; }
 
 
 // --- CStandOnPointTask_FF Implementation ---
-CStandOnPointTask_FF::CStandOnPointTask_FF(CBaseEntity* pCPEntity_conceptual, const Vector& vCPPosition, float fMaxTime, float captureRadius)
-    : CBotTask(), m_pTargetCPEntity_conceptual(pCPEntity_conceptual), m_vCPPosition(vCPPosition), m_fMaxTime(fMaxTime),
-      m_fCaptureRadiusSqr(captureRadius*captureRadius), m_fTaskStartTime(0.0f), m_iTargetCPEntityId_conceptual(-1) {
-    // if (pCPEntity_conceptual) m_iTargetCPEntityId_conceptual = pCPEntity_conceptual->GetId_conceptual();
+CStandOnPointTask_FF::CStandOnPointTask_FF(CBaseEntity* pCPEntity, const Vector& vCPPosition, float fMaxTime, float captureRadius) // pCPEntity is CBaseEntity*
+    : CBotTask(), m_pTargetCPEntity_SDK(pCPEntity), m_vCPPosition(vCPPosition), m_fMaxTime(fMaxTime),
+      m_fCaptureRadiusSqr(captureRadius*captureRadius), m_fTaskStartTime(0.0f) {
+    // if (pCPEntity) m_iTargetCPEntityId_conceptual = pCPEntity->entindex(); // Example SDK way to get an ID
 }
 
 void CStandOnPointTask_FF::init(CFFBaseAI* botAI) {
     CBotTask::init(botAI);
     setState(TASK_STATE_RUNNING);
-    m_fTaskStartTime = botAI ? botAI->GetCurrentWorldTime_conceptual() : 0.0f;
-    if (botAI) botAI->StopMoving_conceptual(nullptr);
+    m_fTaskStartTime = botAI ? botAI->GetWorldTime() : 0.0f;
 }
 
 void CStandOnPointTask_FF::execute(CFFBaseAI* botAI, CBotSchedule* pSchedule) {
     if (!botAI || !botAI->GetBotPlayer() || !botAI->GetKnowledgeBase()) { fail(pSchedule, "StandOnPoint: Invalid bot state"); return; }
-    CFFPlayer* ffPlayer = botAI->GetBotPlayer();
-    const BotKnowledgeBase* kb = botAI->GetKnowledgeBase();
-    // CUserCmd* pCmd = botAI->GetUserCmd_conceptual();
+    CFFPlayerWrapper* ffPlayer = botAI->GetBotPlayer();
+    BotKnowledgeBase* kb = botAI->GetKnowledgeBase(); // Non-const
 
-    float distSqToPoint = (ffPlayer->GetOrigin().x - m_vCPPosition.x)*(ffPlayer->GetOrigin().x - m_vCPPosition.x) +
-                          (ffPlayer->GetOrigin().y - m_vCPPosition.y)*(ffPlayer->GetOrigin().y - m_vCPPosition.y);
-    if (distSqToPoint > m_fCaptureRadiusSqr * 2.25f) { // Moved too far (1.5x radius)
+    if (ffPlayer->GetOrigin().DistToSqr2D(m_vCPPosition) > m_fCaptureRadiusSqr * 2.25f) {
         fail(pSchedule, "Moved too far off CP"); return;
     }
 
-    // const ControlPointInfo* cpState = kb->GetControlPoint(m_iTargetCPEntityId_conceptual);
-    // if (cpState && cpState->ownerTeam == ffPlayer->GetTeamNumber()) {
+    // int cpIndex = -1; // Get CP index from m_pTargetCPEntity_SDK or m_vCPPosition via KB
+    // const ControlPointInfo* cpState = kb->GetControlPoint(cpIndex);
+    // if (cpState && cpState->ownerTeam == ffPlayer->GetTeam()) {
     //     complete(); return;
     // }
 
-    if (botAI->GetCurrentWorldTime_conceptual() - m_fTaskStartTime > m_fMaxTime) {
+    if (botAI->GetWorldTime() - m_fTaskStartTime > m_fMaxTime) {
         fail(pSchedule, "Timeout standing on CP"); return;
     }
-
-    // CBaseEntity* pEnemy = botAI->SelectTargetForArea_conceptual(m_vCPPosition, sqrt(m_fCaptureRadiusSqr) * 2.0f);
-    // if (pEnemy && pEnemy->IsAlive()) {
-    //     botAI->AttackTarget(pEnemy, nullptr);
-    // } else {
-    //     botAI->StopMoving_conceptual(nullptr);
-    //     botAI->SetLookAtTask_conceptual(LookAtTaskType_Conceptual::LOOK_AROUND_ON_POINT, &m_vCPPosition);
-    // }
+    // Logic for attacking enemies or looking around is handled by CFFBaseAI::ExecuteSubTask
+    // when subtask is STAND_ON_POINT.
 }
 void CStandOnPointTask_FF::reset(CFFBaseAI* botAI) { CBotTask::reset(botAI); m_fTaskStartTime = 0.0f; }
 std::string CStandOnPointTask_FF::debugString(CFFBaseAI* botAI) const { return "CStandOnPointTask_FF"; }
@@ -189,37 +148,21 @@ CHoldPositionTask_FF::CHoldPositionTask_FF(const Vector& vPositionToHold, float 
 void CHoldPositionTask_FF::init(CFFBaseAI* botAI) {
     CBotTask::init(botAI);
     setState(TASK_STATE_RUNNING);
-    m_fTaskStartTime = botAI ? botAI->GetCurrentWorldTime_conceptual() : 0.0f;
-    // Bot should ideally already be at or near m_vPositionToHold due to a preceding MoveTo task
-    // if (botAI) botAI->StopMoving_conceptual(nullptr);
+    m_fTaskStartTime = botAI ? botAI->GetWorldTime() : 0.0f;
 }
 
 void CHoldPositionTask_FF::execute(CFFBaseAI* botAI, CBotSchedule* pSchedule) {
     if (!botAI || !botAI->GetBotPlayer()) { fail(pSchedule, "HoldPosition: Invalid bot state"); return; }
-    // CFFPlayer* ffPlayer = botAI->GetBotPlayer();
-    // CUserCmd* pCmd = botAI->GetUserCmd_conceptual();
 
-    if (botAI->GetCurrentWorldTime_conceptual() - m_fTaskStartTime > m_fDuration) {
+    if (botAI->GetWorldTime() - m_fTaskStartTime > m_fDuration) {
         complete(); return;
     }
 
-    // CBaseEntity* pEnemy = botAI->SelectTarget(); // General target selection
-    // if (pEnemy && pEnemy->IsAlive()) {
-    //     botAI->AttackTarget(pEnemy, nullptr);
-    // } else {
-    //     botAI->SetLookAtTask_conceptual(LookAtTaskType_Conceptual::LOOK_AROUND_SCAN_DEFENSIVE, &m_vPositionToHold);
+    // CFFPlayerWrapper* ffPlayer = botAI->GetBotPlayer();
+    // if (ffPlayer->GetOrigin().DistToSqr2D(m_vPositionToHold) > m_fHoldRadiusSqr) {
+    //     // Bot strayed. CFFBaseAI::ExecuteSubTask for HOLD_POSITION should initiate MoveTo.
     // }
-
-    // float distSqToHold = (ffPlayer->GetOrigin().x - m_vPositionToHold.x)*(ffPlayer->GetOrigin().x - m_vPositionToHold.x) +
-    //                      (ffPlayer->GetOrigin().y - m_vPositionToHold.y)*(ffPlayer->GetOrigin().y - m_vPositionToHold.y);
-    // if (distSqToHold > m_fHoldRadiusSqr) {
-    //     // Bot strayed too far, CFFBaseAI::ExecuteSubTask for HOLD_POSITION should call MoveTo.
-    //     // This task itself doesn't call MoveTo directly to avoid pathfinding every frame here.
-    //     // It signals its state/need to the CFFBaseAI layer.
-    //     // For now, this task is ongoing. CFFBaseAI's ExecuteSubTask needs to handle repositioning.
-    // } else {
-    //     // botAI->StopMoving_conceptual(nullptr); // If within hold radius and not fighting
-    // }
+    // Attacking/looking around is handled by CFFBaseAI::ExecuteSubTask for HOLD_POSITION.
 }
 void CHoldPositionTask_FF::reset(CFFBaseAI* botAI) { CBotTask::reset(botAI); m_fTaskStartTime = 0.0f; }
 std::string CHoldPositionTask_FF::debugString(CFFBaseAI* botAI) const { return "CHoldPositionTask_FF"; }

@@ -10,41 +10,41 @@
 #define WEAPON_ID_MEDIC_MELEE 22 // e.g., Bonesaw
 
 // Forward declaration
-class CFFPlayer;
-class CBaseEntity;
-struct CUserCmd;
-struct BotKnowledgeBase;
+class CFFPlayerWrapper; // Updated
+class CBaseEntity;      // SDK Type
+struct CUserCmd;        // SDK Type
+class BotKnowledgeBase; // Updated
 struct ClassConfigInfo;
 class CObjectivePlanner;
+struct TrackedEntityInfo; // For m_pHealTargetInfo
 
 
 class CMedicAI_FF : public CFFBaseAI {
 public:
-    CMedicAI_FF(CFFPlayer* pBotPlayer, CObjectivePlanner* pPlanner,
-                const BotKnowledgeBase* pKnowledgeBase, const ClassConfigInfo* pClassConfig);
+    CMedicAI_FF(CFFPlayerWrapper* pBotPlayer, CObjectivePlanner* pPlanner,
+                BotKnowledgeBase* pKnowledgeBase, const ClassConfigInfo* pClassConfig); // Updated params
     virtual ~CMedicAI_FF();
 
-    virtual void Update(CUserCmd* pCmd) override; // Main update loop
-    virtual CBaseEntity* SelectTarget() override; // Selects heal target or enemy
+    virtual void Update(CUserCmd* pCmd) override;
+    virtual CBaseEntity* SelectTarget() override;
 
-    // Overriding combat/ability as primary action is healing
     virtual bool AttackTarget(CBaseEntity* pTarget, CUserCmd* pCmd) override;
-    virtual bool UseAbility(int abilitySlot, CBaseEntity* pTarget, CUserCmd* pCmd) override; // For UberCharge
+    virtual bool UseAbility(int abilitySlot, CBaseEntity* pTargetEntity, const Vector& targetPosition, CUserCmd* pCmd) override; // Signature matches CFFBaseAI
 
     // Medic-specific methods
-    virtual bool HealAlly(CBaseEntity* pAlly, CUserCmd* pCmd); // Changed from HealTarget for clarity
+    virtual bool HealAlly(CBaseEntity* pAlly, CUserCmd* pCmd);
     virtual bool AttemptUberCharge(CUserCmd* pCmd);
 
-    CBaseEntity* GetHealTarget() const { return m_pHealTarget; }
+    TrackedEntityInfo* GetHealTargetInfo() const { return m_pHealTargetInfo; } // Changed getter
 
 protected:
-    CBaseEntity* FindBestHealTarget(); // Logic to find who to heal
-    void UpdateUberChargeLevel(); // Conceptual: updates m_fUberChargePercentage from game state
-    bool ShouldDeployUber(CBaseEntity* currentEnemy) const; // Strategic condition for Uber
-    void SwitchToWeapon(int weaponId, CUserCmd* pCmd); // Conceptual helper
+    TrackedEntityInfo* FindBestHealTarget(); // Return TrackedEntityInfo*
+    void UpdateUberChargeLevel();
+    bool ShouldDeployUber(CBaseEntity* currentEnemyContext) const; // currentEnemyContext from GetCurrentTarget()
+    void SwitchToWeapon(const std::string& weaponClassName, CUserCmd* pCmd); // Takes classname string
 
-    CBaseEntity* m_pHealTarget;
-    float m_fUberChargePercentage; // 0.0 to 1.0
+    TrackedEntityInfo* m_pHealTargetInfo; // Changed type
+    float m_fUberChargePercentage;
     bool m_bIsUberDeployed;
     float m_flUberExpireTime;
 

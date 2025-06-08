@@ -1,103 +1,67 @@
 #include "FFCTFTasks.h"
-#include "FFBaseAI.h"       // For CFFBaseAI and its methods
-#include "CFFPlayer.h"      // For CFFPlayer methods
-#include "BotKnowledgeBase.h" // For accessing game state like flag status
-#include "BotDefines.h"     // For constants
-// #include "bot_schedule.h" // Assumed for pSchedule parameter in fail/complete (RCBot2 context)
+#include "FFBaseAI.h"       // For CFFBaseAI (now SDK-aware)
+#include "CFFPlayer.h"      // For CFFPlayerWrapper (header name might still be CFFPlayer.h)
+#include "BotKnowledgeBase.h"
+#include "BotDefines.h"     // For constants like PICKUP_RADIUS_SQR_FF, PATH_RECALC_TARGET_MOVED_DIST_SQR_FF
+#include "game/server/cbase.h" // For CBaseEntity (if task targets are CBaseEntity*)
+// #include "GameDefines_Placeholder.h" // No longer needed
 
 #include <string>
 #include <iostream> // For placeholder debug prints
 
-// --- Conceptual Time & Bot Access (placeholders if not available from CBot/CFFBaseAI) ---
-// Using placeholders defined in FFBaseAI.cpp or FFControlPointTasks.cpp if they are global.
-// For self-containment, let's assume CFFBaseAI provides GetCurrentWorldTime_conceptual()
-// and CFFPlayer provides GetOrigin(), HasFlag_conceptual(), AddButton_conceptual().
-// Actual CUserCmd is passed to CFFBaseAI::Update and then to CFFBaseAI::ExecuteSubTask.
-// These tasks, if executed by an RCBot2-style CBotSchedule, would get CBot* which we cast to CFFBaseAI*.
-// The CFFBaseAI would then be responsible for passing its CUserCmd to these tasks if they directly modify it,
-// or the tasks call higher-level actions on CFFBaseAI which then modify the UserCmd.
-// For this implementation, tasks will call action methods on CFFBaseAI.
-
 // --- CPickupFlagTask_FF Implementation ---
-CPickupFlagTask_FF::CPickupFlagTask_FF(CBaseEntity* pFlagEntity_conceptual, const Vector& vFlagKnownPosition)
+// --- CPickupFlagTask_FF Implementation ---
+CPickupFlagTask_FF::CPickupFlagTask_FF(CBaseEntity* pFlagEntity_SDK, const Vector& vFlagKnownPosition) // Use CBaseEntity* for SDK entity
     : CBotTask(),
-      m_pFlagEntity_conceptual(pFlagEntity_conceptual),
+      m_pFlagEntity_SDK(pFlagEntity_SDK),
       m_vFlagKnownPosition(vFlagKnownPosition),
-      m_fTaskTimeout(15.0f), // Max 15 seconds to try and pick up once at location
+      m_fTaskTimeout(15.0f),
       m_fTaskStartTime(0.0f)
 {
-    // setID(TASK_FF_PICKUP_FLAG); // Conceptual RCBot2 Task ID
 }
 
 void CPickupFlagTask_FF::init(CFFBaseAI* botAI) {
-    CBotTask::init(botAI); // Base class init if it takes CFFBaseAI* or void*
-    setState(TASK_STATE_RUNNING); // Assuming TASK_STATE_RUNNING from RCBot2's CBotTask
-    m_fTaskStartTime = botAI ? botAI->GetCurrentWorldTime_conceptual() : 0.0f;
-
-    if (botAI) {
-        // Path planning to m_vFlagKnownPosition is handled by CFFBaseAI::ExecuteSubTask
-        // when it sees a SubTask of type PICKUP_FLAG_FF whose targetPosition is m_vFlagKnownPosition.
-        // This task assumes the bot is already at or very near m_vFlagKnownPosition
-        // due to a preceding MOVE_TO_POSITION subtask.
-        // If not, this task might need to initiate movement itself, or fail.
-        // For now, let's assume the AI's ExecuteSubTask for PICKUP_FLAG will first ensure proximity.
-        // std::cout << botAI->GetBotPlayer()->GetNamePlaceholder() << ": Init PickupFlagTask for flag at ("
-        //           << m_vFlagKnownPosition.x << ", " << m_vFlagKnownPosition.y << ")" << std::endl;
-    }
+    CBotTask::init(botAI);
+    setState(TASK_STATE_RUNNING);
+    m_fTaskStartTime = botAI ? botAI->GetWorldTime() : 0.0f; // Use SDK-aware time
 }
 
 void CPickupFlagTask_FF::execute(CFFBaseAI* botAI, CBotSchedule* pSchedule) {
     if (!botAI || !botAI->GetBotPlayer() || !botAI->GetKnowledgeBase()) {
-        fail(pSchedule, "PickupFlag: BotAI, BotPlayer, or KB is null"); return;
+        fail(pSchedule, "PickupFlag: BotAI, BotPlayerWrapper, or KB is null"); return;
     }
-    CFFPlayer* ffPlayer = botAI->GetBotPlayer();
-    const BotKnowledgeBase* kb = botAI->GetKnowledgeBase();
-    CUserCmd* pCmd = botAI->GetUserCmd_conceptual(); // AI needs to provide UserCmd for actions
+    CFFPlayerWrapper* ffPlayer = botAI->GetBotPlayer(); // Now CFFPlayerWrapper
+    BotKnowledgeBase* kb = botAI->GetKnowledgeBase(); // Non-const
 
-    // Conceptual: Check if flag still exists or has moved significantly from expectation
-    // const FlagInfo* actualFlagInfo = kb->GetFlagInfoByEntity_conceptual(m_pFlagEntity_conceptual);
-    // if (!actualFlagInfo || actualFlagInfo->status == FlagStatus::CARRIED_BY_ALLY || actualFlagInfo->status == FlagStatus::CARRIED_BY_ENEMY) {
+    // Conceptual: Check if flag (m_pFlagEntity_SDK) still exists or has moved.
+    // const TrackedEntityInfo* actualFlagTrackedInfo = kb->GetTrackedEntity(m_pFlagEntity_SDK->edict());
+    // if (!actualFlagTrackedInfo || actualFlagTrackedInfo->isCarried_Conceptual) { // Assuming TrackedEntityInfo has isCarried_Conceptual
     //     fail(pSchedule, "Flag no longer available or already carried"); return;
     // }
-    // if ((actualFlagInfo->currentPosition - m_vFlagKnownPosition).LengthSqr() > 50.0f*50.0f) {
-    //     fail(pSchedule, "Flag moved significantly from expected pickup spot"); return;
+    // if (actualFlagTrackedInfo->lastKnownPosition.DistToSqr(m_vFlagKnownPosition) > 50.0f*50.0f) {
+    //     fail(pSchedule, "Flag moved significantly"); return;
     // }
 
-
-    // Check if bot already has the flag (conceptual: ENEMY_FLAG_ID or OUR_FLAG_ID based on task context)
-    // int flagIdToPickup = (m_pFlagEntity_conceptual == kb->GetEnemyFlagInfo_conceptual().pFlagEntity) ? ENEMY_FLAG_ID_CONCEPTUAL : OUR_FLAG_ID_CONCEPTUAL;
-    // if (ffPlayer->HasFlag_conceptual(flagIdToPickup)) {
+    // if (ffPlayer->HasFlag_SDK(ENEMY_FLAG_ID_CONCEPTUAL)) { // Conceptual check using SDK flag ID
     //     complete(); return;
     // }
 
-    if (botAI->GetCurrentWorldTime_conceptual() - m_fTaskStartTime > m_fTaskTimeout) {
+    if (botAI->GetWorldTime() - m_fTaskStartTime > m_fTaskTimeout) {
         fail(pSchedule, "Timeout trying to pickup flag"); return;
     }
 
-    float distToFlagSq = (ffPlayer->GetOrigin().x - m_vFlagKnownPosition.x)*(ffPlayer->GetOrigin().x - m_vFlagKnownPosition.x) +
-                         (ffPlayer->GetOrigin().y - m_vFlagKnownPosition.y)*(ffPlayer->GetOrigin().y - m_vFlagKnownPosition.y);
+    if (ffPlayer->GetOrigin().DistToSqr2D(m_vFlagKnownPosition) < PICKUP_RADIUS_SQR_FF) {
+        // No StopMoving call; CFFBaseAI::ExecuteSubTask handles movement based on subtask type.
+        // If this task is active, AI should be trying to "use" or touch the flag.
+        // For auto-touch flags, being close is enough. For +use flags:
+        // CUserCmd* pCmd = botAI->GetUserCmdForNextFrame_Conceptual(); // If AI provides this
+        // if (pCmd) ffPlayer->AddButton(pCmd, IN_USE);
 
-    if (distSq < PICKUP_RADIUS_SQR_FF) {
-        botAI->StopMoving_conceptual(pCmd); // Stop movement
-        // Attempt to "use" the flag or rely on auto-pickup by being close.
-        // Some games require +use, others are auto-touch.
-        // ffPlayer->AddButton(pCmd, IN_USE); // Conceptual: Press +use key
-        // std::cout << ffPlayer->GetNamePlaceholder() << ": Attempting to pickup flag (at pickup radius)." << std::endl;
-
-        // For this placeholder, assume being close is enough and it completes quickly if flag is there.
-        // A real system would check game state again next frame or listen for a flag pickup event.
-        complete(); // Simplified: if close, assume pickup happens
+        complete(); // Simplified: assume pickup if close. Game events would confirm.
     } else {
-        // Bot is not at the flag position yet. This task shouldn't be running if a MoveTo task didn't precede it.
-        // This indicates an issue with schedule decomposition or MoveTo task completion criteria.
-        // However, if CFFBaseAI::ExecuteSubTask for PICKUP_FLAG handles movement:
-        // if (!botAI->IsCurrentlyMovingTo(m_vFlagKnownPosition)) { // Conceptual check
-        //    botAI->MoveTo(m_vFlagKnownPosition, pCmd); // Re-issue move if not already doing so
-        // }
-        // For now, assume CFFBaseAI's ExecuteSubTask for PICKUP_FLAG will call MoveTo then this task's logic.
-        // If this execute is called, it means the MoveTo part of the subtask in CFFBaseAI is done.
-        // If still not close enough, it means MoveTo didn't get close enough.
-        fail(pSchedule, "Not close enough to flag for pickup task execution");
+        // This task expects the bot to be at the flag. If not, the preceding MoveTo failed or schedule is wrong.
+        // CFFBaseAI::ExecuteSubTask for PICKUP_FLAG should ensure movement.
+        fail(pSchedule, "Not close enough to flag for pickup task");
     }
 }
 
@@ -106,9 +70,9 @@ std::string CPickupFlagTask_FF::debugString(CFFBaseAI* botAI) const { return "CP
 
 
 // --- CCaptureFlagTask_FF Implementation ---
-CCaptureFlagTask_FF::CCaptureFlagTask_FF(CBaseEntity* pCaptureZoneEntity_conceptual, const Vector& vCaptureZonePosition, float fCaptureRadius, float fTimeout)
+CCaptureFlagTask_FF::CCaptureFlagTask_FF(CBaseEntity* pCaptureZoneEntity_SDK, const Vector& vCaptureZonePosition, float fCaptureRadius, float fTimeout)
     : CBotTask(),
-      m_pCaptureZoneEntity_conceptual(pCaptureZoneEntity_conceptual),
+      m_pCaptureZoneEntity_SDK(pCaptureZoneEntity_SDK),
       m_vCaptureZonePosition(vCaptureZonePosition),
       m_fCaptureRadiusSqr(fCaptureRadius * fCaptureRadius),
       m_fTimeout(fTimeout),
@@ -117,49 +81,36 @@ CCaptureFlagTask_FF::CCaptureFlagTask_FF(CBaseEntity* pCaptureZoneEntity_concept
 void CCaptureFlagTask_FF::init(CFFBaseAI* botAI) {
     CBotTask::init(botAI);
     setState(TASK_STATE_RUNNING);
-    m_fTaskStartTime = botAI ? botAI->GetCurrentWorldTime_conceptual() : 0.0f;
-    // Movement to m_vCaptureZonePosition is handled by CFFBaseAI::ExecuteSubTask for this SubTaskType
+    m_fTaskStartTime = botAI ? botAI->GetWorldTime() : 0.0f;
 }
 
 void CCaptureFlagTask_FF::execute(CFFBaseAI* botAI, CBotSchedule* pSchedule) {
     if (!botAI || !botAI->GetBotPlayer() || !botAI->GetKnowledgeBase()) { fail(pSchedule, "CaptureFlag: Invalid bot state"); return; }
-    CFFPlayer* ffPlayer = botAI->GetBotPlayer();
-    const BotKnowledgeBase* kb = botAI->GetKnowledgeBase();
-    // CUserCmd* pCmd = botAI->GetUserCmd_conceptual();
+    CFFPlayerWrapper* ffPlayer = botAI->GetBotPlayer();
+    BotKnowledgeBase* kb = botAI->GetKnowledgeBase();
 
-    // Conceptual: Check if bot is actually carrying the ENEMY flag.
-    // if (!ffPlayer->HasFlag_conceptual(ENEMY_FLAG_ID_CONCEPTUAL)) {
+    // if (!ffPlayer->HasFlag_SDK(ENEMY_FLAG_ID_CONCEPTUAL)) { // Conceptual check
     //     fail(pSchedule, "Bot lost the enemy flag"); return;
     // }
 
-    if (botAI->GetCurrentWorldTime_conceptual() - m_fTaskStartTime > m_fTimeout) {
+    if (botAI->GetWorldTime() - m_fTaskStartTime > m_fTimeout) {
         fail(pSchedule, "Timeout trying to capture flag at zone"); return;
     }
 
-    float distToZoneSq = (ffPlayer->GetOrigin().x - m_vCaptureZonePosition.x)*(ffPlayer->GetOrigin().x - m_vCaptureZonePosition.x) +
-                         (ffPlayer->GetOrigin().y - m_vCaptureZonePosition.y)*(ffPlayer->GetOrigin().y - m_vCaptureZonePosition.y);
-
-    if (distToZoneSq < m_fCaptureRadiusSqr) {
-        botAI->StopMoving_conceptual(nullptr /*pCmd*/);
-        // botAI->SetLookAtTask_conceptual(LOOK_AROUND_ON_POINT, m_vCaptureZonePosition); // Look around while capping
-
-        // Actual capture is a game event. This task just holds the bot in the zone.
-        // The HLT should complete when the game event "flag_captured" for bot's team occurs.
-        // For testing, we might complete if our own flag is at base (implying a cap is possible/just happened).
-        // const FlagInfo& ourFlag = kb->GetOurFlagInfo_conceptual();
-        // if (ourFlag.status == FlagStatus::AT_BASE) {
+    if (ffPlayer->GetOrigin().DistToSqr2D(m_vCaptureZonePosition) < m_fCaptureRadiusSqr) {
+        // Bot is in the zone. CFFBaseAI::ExecuteSubTask for CAPTURE_FLAG_AT_POINT_FF should handle behavior (e.g. look around).
+        // Actual capture is a game event. This task completes if criteria met (e.g. flag is home).
+        // const FlagInfo* ourFlag = kb->GetFlagDetails_SDK(OUR_FLAG_ID_CONCEPTUAL); // Conceptual
+        // if (ourFlag && ourFlag->status == FlagStatus::AT_BASE) {
         //     complete();
         //     return;
         // }
-        // For this placeholder, assume it completes after a short duration on point
-        static float timeOnPoint = 0.0f;
-        if (m_fTaskStartTime == botAI->GetCurrentWorldTime_conceptual()) timeOnPoint = 0.0f; // Reset if task just started
-        timeOnPoint += botAI->GetFrameInterval_conceptual(); // Conceptual
-        if (timeOnPoint > 2.0f) { complete(); timeOnPoint = 0.0f; return;}
-
+        // For placeholder, complete after a short duration on point if still holding flag.
+        // static float timeOnPoint = 0.0f;
+        // if (m_fTaskStartTime == botAI->GetWorldTime()) timeOnPoint = 0.0f;
+        // timeOnPoint += botAI->GetFrameInterval(); // Conceptual: from CFFBaseAI or Globals
+        // if (timeOnPoint > 2.0f) { complete(); timeOnPoint = 0.0f; return;}
     } else {
-        // Bot is not in the capture zone. This task assumes prior MoveTo got it here.
-        // If CFFBaseAI::ExecuteSubTask for this type handles movement, this means it failed to stay.
         fail(pSchedule, "Not in capture zone for CaptureFlag task");
     }
 }
@@ -168,9 +119,9 @@ std::string CCaptureFlagTask_FF::debugString(CFFBaseAI* botAI) const { return "C
 
 
 // --- CMoveToEntityDynamic_FF Implementation ---
-CMoveToEntityDynamic_FF::CMoveToEntityDynamic_FF(CBaseEntity* pTargetEntity_conceptual, float fFollowDistance, float fUpdatePathInterval)
+CMoveToEntityDynamic_FF::CMoveToEntityDynamic_FF(CBaseEntity* pTargetEntity_SDK, float fFollowDistance, float fUpdatePathInterval)
     : CBotTask(),
-      m_pTargetEntity_conceptual(pTargetEntity_conceptual),
+      m_pTargetEntity_SDK(pTargetEntity_SDK),
       m_fFollowDistance(fFollowDistance),
       m_fFollowDistanceSqr(fFollowDistance * fFollowDistance),
       m_fUpdatePathInterval(fUpdatePathInterval),
@@ -179,47 +130,36 @@ CMoveToEntityDynamic_FF::CMoveToEntityDynamic_FF(CBaseEntity* pTargetEntity_conc
 void CMoveToEntityDynamic_FF::init(CFFBaseAI* botAI) {
     CBotTask::init(botAI);
     setState(TASK_STATE_RUNNING);
-    m_fNextPathUpdateTime = 0.0f; // Force initial path update
-    if (botAI) {
-        // std::cout << botAI->GetBotPlayer()->GetNamePlaceholder() << ": Init MoveToEntityDynamic." << std::endl;
-    }
+    m_fNextPathUpdateTime = 0.0f;
 }
 
 void CMoveToEntityDynamic_FF::execute(CFFBaseAI* botAI, CBotSchedule* pSchedule) {
     if (!botAI || !botAI->GetBotPlayer()) { fail(pSchedule, "MoveDynamic: Invalid bot state"); return; }
-    // CFFPlayer* ffPlayer = botAI->GetBotPlayer();
-    // CUserCmd* pCmd = botAI->GetUserCmd_conceptual();
 
-    if (!m_pTargetEntity_conceptual /* || !m_pTargetEntity_conceptual->IsAlive_conceptual() */) {
-        fail(pSchedule, "Target entity for dynamic move lost or dead");
-        return;
-    }
+    // if (!m_pTargetEntity_SDK || !m_pTargetEntity_SDK->IsAlive()) { // Use SDK IsAlive
+    //     fail(pSchedule, "Target entity for dynamic move lost or dead");
+    //     return;
+    // }
 
-    Vector targetEntityPos = m_pTargetEntity_conceptual->GetPosition(); // Conceptual
-    Vector myPos = botAI->GetBotPlayer()->GetOrigin();
-    float distToTargetSq = (myPos.x - targetEntityPos.x)*(myPos.x - targetEntityPos.x) + (myPos.y - targetEntityPos.y)*(myPos.y - targetEntityPos.y);
+    // Vector targetEntityPos = m_pTargetEntity_SDK->GetAbsOrigin(); // SDK Call
+    // Vector myPos = botAI->GetBotPlayer()->GetOrigin(); // SDK Call
+    // float distToTargetSq = myPos.DistToSqr2D(targetEntityPos);
 
-    if (distSq < m_fFollowDistanceSqr) {
-        botAI->StopMoving_conceptual(nullptr /*pCmd*/);
-        // botAI->AimAt(targetEntityPos, pCmd); // Look towards target
-        m_fNextPathUpdateTime = 0; // Allow immediate re-plan if target moves far again
-        // Task is ongoing, successfully maintaining follow distance.
-        // Completion of this task is usually handled by HLT logic (e.g., flag captured, or duration from HLT expires).
-    } else {
-        // Target is too far, or we need to update path
-        float currentTime = botAI->GetCurrentWorldTime_conceptual();
-        bool targetMovedSignificantly = (m_vLastTargetPosition.x - targetEntityPos.x)*(m_vLastTargetPosition.x - targetEntityPos.x) + (m_vLastTargetPosition.y - targetEntityPos.y)*(m_vLastTargetPosition.y - targetEntityPos.y) > PATH_RECALC_TARGET_MOVED_DIST_SQR_FF;
+    // if (distToTargetSq < m_fFollowDistanceSqr) {
+    //     // Bot is close enough. CFFBaseAI::ExecuteSubTask for MOVE_TO_ENTITY_DYNAMIC
+    //     // should handle behavior (e.g. stop moving, look at target).
+    //     m_fNextPathUpdateTime = 0; // Allow immediate re-plan if target moves far again.
+    // } else {
+    //     float currentTime = botAI->GetWorldTime();
+    //     bool targetMovedSignificantly = m_vLastTargetPosition.DistToSqr(targetEntityPos) > PATH_RECALC_TARGET_MOVED_DIST_SQR_FF;
 
-        if (currentTime >= m_fNextPathUpdateTime || !botAI->IsCurrentlyWithPath_conceptual() || targetMovedSignificantly) {
-            // std::cout << "CMoveToEntityDynamic: Replanning path to target." << std::endl;
-            botAI->MoveTo(targetEntityPos, nullptr /* pCmd - CFFBaseAI::MoveTo doesn't take pCmd now */);
-            m_fNextPathUpdateTime = currentTime + m_fUpdatePathInterval;
-            m_vLastTargetPosition = targetEntityPos;
-        }
-        // Actual movement commands are set by CFFBaseAI::Update -> ExecuteSubTask -> FollowPath
-    }
-    // This task type is usually ongoing until the HLT changes or fails.
-    // It doesn't "complete" on its own unless target is lost.
+    //     if (currentTime >= m_fNextPathUpdateTime || !botAI->IsCurrentlyWithPath() || targetMovedSignificantly) {
+    //         botAI->MoveTo(targetEntityPos, nullptr); // CFFBaseAI::MoveTo now only plans
+    //         m_fNextPathUpdateTime = currentTime + m_fUpdatePathInterval;
+    //         m_vLastTargetPosition = targetEntityPos;
+    //     }
+    //     // Movement commands are set by CFFBaseAI's main update loop via FollowPath.
+    // }
 }
 
 void CMoveToEntityDynamic_FF::reset(CFFBaseAI* botAI) {

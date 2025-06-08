@@ -1,754 +1,682 @@
+// --- Start of CRCBotPlugin.cpp ---
 #include "CRCBotPlugin.h"
-#include "FFStateStructs.h"      // Also includes BotDefines.h implicitly if structured that way
+
+// SDK Headers (ensure paths are correct relative to fortressforever/src/ or your include paths)
+#include "public/tier1/convar.h"        // For ConCommand, CCommand, ICvar, FCVAR_ flags
+#include "public/engine/ivengineserver.h" // For IVEngineServer
+#include "public/igameevents.h"         // For IGameEventManager2, IGameEvent
+#include "public/engine/ienginetrace.h"   // For IEngineTrace
+#include "public/globalvars_base.h"     // For CGlobalVarsBase (gpGlobals)
+#include "public/eiface.h"              // For IServerGameClients, CreateInterfaceFn, etc.
+#include "public/edict.h"               // For edict_t utilities like ENTINDEX() if needed
+#include "game/shared/shareddefs.h"     // For FF specific TEAM_ and CLASS_ defines (e.g. FF_TEAM_RED, CLASS_SOLDIER)
+// #include "game/server/iplayerinfo.h" // Location of IPlayerInfoManager might vary, or use CBasePlayer directly
+// #include "engine/ibotmanager.h"   // Location/existence of IBotManager might vary
+
+// Bot Framework Headers
+#include "AIFactory.h"
+#include "ObjectivePlanner.h"
+#include "FFBaseAI.h"
 #include "BotKnowledgeBase.h"
 #include "FFLuaBridge.h"
-#include "ObjectivePlanner.h"
-#include "AIFactory.h"
+#include "BotLearningData.h" // For TaskOutcomeLog
 #include "CFFPlayer.h"
-#include "BotDefines.h" // For TEAM_ID constants etc.
+#include "FFBot_SDKDefines.h" // Our internal enums like FF_BotPlayerClassID and mapping functions
 
-#include <iostream> // For std::cout, std::cerr (conceptual logging, to be removed or replaced)
-#include <fstream>  // For file I/O (task logging)
+// Lua headers (ensure your build system links Lua correctly)
+extern "C" {
+#include "lua.h"
+#include "lualib.h"
+#include "lauxlib.h"
+}
+
+#include <string>
+#include <vector>
+#include <memory>
+#include <map>
 #include <algorithm> // For std::transform
-#include <chrono>    // For logging timestamps
+#include <fstream>   // For logging
+#include <chrono>    // For logging timestamp
 
-// --- Conceptual Global Engine Interface Pointers ---
-// These would normally be initialized in `Load()` by querying the engine.
-// For conceptual purposes, some might be defined here if not passed around.
-// IVEngineServer* g_pEngineServer_conceptual = nullptr; // Prefer member m_pEngineServer_member
-// ICvar* g_pCVar_conceptual = nullptr; // Prefer member m_pCVar_member
+// Global engine interface pointers (initialized in Load, used by various parts of the plugin)
+IVEngineServer*       g_pEngineServer = nullptr;
+IPlayerInfoManager*   g_pPlayerInfoManager = nullptr;
+IServerGameClients* g_pServerGameClients = nullptr;
+IBotManager*          g_pBotManager = nullptr; // May remain null if not found/used
+IGameEventManager2*   g_pGameEventManager = nullptr;
+IEngineTrace*         g_pEngineTraceClient = nullptr;
+ICvar*                g_pCVar = nullptr;
+CGlobalVarsBase*      g_pGlobals = nullptr; // Should be set to the engine's gpGlobals
 
-// --- Global Plugin Instance ---
-// The EXPOSE macro handles the creation of the instance.
-// We need a global pointer or reference to it for the static ConCommand callback.
-CRCBotPlugin g_CRCBotPlugin; // Definition of the global instance
+// Global plugin instance
+CRCBotPlugin g_CRCBotPlugin;
+EXPOSE_SINGLE_INTERFACE_GLOBALVAR(CRCBotPlugin, IServerPluginCallbacks, INTERFACEVERSION_ISERVERPLUGINCALLBACKS, g_CRCBotPlugin);
 
-// --- Static ConCommand for adding bots ---
-// Initialized in Load()
-static ConCommand_Placeholder s_cmdBotAdd;
-
-// --- EXPOSE_SINGLE_INTERFACE_GLOBALVAR Macro (Conceptual Definition) ---
-// This macro connects the global instance (g_CRCBotPlugin) to the engine's plugin system.
-// It should match the definition in GameDefines_Placeholder.h or be defined here if not included.
-// (Assuming it's in GameDefines_Placeholder.h, so not redefining here)
-EXPOSE_SINGLE_INTERFACE_GLOBALVAR_IMPLEMENTED(CRCBotPlugin, "IServerPluginCallbacks", g_CRCBotPlugin, INTERFACEVERSION_ISERVERPLUGINCALLBACKS_CURRENT);
-
-
-// --- Helper Functions (Conceptual Logging) ---
-// void ConMsg(const char* format, ...) {
-//     // Conceptual: actual engine ConMsg
-//     // va_list args;
-//     // va_start(args, format);
-//     // vprintf(format, args); // Simple stdout print for concept
-//     // va_end(args);
-//     // printf("\n");
-// }
-
-// --- Conceptual Helper Functions for Perception ---
-// CBaseEntity* Ed_GetBaseEntity_Conceptual(edict_t* pEdict) {
-    // if (!pEdict || !g_pEngineServer_conceptual_global) return nullptr; // Assuming g_pEngineServer_conceptual_global is set
-    // return g_pEngineServer_conceptual_global->GetIServerUnknown_Conceptual(pEdict)->GetBaseEntity_Conceptual();
-    // Or if using a direct edict to entity map/function:
-    // return SomeGlobalEdictToBaseEntityFunction(pEdict);
-//     return nullptr; // Placeholder
-// }
-
-// bool IsBuildingClassName_Conceptual(const char* className) {
-//     if (!className) return false;
-//     return strstr(className, "obj_") != nullptr || strcmp(className, CLASSNAME_SENTRYGUN_CONCEPTUAL) == 0 ||
-//            strcmp(className, CLASSNAME_DISPENSER_CONCEPTUAL) == 0 || strcmp(className, CLASSNAME_TELEPORTER_CONCEPTUAL) == 0;
-// }
-
-// BuildingType_FF GetBuildingTypeFromClassName_Conceptual(const char* className) {
-//     if (!className) return BuildingType_FF::UNKNOWN;
-//     if (strcmp(className, CLASSNAME_SENTRYGUN_CONCEPTUAL) == 0) return BuildingType_FF::SENTRY_GUN;
-//     if (strcmp(className, CLASSNAME_DISPENSER_CONCEPTUAL) == 0) return BuildingType_FF::DISPENSER;
-//     if (strcmp(className, CLASSNAME_TELEPORTER_CONCEPTUAL) == 0) return BuildingType_FF::TELEPORTER_ENTRANCE; // Or decide based on other props
-    // Could also check for specific teleporter exit classname if different
-//     return BuildingType_FF::UNKNOWN;
-// }
-
-// bool IsReflectableProjectileClassName_Conceptual(const char* className) {
-//     if (!className) return false;
-//     return strcmp(className, CLASSNAME_PROJECTILE_ROCKET_CONCEPTUAL) == 0 ||
-//            strcmp(className, CLASSNAME_PROJECTILE_GRENADE_CONCEPTUAL) == 0 ||
-//            strcmp(className, CLASSNAME_PROJECTILE_PIPEBOMB_CONCEPTUAL) == 0;
-    // Note: Stickybombs might be reflectable but behave differently. Arrows also.
-// }
-
-// std::string GetClassNameFromId_Conceptual(int classId) {
-    // Conceptual: Map class ID to string name
-    // static const std::map<int, std::string> classIdToName = {
-    //     {CLASS_ID_SCOUT_FF_CONCEPTUAL, "Scout"}, {CLASS_ID_SOLDIER_FF_CONCEPTUAL, "Soldier"}, /* ... all classes ... */
-    // };
-    // auto it = classIdToName.find(classId);
-    // return it != classIdToName.end() ? it->second : "";
-//     return "UnknownClass";
-// }
-
-// std::string ClassNameForDisplay_Conceptual(const TrackedEntityInfo& info) {
-//     return info.isDisguised_conceptual ? info.displayedClassName_conceptual : info.className;
-// }
-
-// --- CRCBotPlugin Implementation ---
 CRCBotPlugin::CRCBotPlugin() :
-    m_pKnowledgeBase(std::make_unique<BotKnowledgeBase>()),
-    m_pLuaState_member(nullptr),
-    m_bLuaInitialized(false),
-    m_bPluginLoaded(false),
-    m_CommandClientIndex(-1),
-    m_fNextFullPerceptionScanTime_conceptual(0.0f) { // Initialize new member
-    // ConMsg("CRCBotPlugin: Constructor called.");
+    m_pLuaState(nullptr), m_bLuaStateCreatedByPlugin(false),
+    m_NextBotIdCounter(0), m_bRegisteredForEvents(false),
+    m_pEngineServer_member(nullptr), m_pPlayerInfoManager_member(nullptr),
+    m_pServerGameClients_member(nullptr), m_pBotManager_member(nullptr),
+    m_pGameEventManager_member(nullptr), m_pEngineTraceClient_member(nullptr),
+    m_pCVar_member(nullptr), m_pGlobals_member(nullptr),
+    m_pCmdBotAdd(nullptr),
+    m_fNextFullPerceptionScanTime(0.0f) // Initialize perception scan time
+     {
+    m_pGlobalKnowledgeBase = std::make_unique<BotKnowledgeBase>();
+    // Use Msg/Warning/DevMsg from tier0/dbg.h once interfaces are up, e.g. after Load()
+    // printf("[RCBot] Plugin Constructor\n");
 }
 
 CRCBotPlugin::~CRCBotPlugin() {
-    // ConMsg("CRCBotPlugin: Destructor called.");
-    // Ensure cleanup, though Unload should handle most of it.
-    if (m_bLuaInitialized) {
-        ShutdownLuaBridge();
-    }
+    // printf("[RCBot] Plugin Destructor\n");
 }
 
-bool CRCBotPlugin::Load(void* (*interfaceFactory)(const char *pName, int *pReturnCode),
-                        void* (*gameServerFactory)(const char *pName, int *pReturnCode)) {
-    // ConMsg("RCBot: Load called.");
+bool CRCBotPlugin::Load(CreateInterfaceFn interfaceFactory, CreateInterfaceFn gameServerFactory) {
+    // Store interface pointers
+    g_pEngineServer = (IVEngineServer*)interfaceFactory(INTERFACEVERSION_VENGINESERVER, nullptr);
+    g_pGameEventManager = (IGameEventManager2*)interfaceFactory(INTERFACEVERSION_GAMEEVENTSMANAGER2, nullptr);
+    g_pEngineTraceClient = (IEngineTrace*)interfaceFactory(INTERFACEVERSION_ENGINETRACE_SERVER, nullptr);
+    g_pCVar = (ICvar*)interfaceFactory(CVAR_INTERFACE_VERSION, nullptr); // CVAR_INTERFACE_VERSION from tier1/iconvar.h
 
-    // Get Engine Interfaces (Conceptual)
-    // int returnCode = 0;
-    // m_pEngineServer_member = static_cast<IVEngineServer*>(interfaceFactory(VENGINESERVER_INTERFACE_VERSION_CURRENT, &returnCode));
-    // if (!m_pEngineServer_member) { /* ConMsg("RCBot Error: Failed to get IVEngineServer."); */ return false; }
+    // For CGlobalVarsBase, some SDK versions provide it via IVEngineServer, others it's a global `gpGlobals`
+    if (g_pEngineServer) {
+         // g_pGlobals = g_pEngineServer->GetGlobals(); // This method might not exist in all SDK versions.
+         // If not, assume gpGlobals is available directly from including "globalvars_base.h"
+         // and is initialized by the engine.
+    }
+    if (!g_pGlobals && !gpGlobals) { /* Critical error if neither method works */ return false;}
+    if (!g_pGlobals) g_pGlobals = gpGlobals; // Use the direct global if available
 
-    // m_pPlayerInfoManager_member = static_cast<IPlayerInfoManager_Conceptual*>(interfaceFactory(INTERFACEVERSION_PLAYERINFOMANAGER_CURRENT, &returnCode));
-    // if (!m_pPlayerInfoManager_member) { /* ConMsg("RCBot Error: Failed to get IPlayerInfoManager."); */ return false; }
+    // Game specific interfaces (from gameServerFactory)
+    // IPlayerInfoManager might be part of game.dll/tf.dll etc.
+    // g_pPlayerInfoManager = (IPlayerInfoManager*)gameServerFactory(INTERFACEVERSION_PLAYERINFOMANAGER, nullptr);
+    g_pServerGameClients = (IServerGameClients*)gameServerFactory(INTERFACEVERSION_SERVERGAMECLIENTS, nullptr);
 
-    // m_pServerGameClients_member = static_cast<IServerGameClients_Conceptual*>(interfaceFactory("ServerGameClients004", &returnCode)); // Example version
-    // if (!m_pServerGameClients_member) { /* ConMsg("RCBot Error: Failed to get IServerGameClients."); */ return false; }
+    // IBotManager is often not a standard/public interface. CreateFakeClient is more common.
+    // g_pBotManager = (IBotManager*)interfaceFactory("BotManagerInterface001_UsuallyNotFound", nullptr);
 
-    // m_pGameEventManager_member = static_cast<IGameEventManager2_Conceptual*>(interfaceFactory(INTERFACEVERSION_GAMEEVENTSMANAGER2_CURRENT, &returnCode));
-    // if (!m_pGameEventManager_member) { /* ConMsg("RCBot Error: Failed to get IGameEventManager2."); */ return false; }
-    // else { /* m_pGameEventManager_member->AddListener(this, "player_death", true); */ /* Conceptual */ }
+    // Assign to member variables
+    m_pEngineServer_member = g_pEngineServer;
+    m_pPlayerInfoManager_member = g_pPlayerInfoManager; // May be null
+    m_pServerGameClients_member = g_pServerGameClients;
+    m_pBotManager_member = g_pBotManager; // May be null
+    m_pGameEventManager_member = g_pGameEventManager;
+    m_pEngineTraceClient_member = g_pEngineTraceClient;
+    m_pCVar_member = g_pCVar;
+    m_pGlobals_member = g_pGlobals;
 
-    // m_pCVar_member = static_cast<ICvar_Conceptual*>(interfaceFactory(CVAR_INTERFACE_VERSION_CURRENT, &returnCode));
-    // if (!m_pCVar_member) { /* ConMsg("RCBot Warning: Failed to get ICvar. Bot commands may not be available."); */ }
-    // else {
-        // Initialize and Register ConCommand
-        s_cmdBotAdd = ConCommand_Placeholder("rcbot_add", CRCBotPlugin::RCBot_Add_Cmd_Callback,
-                                         "Adds an RCBot. Usage: rcbot_add [team] [class] [name] [skill(1-5)]",
-                                         FCVAR_GAMEDLL_CONCEPTUAL | FCVAR_CHEAT_CONCEPTUAL | FCVAR_SERVER_CAN_EXECUTE_CONCEPTUAL);
-        // m_pCVar_member->RegisterConCommand(&s_cmdBotAdd); // Conceptual registration
-        s_cmdBotAdd.m_bRegistered_conceptual = true; // Manually mark as "registered" for our placeholder
-        // ConMsg("RCBot: Conceptually registered 'rcbot_add' console command.");
-    // }
-
-    // m_pBotManager_member = static_cast<IBotManager_Conceptual*>(interfaceFactory("PlayerBotManager001_Engine", &returnCode)); // Example version
-    // if (!m_pBotManager_member) { /* ConMsg("RCBot Warning: Failed to get IBotManager. Engine's CreateBot might not be usable."); */ }
-
-    // m_pEngineTrace_member = static_cast<IEngineTrace_Conceptual*>(interfaceFactory("EngineTraceServer004", &returnCode)); // Example
-    // if (!m_pEngineTrace_member) { /* ConMsg("RCBot Warning: Failed to get IEngineTrace."); */ }
+    // Check critical interfaces
+    if (!m_pEngineServer_member) { /* Log Error */ return false; }
+    if (!m_pCVar_member) { /* Log Error */ return false; }
+    if (!m_pGlobals_member) { /* Log Error */ return false; }
+    if (!m_pGameEventManager_member) { /* Log Warning, events are useful */ }
 
 
-    if (!InitializeLuaBridge()) {
-        // ConMsg("RCBot Error: Failed to initialize Lua bridge in Load().");
-        // Depending on design, this might be fatal or just disable Lua features.
+    if (!InitializeLuaBridge()) { /* Log Error */ }
+    if (m_pLuaState && m_pGlobalKnowledgeBase) {
+        LoadGlobalClassConfigsFromLua(); // Call new function
     }
 
-    if (!LoadGlobalClassConfigsFromLua()) {
-        // ConMsg("RCBot Warning: Could not load global class configs from Lua in Load(). Bots may not behave correctly.");
+    if (m_pGameEventManager_member) {
+        m_pGameEventManager_member->AddListener(this, "player_death", false); // false for server-side
+        m_pGameEventManager_member->AddListener(this, "player_spawn", false);
+        // Add FF specific events: e.g. "ff_event_flag_captured", "ff_event_point_captured" (need actual names)
+        // m_pGameEventManager_member->AddListener(this, "ff_flag_captured", false);
+        m_bRegisteredForEvents = true;
     }
 
-    // ConMsg("RCBot: Plugin Loaded Successfully.");
-    m_bPluginLoaded = true;
+    if (m_pCVar_member) {
+        // In modern Source SDKs, ConCommands register themselves when g_pCVar is set.
+        // new ConCommand(...) is enough. Store the pointer to delete it in Unload.
+        m_pCmdBotAdd = new ConCommand("rcbot_add", CRCBotPlugin::RCBot_Add_Cmd_Callback,
+                                   "Adds an RCBot. Usage: rcbot_add [team] [class] [name] [skill(1-5)]",
+                                   FCVAR_PLUGIN_CONCOMMAND_FLAGS);
+        // If explicit registration is needed by an older SDK:
+        // m_pCVar_member->RegisterConCommand(m_pCmdBotAdd);
+    }
+
+    m_NextBotIdCounter = 1; // Start bot IDs from 1
+    // Msg("[RCBot] Plugin Loaded Successfully.\n"); // Using SDK's Msg
     return true;
 }
 
-void CRCBotPlugin::Unload(void) {
-    // ConMsg("RCBot: Unload called.");
+void CRCBotPlugin::Unload() {
+    // Msg("[RCBot] Plugin Unload.\n");
+    SaveTaskLogsToFile();
 
-    // Unregister ConCommand
-    // if (m_pCVar_member && s_cmdBotAdd.IsRegistered_Conceptual()) {
-        // m_pCVar_member->UnregisterConCommand(&s_cmdBotAdd); // Conceptual unregistration
-        s_cmdBotAdd.m_bRegistered_conceptual = false;
-        // ConMsg("RCBot: Conceptually unregistered 'rcbot_add' console command.");
-    // }
-
-    // Remove all bots
-    while (!m_ManagedBots.empty()) {
-        // This is a bit rough, assumes bot name or index can be derived or we use a generic removal
-        // If bots have specific edicts, use that. For now, just clear.
-        // Conceptual: Kick all bots from the game
-        // if (m_ManagedBots.back()->pEdict && m_pEngineServer_member) {
-        //     char cmd[64];
-        //     snprintf(cmd, sizeof(cmd), "kickid %d", m_ManagedBots.back()->userId_conceptual); // Assuming userId is known
-        //     m_pEngineServer_member->ServerCommand(cmd);
-        // }
-        m_ManagedBots.pop_back();
+    if (m_pGameEventManager_member && m_bRegisteredForEvents) {
+        m_pGameEventManager_member->RemoveListener(this);
+        m_bRegisteredForEvents = false;
     }
-    m_PendingBots.clear();
-    // ConMsg("RCBot: All bots removed/cleared.");
 
-    SaveTaskLogsToFile(); // Save any remaining logs
+    if (m_pCmdBotAdd) { // m_pCVar_member check not strictly needed for delete if ConCommand handles unregistration
+        // if (m_pCVar_member) m_pCVar_member->UnregisterConCommand(m_pCmdBotAdd); // If explicit unreg needed
+        delete m_pCmdBotAdd;
+        m_pCmdBotAdd = nullptr;
+    }
 
     ShutdownLuaBridge();
 
-    // Release engine interfaces (conceptual, smart pointers would handle this)
-    // m_pEngineServer_member = nullptr;
-    // m_pPlayerInfoManager_member = nullptr;
-    // m_pServerGameClients_member = nullptr;
-    // m_pGameEventManager_member = nullptr; // remove listener if AddListener was called
-    // m_pCVar_member = nullptr;
-    // m_pBotManager_member = nullptr;
-    // m_pEngineTrace_member = nullptr;
-
-    m_bPluginLoaded = false;
-    // ConMsg("RCBot: Plugin Unloaded.");
-}
-
-void CRCBotPlugin::Pause(void) { /* ConMsg("RCBot: Pause called."); */ }
-void CRCBotPlugin::UnPause(void) { /* ConMsg("RCBot: UnPause called."); */ }
-const char* CRCBotPlugin::GetPluginDescription(void) { return "RCBot - A Rule-Based Bot for Fortress Forever"; }
-
-void CRCBotPlugin::LevelInit(char const *pMapName) {
-    // ConMsg("RCBot: LevelInit for map %s.", pMapName ? pMapName : "unknown");
-    m_CurrentMapName_Log = pMapName ? pMapName : "unknown_map";
-    m_CompletedTaskLogs.clear(); // Clear logs for the new map
-
-    if (!m_bLuaInitialized) { // If Lua wasn't set up in Load or was shut down
-        if (!InitializeLuaBridge()) {
-            // ConMsg("RCBot Error: Failed to initialize Lua bridge in LevelInit.");
-            return; // Critical failure for map-specific data
-        }
-    }
-    if (!LoadGlobalClassConfigsFromLua()){ // Reload in case of changes or if Load failed this part
-         // ConMsg("RCBot Warning: Could not load global class configs from Lua in LevelInit.");
-    }
-
-    if (m_pKnowledgeBase) {
-        m_pKnowledgeBase->ClearMapSpecificData(); // Clear old nav mesh, objectives
-        if (!LoadMapDataFromLua(m_CurrentMapName_Log)) {
-            // ConMsg("RCBot Warning: Failed to load Lua map data for %s. Bots may not navigate or understand objectives.", m_CurrentMapName_Log.c_str());
-            // Attempt to load a default or generate placeholder nav data if possible
-            // m_pKnowledgeBase->LoadNavMesh("placeholder_nav_mesh.nav"); // Conceptual
-        }
-    } else {
-        // ConMsg("RCBot Error: KnowledgeBase is null in LevelInit.");
-    }
-}
-
-void CRCBotPlugin::ServerActivate(edict_t *pEdictList, int edictCount, int clientMax) {
-    // ConMsg("RCBot: ServerActivate called. Max Edicts: %d, Max Clients: %d", edictCount, clientMax);
-    // World is fully up, game rules active. Bots requested before this might need final setup.
-    // Or iterate pEdictList to find existing players/entities to populate KnowledgeBase.
-}
-
-void CRCBotPlugin::GameFrame(bool simulating) {
-    if (!simulating || !m_bPluginLoaded) {
-        return;
-    }
-
-    // Conceptual: Update game time in KnowledgeBase or via a global accessor
-    // float currentTime = m_pEngineServer_member ? m_pEngineServer_member->GetTime() : 0.0f;
-    // if (m_pKnowledgeBase) m_pKnowledgeBase->SetCurrentTime(currentTime);
-
-
-    // UpdatePerceptionSystem_Conceptual(); // Discover/update enemies, allies, projectiles
-    // PollGameState_Conceptual();          // Update control points, payload, flags
-
-    // Max usercmds we can generate: For now, assume a capacity equal to managed bots.
-    // In reality, the engine provides a CUserCmd array to fill.
-    // For conceptual logic, we'll pass a dummy array or handle it inside UpdateAllBots.
-    if (!m_ManagedBots.empty()) {
-        // CUserCmd conceptual_usercmds[MAX_BOTS_CONCEPTUAL]; // MAX_BOTS_CONCEPTUAL would be a define
-        // UpdateAllBots(conceptual_usercmds, MAX_BOTS_CONCEPTUAL);
-        // for (size_t i = 0; i < m_ManagedBots.size(); ++i) {
-        //     if (m_ManagedBots[i] && m_ManagedBots[i]->isActive && m_ManagedBots[i]->pEdict) {
-        //         // Conceptual: m_pEngineServer_member->SetBotCommand(m_ManagedBots[i]->pEdict, conceptual_usercmds[i]);
-        //     }
-        // }
-        UpdateAllBots(nullptr, 0); // Pass nullptr if CUserCmd is handled internally by CFFPlayer for concept
-    }
-}
-
-void CRCBotPlugin::LevelShutdown(void) {
-    // ConMsg("RCBot: LevelShutdown called.");
-    SaveTaskLogsToFile();
+    m_ManagedBots.clear();
+    m_PendingBots.clear();
     m_CompletedTaskLogs.clear();
 
-    // Remove all bots without trying to kick (server is shutting down)
-    for (auto& bot : m_ManagedBots) {
-        if (bot) {
-            // ConMsg("RCBot: Clearing bot %s during level shutdown.", bot->name.c_str());
-        }
+    // Nullify all interface pointers
+    g_pEngineServer = nullptr; g_pPlayerInfoManager = nullptr; g_pServerGameClients = nullptr;
+    g_pBotManager = nullptr; g_pGameEventManager = nullptr; g_pEngineTraceClient = nullptr;
+    g_pCVar = nullptr; g_pGlobals = nullptr;
+    m_pEngineServer_member = nullptr; m_pPlayerInfoManager_member = nullptr; m_pServerGameClients_member = nullptr;
+    m_pBotManager_member = nullptr; m_pGameEventManager_member = nullptr; m_pEngineTraceClient_member = nullptr;
+    m_pCVar_member = nullptr; m_pGlobals_member = nullptr;
+}
+
+void CRCBotPlugin::Pause() { /* Msg("[RCBot] Pause.\n"); */ }
+void CRCBotPlugin::UnPause() { /* Msg("[RCBot] UnPause.\n"); */ }
+const char *CRCBotPlugin::GetPluginDescription() { return "RCBot FF v1.0"; }
+
+void CRCBotPlugin::LevelInit(char const *pMapName) {
+    // Msg("[RCBot] LevelInit: %s\n", pMapName ? pMapName : "N/A");
+    SaveTaskLogsToFile();
+    m_CompletedTaskLogs.clear();
+    m_ManagedBots.clear();
+    m_PendingBots.clear();
+    m_NextBotIdCounter = 1;
+    m_sCurrentMapName = pMapName ? pMapName : "";
+
+    if (m_pGlobalKnowledgeBase) {
+        m_pGlobalKnowledgeBase->ClearDynamicMapData();
+        if (pMapName) m_pGlobalKnowledgeBase->LoadNavMesh(pMapName); // Assumes .nav file matches map name
+        LoadMapDataFromLua(pMapName); // Load map specific Lua data (CPs, etc.)
+    }
+}
+void CRCBotPlugin::LevelShutdown() {
+    // Msg("[RCBot] LevelShutdown.\n");
+    SaveTaskLogsToFile();
+    if (m_pGlobalKnowledgeBase) {
+        m_pGlobalKnowledgeBase->ClearDynamicMapData();
     }
     m_ManagedBots.clear();
     m_PendingBots.clear();
-    // ConMsg("RCBot: All bots cleared from management lists.");
-
-    if (m_pKnowledgeBase) {
-        m_pKnowledgeBase->ClearMapSpecificData();
-    }
-
-    // Optionally shut down Lua here if it's per-map, but Load/Unload handles plugin-lifetime Lua.
-    // ShutdownLuaBridge(); // This might be too aggressive if Lua holds cross-level global configs.
-    // ConMsg("RCBot: Level shutdown complete.");
 }
 
-void CRCBotPlugin::ClientActive(edict_t *pEntity) { /* May use to track human players */ }
-void CRCBotPlugin::ClientDisconnect(edict_t *pEntity) { /* May use to track human players */ }
+void CRCBotPlugin::ServerActivate(edict_t *pEdictList, int edictCount, int clientMax) {
+    // Msg("[RCBot] ServerActivate. Max Edicts: %d, Max Clients: %d\n", edictCount, clientMax);
+}
+void CRCBotPlugin::ClientActive(edict_t *pEntity) { /* Not used for now */ }
+void CRCBotPlugin::SetCommandClient(int index) { /* Not used for now */ }
+void CRCBotPlugin::ClientSettingsChanged(edict_t *pEdict) { /* Not used for now */ }
 
-void CRCBotPlugin::ClientPutInServer(edict_t *pEntity, char const *playername) {
-    // ConMsg("RCBot: ClientPutInServer: %s", playername);
-    // Check if this playername matches any in m_PendingBots
-    auto it = m_PendingBots.find(std::string(playername));
-    if (it != m_PendingBots.end()) {
-        // ConMsg("RCBot: Matched pending bot: %s", playername);
-        FinalizeBotAddition(*(it->second), pEntity); // Pass the BotInfo unique_ptr's content
-        m_ManagedBots.push_back(std::move(it->second)); // Transfer ownership to m_ManagedBots
-        m_PendingBots.erase(it); // Remove from pending
-    }
+PLUGIN_RESULT CRCBotPlugin::ClientConnect(bool *bAllowConnect, edict_t *pEntity, const char *pszName, const char *pszAddress, char *reject, int maxrejectlen) {
+    // Msg("[RCBot] ClientConnect: %s from %s\n", pszName, pszAddress);
+    return PLUGIN_CONTINUE;
+}
+PLUGIN_RESULT CRCBotPlugin::ClientCommand(edict_t *pEntity, const CCommand &args) {
+    // This is for commands typed by actual players, not the server console ConCommands.
+    // We could implement player-usable bot commands here if desired.
+    return PLUGIN_CONTINUE;
+}
+PLUGIN_RESULT CRCBotPlugin::NetworkIDValidated(const char *pszUserName, const char *pszNetworkID) { return PLUGIN_CONTINUE; }
+void CRCBotPlugin::OnQueryCvarValueFinished(QueryCvarCookie_t iCookie, edict_t *pPlayerEntity, EQueryCvarValueStatus eStatus, const char *pCvarName, const char *pCvarValue) {}
+void CRCBotPlugin::OnEdictAllocated(edict_t *edict) { /* Can be used to track new entities if needed */ }
+void CRCBotPlugin::OnEdictFreed(const edict_t *edict) {
+    // If an edict is freed, and it belongs to one of our bots, remove the bot.
+    // The const_cast is typical here as our internal list might not be const.
+    RemoveBot(const_cast<edict_t*>(edict));
 }
 
-void CRCBotPlugin::SetCommandClient(int index) { m_CommandClientIndex = index; }
-void CRCBotPlugin::ClientSettingsChanged(edict_t *pEdict) { /* For player settings changes */ }
-
-int CRCBotPlugin::ClientConnect(bool *bAllowConnect, edict_t *pEntity, const char *pszName,
-                                const char *pszAddress, char *reject, int maxrejectlen) {
-    // ConMsg("RCBot: ClientConnect: %s from %s", pszName, pszAddress);
-    *bAllowConnect = true; // Default: allow connection
-    return 0;
-}
-
-void CRCBotPlugin::ClientCommand(edict_t *pEntity, const CCommand &args) {
-    // This is for client commands executed on the server by players.
-    // The ConCommand callback (RCBot_Add_Cmd_Callback) is for server console commands.
-    // const char* cmd = args.Arg(0);
-    // if (pEntity && cmd) {
-        // ConMsg("RCBot: ClientCommand from entity %p: %s", pEntity, cmd);
-        // Example: if (stricmp(cmd, "bot_add_from_client") == 0) { /* process */ }
-    // }
-}
-
-void CRCBotPlugin::NetworkIDValidated(const char *pszUserName, const char *pszNetworkID) {}
-void CRCBotPlugin::OnQueryCvarValueFinished(int iCookie, edict_t *pPlayerEntity, int eStatus,
-                                           const char *pCvarName, const char *pCvarValue) {}
-void CRCBotPlugin::OnEdictAllocated(edict_t *edict) {}
-void CRCBotPlugin::OnEdictFreed(edict_t *edict) {
-    // If an edict being freed belongs to one of our managed bots, clean up the bot.
-    for (auto it = m_ManagedBots.begin(); it != m_ManagedBots.end(); ++it) {
-        if ((*it) && (*it)->pEdict == edict) {
-            // ConMsg("RCBot: Edict for bot %s is being freed. Removing bot.", (*it)->name.c_str());
-            // Perform necessary cleanup, similar to RemoveBot but without kicking.
-            (*it)->isActive = false;
-            // Log or handle any specific shutdown tasks for this bot
-            m_ManagedBots.erase(it); // Remove from managed list
-            break;
-        }
-    }
-}
-
-
-void CRCBotPlugin::FireGameEvent(void *event_conceptual /* IGameEvent *event */) {
-    // if (!m_pGameEventManager_member || !event_conceptual) return;
-    // const char *eventName = // m_pGameEventManager_member->GetEventName(event_conceptual); // Conceptual
-    // if (strcmp(eventName, "player_death") == 0) {
-        // int victimUserID = // event_conceptual->GetInt("userid");
-        // int attackerUserID = // event_conceptual->GetInt("attacker");
-        // ConMsg("RCBot: Player death event: Victim %d, Attacker %d", victimUserID, attackerUserID);
-        // Update bot knowledge, check if a bot was involved, etc.
-        // for (auto& bot : m_ManagedBots) {
-        //     if (bot && bot->pPlayer && bot->pPlayer->GetUserID_Conceptual() == victimUserID) {
-        //         if (bot->pPlanner) bot->pPlanner->OnBotKilled(bot->pPlayer.get());
-        //     }
-        // }
-    // }
-    // else if (strcmp(eventName, "teamplay_point_captured") == 0) { // FF specific event name
-        // int cpID = // event_conceptual->GetInt("cp");
-        // int newOwnerTeam = // event_conceptual->GetInt("team");
-        // if (m_pKnowledgeBase) m_pKnowledgeBase->UpdateControlPointOwner_Conceptual(cpID, newOwnerTeam);
-    // }
-}
-
-bool CRCBotPlugin::RequestBot(const std::string& name_in, int teamId, const std::string& className_in, int skill) {
-    // ConMsg("RCBot: RequestBot: Name '%s', Team %d, Class '%s', Skill %d", name_in.c_str(), teamId, className_in.c_str(), skill);
-    std::string botName = name_in;
-    if (botName.empty()) {
-        // Generate a unique name, e.g., "RCBot_Soldier_1"
-        // For now, just use class name
-        botName = "RCBot_" + className_in;
-        // Add a number to make it unique if multiple unnamed bots of same class
-        int count = 0;
-        for(const auto& bot : m_ManagedBots) if(bot && bot->name.rfind(botName, 0) == 0) count++;
-        for(const auto& pair : m_PendingBots) if(pair.second && pair.second->name.rfind(botName, 0) == 0) count++;
-        if (count > 0) botName += "_" + std::to_string(count);
-
-    }
-
-    // Validate class (conceptual, relies on BotKnowledgeBase class configs)
-    // if (m_pKnowledgeBase && !m_pKnowledgeBase->GetClassConfigByName(className_in)) {
-        // ConMsg("RCBot Error: Invalid class '%s' requested for bot '%s'.", className_in.c_str(), botName.c_str());
-        // return false;
-    // }
-
-    auto newBotInfo = std::make_unique<BotInfo>(botName, teamId, className_in, skill);
-
-    // Conceptual: Call engine's bot creation function
-    // edict_t* botEdict = m_pBotManager_member ? m_pBotManager_member->CreateBot(botName.c_str()) : nullptr;
-    // if (botEdict) {
-    //     FinalizeBotAddition(*newBotInfo, botEdict);
-    //     m_ManagedBots.push_back(std::move(newBotInfo));
-    //     ConMsg("RCBot: Engine created bot %s directly.", botName.c_str());
-    // } else {
-        // If engine doesn't create it immediately or we need manual spawn:
-        // This assumes the game will eventually call ClientPutInServer for a bot spawned via "sv_addbot" or similar
-        // if (m_pEngineServer_member) {
-        //     char cmd[256];
-        //     snprintf(cmd, sizeof(cmd), "sv_addbot %s %d %s %d", // Conceptual command
-        //              botName.c_str(), teamId, className_in.c_str(), skill);
-        //     m_pEngineServer_member->ServerCommand(cmd);
-            m_PendingBots[botName] = std::move(newBotInfo); // Store in pending, wait for ClientPutInServer
-        //     ConMsg("RCBot: Bot %s added to pending list. Issued conceptual sv_addbot command.", botName.c_str());
-        // } else {
-        //     ConMsg("RCBot Error: Cannot create bot. No engine server or bot manager.");
-        //     return false;
-        // }
-    // }
-    return true;
-}
-
-void CRCBotPlugin::FinalizeBotAddition(BotInfo& botInfo, edict_t* pEdict) {
-    // ConMsg("RCBot: Finalizing addition of bot %s.", botInfo.name.c_str());
-    botInfo.pEdict = pEdict;
-    botInfo.isActive = true;
-    // botInfo.userId = m_pPlayerInfoManager_member ? m_pPlayerInfoManager_member->GetPlayerUserID(pEdict) : -1; // Conceptual
-
-    // Set team and class using engine commands if necessary
-    // if (m_pEngineServer_member) {
-    //     char cmd[128];
-    //     snprintf(cmd, sizeof(cmd), "jointeam_conceptual %d %d", botInfo.userId, botInfo.requestedTeamId);
-    //     m_pEngineServer_member->ServerCommand(cmd);
-    //     snprintf(cmd, sizeof(cmd), "joinclass_conceptual %d %s", botInfo.userId, botInfo.requestedClassName.c_str());
-    //     m_pEngineServer_member->ServerCommand(cmd);
-    // }
-
-    botInfo.pPlayer = std::make_unique<CFFPlayer>(pEdict, this);
-    // const ClassConfigInfo* classConfig = m_pKnowledgeBase ? m_pKnowledgeBase->GetClassConfigByName(botInfo.requestedClassName) : nullptr;
-    // if (!classConfig) {
-    //     ConMsg("RCBot Error: Could not get class config for %s during FinalizeBotAddition.", botInfo.requestedClassName.c_str());
-    //     botInfo.isActive = false; return; // Critical failure for this bot
-    // }
-
-    botInfo.pPlanner = std::make_unique<CObjectivePlanner>(botInfo.pPlayer.get(), m_pKnowledgeBase.get(), this /*plugin_ref*/);
-    // botInfo.pAIModule = AIFactory::CreateAIModule(classConfig->BotAIClassName, botInfo.pPlayer.get(), botInfo.pPlanner.get(), m_pKnowledgeBase.get(), classConfig);
-
-    // if (!botInfo.pAIModule) {
-    //     ConMsg("RCBot Error: Failed to create AI module for bot %s (class %s).", botInfo.name.c_str(), botInfo.requestedClassName.c_str());
-    //     botInfo.isActive = false; // Cannot function without AI
-    // } else {
-    //     ConMsg("RCBot: Bot %s (Class: %s, Team: %d) finalized and active.", botInfo.name.c_str(), botInfo.requestedClassName.c_str(), botInfo.requestedTeamId);
-    // }
-}
-
-
+// ConCommand Callback
 void CRCBotPlugin::RCBot_Add_Cmd_Callback(const CCommand& args) {
-    // This is a static function. It calls RequestBot on the global g_CRCBotPlugin instance.
-    // if (!g_CRCBotPlugin.m_pEngineServer_member) { // Accessing member of global instance
-    //     // ConMsg("RCBot_Add_Cmd Error: Engine server not available.");
-    //     return;
-    // }
+    if (!g_CRCBotPlugin.m_pEngineServer_member) { // Access plugin instance through global
+        Warning("[RCBot] RCBot_Add_Cmd_Callback: Engine server not available.\n");
+        return;
+    }
 
-    // Arg(0) is "rcbot_add"
-    std::string teamStr     = (args.ArgC() > 1) ? args.Arg(1) : "auto";
-    std::string className   = (args.ArgC() > 2) ? args.Arg(2) : "soldier"; // Default class
-    std::string botName     = (args.ArgC() > 3) ? args.Arg(3) : "";
-    int skillLevel          = (args.ArgC() > 4) ? std::atoi(args.Arg(4)) : 3;
+    std::string teamStr = (args.ArgC() > 1) ? args.Arg(1) : "auto";
+    std::string classNameRequestStr = (args.ArgC() > 2) ? args.Arg(2) : "soldier";
+    std::string botName = (args.ArgC() > 3) ? args.Arg(3) : "";
+    int skillLevel = (args.ArgC() > 4) ? atoi(args.Arg(4)) : 3;
 
-    int teamId = TEAM_ID_AUTO_FF_CONCEPTUAL;
+    int teamId = TEAM_ID_BOT_AUTO_ASSIGN;
     std::string lowerTeamStr = teamStr;
-    std::transform(lowerTeamStr.begin(), lowerTeamStr.end(), lowerTeamStr.begin(),
-                   [](unsigned char c){ return std::tolower(c); });
+    std::transform(lowerTeamStr.begin(), lowerTeamStr.end(), lowerTeamStr.begin(), ::tolower);
 
-    if (lowerTeamStr == "red" || lowerTeamStr == "2") {
-        teamId = TEAM_ID_RED_FF_CONCEPTUAL;
-    } else if (lowerTeamStr == "blue" || lowerTeamStr == "3") {
-        teamId = TEAM_ID_BLUE_FF_CONCEPTUAL;
-    } else if (lowerTeamStr != "auto") {
-        // g_CRCBotPlugin.GetEngineServer()->ConMsg("RCBot: Invalid team '%s'. Use 'auto', 'red', or 'blue'.\n", teamStr.c_str());
+    // Using FF_TEAM_ defines from shareddefs.h (assuming they are available)
+    if (lowerTeamStr == "red" || teamStr == std::to_string(FF_TEAM_RED)) teamId = FF_TEAM_RED;
+    else if (lowerTeamStr == "blue" || teamStr == std::to_string(FF_TEAM_BLUE)) teamId = FF_TEAM_BLUE;
+    // Add other FF teams if applicable (e.g., FF_TEAM_GREEN, FF_TEAM_YELLOW)
+    else if (lowerTeamStr != "auto" && teamStr != std::to_string(TEAM_ID_BOT_AUTO_ASSIGN)) {
+        Msg("[RCBot] Invalid team '%s'. Use 'auto', 'red', 'blue', or numeric team IDs.\n", teamStr.c_str());
         return;
     }
 
     if (skillLevel < 1) skillLevel = 1;
     if (skillLevel > 5) skillLevel = 5;
 
-    // Conceptual: Validate class name (e.g., against BotKnowledgeBase class configs)
-    // if (g_CRCBotPlugin.GetKnowledgeBase() && !g_CRCBotPlugin.GetKnowledgeBase()->GetClassConfigByName(className)) {
-    //    g_CRCBotPlugin.GetEngineServer()->ConMsg("RCBot: Invalid class '%s' requested.\n", className.c_str());
-    //    return;
-    // }
+    FF_BotPlayerClassID internalClassId = GetBotClassIDFromString_FF(classNameRequestStr);
+    if (internalClassId == FF_BOT_CLASS_UNKNOWN) {
+        Msg("[RCBot] Invalid class name '%s' requested.\n", classNameRequestStr.c_str());
+        return;
+    }
 
-    if (g_CRCBotPlugin.RequestBot(botName, teamId, className, skillLevel)) {
-        // g_CRCBotPlugin.GetEngineServer()->ConMsg("RCBot: Bot request for '%s' (Class: %s, Team: %s, Skill: %d) successful.\n",
-        //                                       botName.empty() ? "Unnamed" : botName.c_str(), className.c_str(), teamStr.c_str(), skillLevel);
+    if (g_CRCBotPlugin.RequestBot(botName, teamId, classNameRequestStr, skillLevel)) {
+        Msg("[RCBot] Bot request for '%s' (Class: %s, Team: %s, Skill: %d) successful.\n",
+            botName.empty() ? classNameRequestStr.c_str() : botName.c_str(),
+            classNameRequestStr.c_str(), teamStr.c_str(), skillLevel);
     } else {
-        // g_CRCBotPlugin.GetEngineServer()->ConMsg("RCBot: Bot request for '%s' failed.\n",
-        //                                       botName.empty() ? "Unnamed" : botName.c_str());
+        Msg("[RCBot] Bot request for '%s' failed.\n",
+            botName.empty() ? classNameRequestStr.c_str() : botName.c_str());
     }
 }
 
+bool CRCBotPlugin::RequestBot(const std::string& name, int teamIdReq, const std::string& classNameReq, int skill) {
+    if (!m_pEngineServer_member) {
+        Warning("[RCBot] Cannot request bot: IVEngineServer not available.\n");
+        return false;
+    }
 
-void CRCBotPlugin::RemoveBot(const std::string& nameOrIndex) {
-    // ConMsg("RCBot: Attempting to remove bot: %s", nameOrIndex.c_str());
-    // Iterate m_ManagedBots, find by name or edict index, then remove.
-    // Conceptual: if (m_pEngineServer_member) { m_pEngineServer_member->ServerCommand("kick " + nameOrIndex); }
-    // The OnEdictFreed callback should handle removal from m_ManagedBots if kick is successful.
+    std::string botName = name;
+    if (botName.empty()) {
+        // Generate a unique name if not provided
+        botName = "RCBot_" + classNameReq + "_" + std::to_string(m_NextBotIdCounter);
+    }
+
+    // Store pending bot info
+    BotInfo pendingBotInfo; // Default constructor
+    pendingBotInfo.botId = m_NextBotIdCounter++; // Assign unique ID
+    pendingBotInfo.nameRequest = botName;
+    pendingBotInfo.isPendingPlayerSlot = true;
+    pendingBotInfo.isActive = false;
+    pendingBotInfo.teamIdRequest = teamIdReq;
+    pendingBotInfo.classNameRequest = classNameReq.empty() ? "soldier" : classNameReq; // Default to soldier
+    pendingBotInfo.skillLevel = skill;
+
+    m_PendingBots[botName] = pendingBotInfo; // Add to pending map, keyed by requested name
+
+    // Actual engine call to spawn a bot:
+    edict_t* pNewEdict = m_pEngineServer_member->CreateFakeClient(botName.c_str());
+    if (pNewEdict) {
+        Msg("[RCBot] CreateFakeClient for %s succeeded. Waiting for ClientPutInServer.\n", botName.c_str());
+        return true;
+    } else {
+        Warning("[RCBot] CreateFakeClient for %s failed.\n", botName.c_str());
+        m_PendingBots.erase(botName); // Remove from pending if creation failed immediately
+        m_NextBotIdCounter--; // Reclaim ID
+        return false;
+    }
 }
 
-void CRCBotPlugin::UpdateAllBots(CUserCmd* usercmds_output_array, int max_usercmds_capacity) {
-    for (size_t i = 0; i < m_ManagedBots.size(); ++i) {
-        BotInfo* bot = m_ManagedBots[i].get();
-        if (bot && bot->isActive && bot->pPlayer && bot->pAIModule && bot->pPlanner) {
-            // Conceptual: CUserCmd for this bot. If usercmds_output_array is null, CFFPlayer might manage its own.
-            CUserCmd currentCmd;
-            // if (usercmds_output_array && i < (size_t)max_usercmds_capacity) {
-            //    currentCmd = &usercmds_output_array[i];
-            // } else if (usercmds_output_array) {
-            //    // ConMsg("RCBot Warning: Exceeded usercmd capacity in UpdateAllBots.");
-            //    continue;
-            // }
+void CRCBotPlugin::ClientPutInServer(edict_t *pEdict, char const *playername) {
+    if (!playername || pEdict == nullptr || !m_pEngineServer_member) return;
 
-            bot->pPlanner->EvaluateAndSelectTask(); // Planner decides on HighLevelTask
-            bot->pAIModule->Update(&currentCmd);    // AI executes SubTasks from Planner and fills CUserCmd
+    std::string nameStr = playername;
+    auto it = m_PendingBots.find(nameStr);
 
-            // Conceptual: If not using usercmds_output_array, CFFPlayer might queue the command.
-            // if (!usercmds_output_array && bot->pPlayer) {
-            //    bot->pPlayer->ExecuteUserCmd_Conceptual(currentCmd);
-            // }
+    if (it != m_PendingBots.end()) {
+        BotInfo pendingData = it->second;
+        m_PendingBots.erase(it);
+
+        // Create new BotInfo in m_ManagedBots
+        m_ManagedBots.emplace_back(pEdict, pendingData.botId); // Use constructor (edict_t*, int)
+        BotInfo& newBot = m_ManagedBots.back();
+
+        FinalizeBotAddition(pEdict, newBot, pendingData); // Pass the BotInfo from m_ManagedBots
+        Msg("[RCBot] Bot %s finalized and added to managed list.\n", newBot.name.c_str());
+    }
+}
+
+void CRCBotPlugin::FinalizeBotAddition(edict_t* pBotEdict, BotInfo& newBotInManagedList, const BotInfo& pendingBotData) {
+    newBotInManagedList.name = pendingBotData.nameRequest;
+    newBotInManagedList.teamIdRequest = pendingBotData.teamIdRequest;
+    newBotInManagedList.classNameRequest = pendingBotData.classNameRequest;
+    newBotInManagedList.skillLevel = pendingBotData.skillLevel;
+    // pEdict and botId are already set by constructor of BotInfo in m_ManagedBots
+
+    newBotInManagedList.isPendingPlayerSlot = false; // No longer pending slot
+    newBotInManagedList.isActive = true;
+
+    int finalTeamId = newBotInManagedList.teamIdRequest;
+    if (finalTeamId == TEAM_ID_BOT_AUTO_ASSIGN) {
+        // Simple auto-team: try to balance. Needs actual player counts per team.
+        // int redCount = CountPlayersOnTeam_SDK(FF_TEAM_RED);
+        // int blueCount = CountPlayersOnTeam_SDK(FF_TEAM_BLUE);
+        // finalTeamId = (redCount <= blueCount) ? FF_TEAM_RED : FF_TEAM_BLUE;
+        finalTeamId = FF_TEAM_RED; // Default to RED for now
+    }
+    newBotInManagedList.teamId = finalTeamId;
+
+    newBotInManagedList.internalClassId = GetBotClassIDFromString_FF(newBotInManagedList.classNameRequest);
+    int sdkClassId = GetSDKClassIDFromBotEnum_FF(newBotInManagedList.internalClassId);
+    newBotInManagedList.className = GetPlayerClassNameFromBotID_FF(newBotInManagedList.internalClassId);
+
+    if (m_pEngineServer_member && pBotEdict) {
+        // Deferring ClientCommand calls to allow the player entity to fully initialize.
+        // Might need a short delay or do this in the next GameFrame tick.
+        // For now, issue immediately:
+        char cmd[128];
+        snprintf(cmd, sizeof(cmd), "jointeam %d", newBotInManagedList.teamId); // Use SDK team ID
+        m_pEngineServer_member->ClientCommand(pBotEdict, cmd);
+
+        snprintf(cmd, sizeof(cmd), "joinclass %d", sdkClassId); // Use SDK class ID
+        m_pEngineServer_member->ClientCommand(pBotEdict, cmd);
+    }
+
+    newBotInManagedList.playerWrapper = std::make_unique<CFFPlayer>(pBotEdict); // Pass only edict
+    const ClassConfigInfo* pClassCfg = m_pGlobalKnowledgeBase ? m_pGlobalKnowledgeBase->GetClassConfig(newBotInManagedList.className) : nullptr;
+    if (!pClassCfg) {
+        Warning("[RCBot] Could not get class config for %s. Bot may not behave correctly.\n", newBotInManagedList.className.c_str());
+    }
+
+    newBotInManagedList.objectivePlanner = std::make_unique<CObjectivePlanner>(newBotInManagedList.playerWrapper.get(), m_pGlobalKnowledgeBase.get(), this);
+    newBotInManagedList.aiModule = AIFactory::CreateAIModule(newBotInManagedList.className, newBotInManagedList.playerWrapper.get(), newBotInManagedList.objectivePlanner.get(), m_pGlobalKnowledgeBase.get(), pClassCfg);
+
+    if (!newBotInManagedList.aiModule) {
+        Warning("[RCBot] Failed to create AI module for bot %s (Class: %s).\n", newBotInManagedList.name.c_str(), newBotInManagedList.className.c_str());
+        newBotInManagedList.isActive = false;
+    }
+}
+
+void CRCBotPlugin::RemoveBot(edict_t* pBotEdict) {
+    if (!pBotEdict) return;
+    for (auto it = m_ManagedBots.begin(); it != m_ManagedBots.end(); ++it) {
+        if (it->pEdict == pBotEdict) {
+            Msg("[RCBot] Removing bot: %s (ID: %d)\n", it->name.c_str(), it->botId);
+            // Any specific AI module cleanup if needed before erase
+            it->aiModule.reset();
+            it->objectivePlanner.reset();
+            it->playerWrapper.reset();
+            m_ManagedBots.erase(it);
+            return;
+        }
+    }
+    // Also check pending bots if an edict was assigned then freed before ClientPutInServer (unlikely but possible)
+    for (auto it = m_PendingBots.begin(); it != m_PendingBots.end(); ++it) {
+        if (it->second.pEdict == pBotEdict) { // Though pEdict for pending is usually null until ClientPutInServer
+            Msg("[RCBot] Removing pending bot: %s\n", it->second.nameRequest.c_str());
+            m_PendingBots.erase(it);
+            return;
+        }
+    }
+}
+
+void CRCBotPlugin::ClientDisconnect(edict_t *pEntity) {
+    RemoveBot(pEntity);
+}
+
+void CRCBotPlugin::GameFrame(bool simulating) {
+    if (!simulating || !m_pGlobalKnowledgeBase || !m_pGlobals_member ) {
+        return;
+    }
+    // All per-frame logic happens here
+    // float currentTime = m_pGlobals_member->curtime;
+    // float frameTime = m_pGlobals_member->frametime;
+
+    UpdatePerceptionSystem();
+    PollGameState();
+    UpdateAllBots(); // This will generate CUserCmds for bots
+}
+
+void CRCBotPlugin::UpdateAllBots() {
+    if (!m_pEngineServer_member) return;
+
+    for (BotInfo& bot : m_ManagedBots) {
+        if (bot.isActive && !bot.isPendingPlayerSlot && bot.pEdict &&
+            bot.aiModule && bot.objectivePlanner && bot.playerWrapper) {
+
+            if (!bot.playerWrapper->IsAlive()) continue; // Skip dead bots
+
+            CUserCmd currentCmd; // SDK's CUserCmd, typically from game/shared/usercmd.h
+            // Initialize CUserCmd if necessary (e.g. command_number, tick_count from player's last cmd or new prediction)
+            // currentCmd.command_number = bot.playerWrapper->GetCurrentUserCommandNumber_Conceptual() + 1;
+            // currentCmd.tick_count = m_pGlobals_member->tickcount; // Or predicted tick
+
+            bot.objectivePlanner->EvaluateAndSelectTask();
+            bot.aiModule->Update(&currentCmd); // AI fills the CUserCmd
+
+            // Apply the command to the bot. The exact mechanism depends on the game/engine version.
+            // For many Source 1 games, there isn't a direct SetFakeClientUserCmd.
+            // BotRunCommand in IServerGameDLL is one way, or specific game hooks.
+            // If CreateFakeClient makes them behave like real clients, the engine might handle it.
+            // For now, this is a conceptual placeholder for applying the bot's CUserCmd.
+            // m_pEngineServer_member->SetFakeClientUserCmd_Conceptual(bot.pEdict, currentCmd);
+            // OR if IServerGameDLL is available:
+            // if (g_pServerGameDLL) g_pServerGameDLL->BotRunCommand(bot.pEdict, &currentCmd);
         }
     }
 }
 
 bool CRCBotPlugin::InitializeLuaBridge() {
-    // ConMsg("RCBot: Initializing Lua bridge...");
-    if (m_bLuaInitialized && m_pLuaState_member) {
-        // ConMsg("RCBot: Lua bridge already initialized.");
-        return true;
+    m_pLuaState = nullptr;
+    m_bLuaStateCreatedByPlugin = false;
+
+    // Conceptual: Attempt to get a game-shared Lua state if available
+    // m_pLuaState = SomeGameInterface->GetLuaState();
+
+    if (!m_pLuaState) {
+        m_pLuaState = luaL_newstate();
+        if (m_pLuaState) {
+            luaL_openlibs(m_pLuaState);
+            m_bLuaStateCreatedByPlugin = true;
+            // Msg("[RCBot] Created new Lua state.\n");
+        } else {
+            Warning("[RCBot] Failed to create Lua state.\n");
+            return false;
+        }
+    } else {
+        // Msg("[RCBot] Using existing/shared Lua state.\n");
     }
-    // m_pLuaState_member = FFLuaBridge::CreateLuaState_Conceptual(); // Or GetGameLuaState_Conceptual();
-    // if (!m_pLuaState_member) {
-    //     ConMsg("RCBot Error: Could not create or get Lua state.");
-    //     return false;
-    // }
-    // FFLuaBridge::OpenLuaLibraries_Conceptual(m_pLuaState_member);
-    // RegisterLuaFunctionsWithPlugin(); // Register RCBot specific functions
-    m_bLuaInitialized = true;
-    // ConMsg("RCBot: Lua bridge initialized successfully.");
+    RegisterLuaFunctionsWithPlugin();
     return true;
 }
 
 void CRCBotPlugin::ShutdownLuaBridge() {
-    // ConMsg("RCBot: Shutting down Lua bridge...");
-    // if (m_pLuaState_member && m_bLuaInitialized) {
-    //     FFLuaBridge::CloseLuaState_Conceptual(m_pLuaState_member);
-    //     m_pLuaState_member = nullptr;
-    //     m_bLuaInitialized = false;
-    //     ConMsg("RCBot: Lua bridge shut down.");
-    // } else {
-    //     ConMsg("RCBot: Lua bridge was not active or already shut down.");
-    // }
+    if (m_pLuaState && m_bLuaStateCreatedByPlugin) {
+        lua_close(m_pLuaState);
+        // Msg("[RCBot] Closed plugin-created Lua state.\n");
+    }
+    m_pLuaState = nullptr;
+    m_bLuaStateCreatedByPlugin = false;
 }
 
 void CRCBotPlugin::RegisterLuaFunctionsWithPlugin() {
-    // if (!m_pLuaState_member || !m_bLuaInitialized) {
-    //     ConMsg("RCBot Error: Cannot register Lua functions, bridge not initialized.");
-    //     return;
-    // }
-    // ConMsg("RCBot: Registering plugin-specific Lua functions...");
-    // Example:
-    // FFLuaBridge::RegisterFunction_Conceptual(m_pLuaState_member, "RCBot_GetTime", Lua_RCBot_GetGameTime_Conceptual_Callback);
-    // FFLuaBridge::RegisterFunction_Conceptual(m_pLuaState_member, "RCBot_GetMapName", Lua_RCBot_GetMapName_Conceptual_Callback);
-    // FFLuaBridge::RegisterUserData_Conceptual(m_pLuaState_member, "g_PluginKnowledgeBase", m_pKnowledgeBase.get()); // Risky, manage lifetime
-}
-
-bool CRCBotPlugin::LoadMapDataFromLua(const std::string& mapName) {
-    // if (!m_pLuaState_member || !m_bLuaInitialized || !m_pKnowledgeBase) {
-    //     ConMsg("RCBot Error: Cannot load map data from Lua. Bridge or KB not ready.");
-    //     return false;
-    // }
-    // std::string scriptPath = "lua/maps/" + mapName + ".lua"; // Conceptual path
-    // ConMsg("RCBot: Attempting to load map data from Lua script: %s", scriptPath.c_str());
-    // if (FFLuaBridge::ExecuteLuaFile_Conceptual(m_pLuaState_member, scriptPath.c_str())) {
-        // FFLuaBridge::CallLuaFunction_Conceptual(m_pLuaState_member, "LoadMapData", m_pKnowledgeBase.get()); // Pass KB to Lua
-        // ConMsg("RCBot: Successfully executed Lua map script and called LoadMapData for %s.", mapName.c_str());
-        // m_pKnowledgeBase->LoadNavMesh(mapName + ".nav"); // Conceptual: also load binary nav mesh
-        // return true;
-    // } else {
-    //     ConMsg("RCBot Error: Failed to execute Lua map script %s.", scriptPath.c_str());
-    //     return false;
-    // }
-    return true; // Placeholder if Lua not fully active
+    if (!m_pLuaState) return;
+    // Assumes FFLuaBridge functions are compatible with SDK lua_State
+    lua_newtable(m_pLuaState);
+    lua_pushcfunction(m_pLuaState, FFLuaBridge::Lua_RCBot_LogMessage); // Ensure this is static or global
+    lua_setfield(m_pLuaState, -2, "LogMessage");
+    lua_pushcfunction(m_pLuaState, FFLuaBridge::Lua_RCBot_GetGameTime); // Ensure this is static or global
+    lua_setfield(m_pLuaState, -2, "GetGameTime");
+    // Add more functions as needed
+    lua_setglobal(m_pLuaState, "RCBot"); // Create global table "RCBot"
 }
 
 bool CRCBotPlugin::LoadGlobalClassConfigsFromLua() {
-    // if (!m_pLuaState_member || !m_bLuaInitialized || !m_pKnowledgeBase) {
-    //     ConMsg("RCBot Error: Cannot load class configs from Lua. Bridge or KB not ready.");
-    //     return false;
-    // }
-    // std::string scriptPath = "lua/global/class_configs.lua"; // Conceptual path
-    // ConMsg("RCBot: Attempting to load global class configs from Lua script: %s", scriptPath.c_str());
-    // if (FFLuaBridge::ExecuteLuaFile_Conceptual(m_pLuaState_member, scriptPath.c_str())) {
-        // FFLuaBridge::CallLuaFunction_Conceptual(m_pLuaState_member, "LoadAllClassConfigs", m_pKnowledgeBase.get());
-        // ConMsg("RCBot: Successfully loaded global class configs from Lua.");
-        // return true;
-    // } else {
-    //     ConMsg("RCBot Error: Failed to execute Lua script for global class configs: %s.", scriptPath.c_str());
-    //     return false;
-    // }
-    return true; // Placeholder if Lua not fully active
+    if (!m_pLuaState || !m_pGlobalKnowledgeBase) return false;
+    return m_pGlobalKnowledgeBase->LoadGlobalClassConfigs(m_pLuaState); // Removed table names, now handled in KB
 }
 
+void CRCBotPlugin::LoadMapDataFromLua(const char* pMapName) {
+    if (m_pLuaState && m_pGlobalKnowledgeBase && pMapName) {
+        m_pGlobalKnowledgeBase->LoadMapObjectiveData(m_pLuaState, pMapName); // Removed table names
+    }
+}
 
 void CRCBotPlugin::StoreTaskLog(const TaskOutcomeLog& log) {
     m_CompletedTaskLogs.push_back(log);
 }
-
 void CRCBotPlugin::SaveTaskLogsToFile() {
-    // if (m_CompletedTaskLogs.empty()) return;
-
-    // std::string filename = "rcbot_task_log_" + m_CurrentMapName_Log + "_" + std::to_string(std::time(0)) + ".jsonl";
+    if (m_CompletedTaskLogs.empty() || m_sCurrentMapName.empty()) return;
+    // std::string filename = "rcbot_task_log_" + m_sCurrentMapName + "_" + std::to_string(std::time(nullptr)) + ".jsonl";
     // std::ofstream outFile(filename, std::ios_base::app);
-    // if (!outFile.is_open()) {
-    //     ConMsg("RCBot Error: Could not open task log file %s for writing.", filename.c_str());
-    //     return;
-    // }
-    // ConMsg("RCBot: Saving %zu task logs to %s...", m_CompletedTaskLogs.size(), filename.c_str());
-    // for (const auto& log : m_CompletedTaskLogs) {
-    //     // Simple JSON-like structure, not using a full JSON lib for conceptual simplicity
-    //     outFile << "{";
-    //     outFile << "\"task_name\":\"" << log.taskName << "\",";
-    //     outFile << "\"task_id\":" << log.taskNumericID << ",";
-    //     outFile << "\"bot_name\":\"" << log.botName << "\",";
-    //     outFile << "\"bot_class\":\"" << log.botClass << "\",";
-    //     outFile << "\"start_time_epoch\":" << log.startTimeEpoch << ",";
-    //     outFile << "\"end_time_epoch\":" << log.endTimeEpoch << ",";
-    //     outFile << "\"duration_ms\":" << log.durationMs << ",";
-    //     outFile << "\"outcome\":\"" << TaskOutcomeToString(log.outcome) << "\",";
-    //     outFile << "\"details\":\"" << log.details << "\"";
-    //     outFile << "}\n";
-    // }
+    // if (!outFile.is_open()) { return; }
+    // for (const auto& log : m_CompletedTaskLogs) { /* ... JSONL writing ... */ }
     // outFile.close();
-    // m_CompletedTaskLogs.clear(); // Clear after saving
+    m_CompletedTaskLogs.clear();
 }
 
-// Placeholder for actual perception updates
-void CRCBotPlugin::UpdatePerceptionSystem_Conceptual() {
-    // Conceptual: Need access to engine server, globals, and trace client for a real implementation.
-    // For now, assume they are available as m_pEngineServer_member, g_pGlobals_conceptual, m_pEngineTrace_member.
-    // if (!m_pEngineServer_member || !g_pGlobals_conceptual || !m_pKnowledgeBase || !m_pEngineTrace_member) return;
+void CRCBotPlugin::UpdatePerceptionSystem() {
+    // if (!m_pEngineServer_member || !m_pGlobals_member || !m_pGlobalKnowledgeBase || !m_pEngineTraceClient_member) return;
 
-    // float currentTime = 0.0f; // Conceptual: g_pGlobals_conceptual->curtime;
-    // Throttle full scans if necessary
-    // if (currentTime < m_fNextFullPerceptionScanTime_conceptual) return;
-    // m_fNextFullPerceptionScanTime_conceptual = currentTime + FULL_PERCEPTION_SCAN_INTERVAL_FF;
+    // float currentTime = m_pGlobals_member->curtime;
+    // if (currentTime < m_fNextFullPerceptionScanTime) return; // Throttle full scan
+    // m_fNextFullPerceptionScanTime = currentTime + FULL_PERCEPTION_SCAN_INTERVAL_FF;
 
     std::vector<TrackedEntityInfo> perceivedPlayers;
     std::vector<BuildingInfo> perceivedBuildings;
     std::vector<ReflectableProjectileInfo> perceivedProjectiles;
 
-    // --- Iterate Entities (Conceptual) ---
-    // int maxEdicts = 0; // Conceptual: m_pEngineServer_member->GetMaxEdicts();
-    // for (int i = 1; i <= maxEdicts; ++i) {
-    //    edict_t* pEdict = nullptr; // Conceptual: m_pEngineServer_member->PEntityOfEntIndex(i);
-    //    if (!pEdict /* || m_pEngineServer_member->IsEdictFree(pEdict) */ ) continue;
+    // --- Iterate Players ---
+    // for (int i = 1; i <= m_pGlobals_member->maxClients; ++i) {
+    //     edict_t* pEdict = m_pEngineServer_member->PEntityOfEntIndex(i);
+    //     if (!pEdict || m_pEngineServer_member->IsEdictFree(pEdict)) continue;
 
-    //    CBaseEntity* pEntity = nullptr; // Conceptual: Ed_GetBaseEntity_Conceptual(pEdict);
-    //    if (!pEntity /* || pEntity->IsMarkedForDeletion_Conceptual() || !pEntity->IsNetworkable_Conceptual() */) continue;
+    //     CBaseEntity* pBaseEnt = CBaseEntity::Instance(pEdict); // SDK: Get CBaseEntity from edict
+    //     if (!pBaseEnt || !pBaseEnt->IsPlayer() || !pBaseEnt->IsAlive()) continue;
 
-        // Conceptual: Skip self if this is a global perception system for all bots.
-        // if (pEdict == SomeWayToGetLocalPlayerEdict_Conceptual()) continue;
+    //     // Skip self if this perception system is run for each bot individually and has context of self.
+    //     // If it's a global system, this check might not be needed or be different.
+    //     // if (pEdict == bot_owner_edict) continue;
 
-    //    const char* entityClassName = ""; // Conceptual: pEntity->GetClassName_Conceptual();
-    //    Vector entityOrigin = Vector(); // Conceptual: pEntity->GetAbsOrigin_Conceptual();
-    //    int entityTeam = 0; // Conceptual: pEntity->GetTeamNumber_Conceptual();
+    //     ::CFFPlayer* pSDKPlayer = static_cast<::CFFPlayer*>(pBaseEnt);
+    //     TrackedEntityInfo pInfo(pEdict, i); // Use edict index as entityId for now
 
-        // --- Player Processing ---
-    //    if (strcmp(entityClassName, CLASSNAME_PLAYER_CONCEPTUAL) == 0 /* || pEntity->IsPlayer_Conceptual() */) {
-    //        TrackedEntityInfo playerInfo(pEdict, i);
-    //        CFFPlayer tempPlayerWrapper(pEdict, this); // Pass 'this' if CFFPlayer constructor needs plugin ptr
+    //     pInfo.lastKnownPosition = pSDKPlayer->GetAbsOrigin();
+    //     pInfo.velocity = pSDKPlayer->GetAbsVelocity();
+    //     pInfo.health = pSDKPlayer->GetHealth();
+    //     pInfo.maxHealth = pSDKPlayer->GetMaxHealth(); // Or pSDKPlayer->m_PlayerClass.GetClassData()->m_iHealth
+    //     pInfo.team = pSDKPlayer->GetTeamNumber();
+    //     pInfo.className = pSDKPlayer->m_PlayerClass.GetClassData()->m_szClassName; // Actual class name string from SDK
 
-    //        playerInfo.lastKnownPosition = entityOrigin;
-    //        playerInfo.velocity = tempPlayerWrapper.GetVelocity(); // Uses actual CFFPlayer getter
-    //        playerInfo.health = tempPlayerWrapper.GetHealth();
-    //        playerInfo.maxHealth = tempPlayerWrapper.GetMaxHealth();
-    //        playerInfo.team = tempPlayerWrapper.GetTeam();
-            // playerInfo.className = tempPlayerWrapper.GetPlayerClassName_Conceptual(); // Needs mapping from ID or direct string
+    //     pInfo.isOnFire = (pSDKPlayer->GetFlags() & FL_ONFIRE); // Example, FF might use a condition like m_nPlayerCondEx
+    //     // pInfo.fireExpireTime = pInfo.isOnFire ? (currentTime + pSDKPlayer->GetRemainingFireDuration_Conceptual()) : 0.0f;
 
-    //        playerInfo.isOnFire = tempPlayerWrapper.IsOnFire_Conceptual();
-            // playerInfo.fireExpireTime = playerInfo.isOnFire ? (currentTime + GetRemainingFireDuration_Conceptual(pEntity)) : 0.0f;
+    //     if (pSDKPlayer->m_PlayerClass.GetClassNum() == CLASS_SPY) { // Use actual SDK CLASS_SPY
+    //         pInfo.isDisguised_conceptual = pSDKPlayer->IsDisguised();
+    //         if (pInfo.isDisguised_conceptual) {
+    //             pInfo.displayedTeam_conceptual = pSDKPlayer->GetDisguiseTeam();
+    //             pInfo.displayedClassName_conceptual = GetPlayerClassNameFromBotID_FF(GetBotClassIDFromSlot_FF(pSDKPlayer->GetDisguiseClass()));
+    //         }
+    //     }
 
-    //        if (playerInfo.className == "Spy") { // Conceptual: Use actual class name string
-    //            if (tempPlayerWrapper.IsDisguised_Conceptual()) {
-    //                playerInfo.isDisguised_conceptual = true;
-    //                playerInfo.displayedTeam_conceptual = tempPlayerWrapper.GetDisguiseTeam_Conceptual();
-                    // playerInfo.displayedClassName_conceptual = GetClassNameFromId_Conceptual(tempPlayerWrapper.GetDisguiseClass_Conceptual());
-    //            }
-    //        }
+    //     // Basic Visibility (Placeholder - real LOS is complex and per-bot)
+    //     pInfo.isVisible = true;
+    //     pInfo.lastSeenTime = pInfo.isVisible ? currentTime : 0.f; // Update if visible, else needs old data
 
-    //        playerInfo.isVisible = true; // Placeholder: Assume all iterated players are "known"
-    //        playerInfo.lastSeenTime = playerInfo.isVisible ? currentTime : 0.f;
+    //     perceivedPlayers.push_back(pInfo);
+    // }
 
-    //        perceivedPlayers.push_back(playerInfo);
-    //    }
-        // --- Building Processing ---
-    //    else if (IsBuildingClassName_Conceptual(entityClassName)) {
-    //        BuildingInfo buildingInfo;
-    //        buildingInfo.pEdict = pEdict;
-    //        buildingInfo.uniqueId = i; // Use edict index as unique ID
-    //        buildingInfo.type = GetBuildingTypeFromClassName_Conceptual(entityClassName);
-    //        buildingInfo.position = entityOrigin;
-    //        buildingInfo.teamId = entityTeam;
-            // buildingInfo.health = pEntity->GetHealth_Conceptual();
-            // buildingInfo.maxHealth = pEntity->GetMaxHealth_Conceptual();
-            // buildingInfo.level = pEntity->GetBuildingLevel_Conceptual();
-            // buildingInfo.isSapped = pEntity->IsSapped_Conceptual();
-            // buildingInfo.isBuildingInProgress = pEntity->IsBuilding_Conceptual();
-            // buildingInfo.builderPlayerId = pEntity->GetBuilderUserID_Conceptual();
-    //        perceivedBuildings.push_back(buildingInfo);
-    //    }
-        // --- Projectile Processing ---
-    //    else if (IsReflectableProjectileClassName_Conceptual(entityClassName)) {
-            // Conceptual: Determine actual bot team for hostility check
-            // int myBotsTeam = TEAM_ID_NONE;
-            // if (!m_ManagedBots.empty() && m_ManagedBots[0]->pPlayer) myBotsTeam = m_ManagedBots[0]->pPlayer->GetTeam();
+    // --- Iterate Other Entities (Buildings, Projectiles) ---
+    // This loop should go up to m_pGlobals_member->maxEntities or a known higher edict limit.
+    // for (int i = m_pGlobals_member->maxClients + 1; i < MAX_EDICTS_FROM_SOMEWHERE; ++i) {
+    //     edict_t* pEdict = m_pEngineServer_member->PEntityOfEntIndex(i);
+    //     if (!pEdict || m_pEngineServer_member->IsEdictFree(pEdict)) continue;
+    //     CBaseEntity* pBaseEnt = CBaseEntity::Instance(pEdict);
+    //     if (!pBaseEnt /* || !pBaseEnt->IsNetworkable() - some projectiles might not be alive */) continue;
 
-    //        if (entityTeam != myBotsTeam && entityTeam != TEAM_ID_NONE) { // Hostile projectile
-    //            ReflectableProjectileInfo projInfo;
-    //            projInfo.pEntity = pEdict;
-    //            projInfo.projectileId = i;
-    //            projInfo.position = entityOrigin;
-                // projInfo.velocity = pEntity->GetAbsVelocity_Conceptual();
-    //            projInfo.isHostile = true;
-                // projInfo.projectileType = GetProjectileTypeFromClassName_Conceptual(entityClassName);
-                // projInfo.creationTime = pEntity->GetCreationTime_Conceptual();
-                // projInfo.estimatedImpactTime = PredictImpactTime_Conceptual(projInfo);
-    //            perceivedProjectiles.push_back(projInfo);
-    //        }
-    //    }
+    //     const char* entityClassName = pBaseEnt->GetClassname(); // SDK: Get CBaseEntity classname
+
+    //     // Building Processing
+    //     if (IsBuildingClassName_Conceptual(entityClassName)) { // Use helper with actual FF classnames
+    //         BuildingInfo buildingInfo;
+    //         buildingInfo.pEdict = pEdict;
+    //         buildingInfo.uniqueId = i;
+    //         buildingInfo.type = GetBuildingTypeFromClassName_Conceptual(entityClassName); // Use helper
+    //         buildingInfo.position = pBaseEnt->GetAbsOrigin();
+    //         buildingInfo.teamId = pBaseEnt->GetTeamNumber();
+    //         buildingInfo.health = pBaseEnt->GetHealth();
+    //         // buildingInfo.maxHealth = pBaseEnt->GetMaxHealth(); // Or GetBuildingMaxHealth(type, level)
+    //         // buildingInfo.level = pBaseEnt->GetBuildingLevel_Conceptual();
+    //         // buildingInfo.isSapped = pBaseEnt->IsSapped_Conceptual();
+    //         // buildingInfo.isBuildingInProgress = pBaseEnt->IsBuilding_Conceptual();
+    //         // buildingInfo.builderPlayerId = pBaseEnt->GetBuilderUserID_Conceptual(); // If available
+    //         perceivedBuildings.push_back(buildingInfo);
+    //     }
+    //     // Projectile Processing
+    //     else if (IsReflectableProjectileClassName_Conceptual(entityClassName)) { // Use helper
+    //         // int myBotsTeam = TEAM_ID_NONE; // Get the team of the bot(s) this perception update is for
+    //         // if (!m_ManagedBots.empty() && m_ManagedBots[0].playerWrapper) myBotsTeam = m_ManagedBots[0].playerWrapper->GetTeam();
+
+    //         // if (pBaseEnt->GetTeamNumber() != myBotsTeam && pBaseEnt->GetTeamNumber() != TEAM_UNASSIGNED) {
+    //         //     ReflectableProjectileInfo projInfo;
+    //         //     projInfo.pEntity = pEdict;
+    //         //     projInfo.projectileId = i;
+    //         //     projInfo.position = pBaseEnt->GetAbsOrigin();
+    //         //     projInfo.velocity = pBaseEnt->GetAbsVelocity();
+    //         //     projInfo.isHostile = true;
+    //         //     // projInfo.projectileType = GetProjectileTypeFromClassName_Conceptual(entityClassName);
+    //         //     // projInfo.creationTime = pBaseEnt->GetCreationTime_Conceptual();
+    //         //     perceivedProjectiles.push_back(projInfo);
+    //         // }
+    //     }
     // } // End entity iteration
 
-    // --- Update BotKnowledgeBase ---
-    if (m_pKnowledgeBase) {
-        // The UpdateTrackedPlayers_Conceptual function in BotKnowledgeBase will need
-        // the bot's own team ID to separate players into allies and enemies.
-        // This could be passed in, or KB could fetch it if it has a reference to the bot/plugin.
-        // For simplicity, UpdateTrackedPlayers_Conceptual uses a static conceptual team ID for now.
-        m_pKnowledgeBase->UpdateTrackedPlayers_Conceptual(perceivedPlayers);
-        m_pKnowledgeBase->UpdateTrackedBuildings_Conceptual(perceivedBuildings);
-        m_pKnowledgeBase->UpdateTrackedProjectiles(perceivedProjectiles);
+    if (m_pGlobalKnowledgeBase) {
+        m_pGlobalKnowledgeBase->UpdateTrackedPlayers(perceivedPlayers); // Use renamed method
+        m_pGlobalKnowledgeBase->UpdateTrackedBuildings(perceivedBuildings); // Use renamed method
+        m_pGlobalKnowledgeBase->UpdateTrackedProjectiles(perceivedProjectiles);
     }
 }
 
-// Placeholder for direct game state polling (if events are not sufficient)
-void CRCBotPlugin::PollGameState_Conceptual() {
-    // - Update Control Point status from game state
-    // - Update Payload status
-    // - Update Flag status for CTF
-    // This data would then refresh the BotKnowledgeBase
+void CRCBotPlugin::PollGameState() {
+    // if (!m_pGlobalKnowledgeBase || !m_pGlobals_member) return;
+    // This function is for game states that are not event-driven or need very frequent checks.
+    // For example, iterating through known control points and querying their state directly from entities.
+
+    // for (const auto& cp_config_info : m_pGlobalKnowledgeBase->GetControlPointsConfig_Conceptual()) {
+    //     // CBaseEntity* cpEnt = FindEntityByTargetname_Conceptual(cp_config_info.targetname); // Or by index if known
+    //     // if (cpEnt) {
+    //     //     int currentOwner = cpEnt->GetNetProp_Conceptual<int>("m_iTeamOwningCapPoint", TEAM_UNASSIGNED);
+    //     //     float captureProgress = cpEnt->GetNetProp_Conceptual<float>("m_flCaptureProgress", 0.0f);
+    //     //     bool isLocked = cpEnt->GetNetProp_Conceptual<bool>("m_bCPLocked", false);
+    //     //     m_pGlobalKnowledgeBase->UpdateControlPointState(cp_config_info.id, currentOwner, captureProgress, isLocked);
+    //     // }
+    // }
 }
+
+void CRCBotPlugin::FireGameEvent(IGameEvent *event) {
+    if (!event || !m_pGlobalKnowledgeBase) return;
+    const char *eventName = event->GetName();
+    if (!eventName) return;
+
+    // Use Q_strcmp from SDK's tier1/strtools.h (or cstring.h) for case-sensitive comparison.
+    // Or V_stricmp for case-insensitive if event names might vary by case.
+    // Assuming FF_EVENT_POINT_CAPTURED, etc. are const char* defined in FFBot_SDKDefines.h
+
+    // if (Q_strcmp(eventName, FF_EVENT_POINT_CAPTURED) == 0) {
+    //     int cpID = event->GetInt("cp_index"); // Use actual key name from FF event
+    //     int newTeam = event->GetInt("team_owning"); // Use actual key name
+    //     // float progress = event->GetFloat("capture_progress", 0.0f); // If available
+    //     // bool locked = event->GetBool("cp_locked", false); // If available
+    //     m_pGlobalKnowledgeBase->UpdateControlPointState(cpID, newTeam, 1.0f /*assume full cap on event*/, false);
+    // }
+    // else if (Q_strcmp(eventName, FF_EVENT_PLAYER_DEATH) == 0) {
+    //     int victimUserID = event->GetInt("userid");       // Victim's UserID
+    //     int attackerUserID = event->GetInt("attacker");   // Attacker's UserID
+    //     // Potentially update BotKnowledgeBase with kill/death info, or notify AI modules.
+    // }
+    // else if (Q_strcmp(eventName, FF_EVENT_PLAYER_SPAWN) == 0) {
+    //     int spawnUserID = event->GetInt("userid");
+    //     // A player (bot or human) has spawned. Perception system will pick them up,
+    //     // but this event can be used for immediate actions or state resets.
+    // }
+    // else if (Q_strcmp(eventName, FF_EVENT_BUILDING_PLACED) == 0) {
+    //     // BuildingInfo info;
+    //     // info.builderPlayerId = event->GetInt("builder_userid");
+    //     // info.teamId = event->GetInt("teamid");
+    //     // info.type = static_cast<BuildingType_FF>(event->GetInt("building_type_id")); // Assuming type is an int ID
+    //     // info.position.x = event->GetFloat("pos_x"); /* ... y, z ... */
+    //     // info.pEdict = FindEdictForNewlyPlacedBuilding_Conceptual(info); // This is tricky, event might not give edict
+    //     // if (info.pEdict || info.uniqueId != -1 /* if event provides a unique ID for the building */) {
+    //     //     m_pGlobalKnowledgeBase->UpdateOrAddBuilding(info);
+    //     // }
+    // }
+    // else if (Q_strcmp(eventName, FF_EVENT_BUILDING_DESTROYED) == 0) {
+    //     // int buildingOwnerUserId = event->GetInt("builder_userid");
+    //     // int buildingUniqueId = event->GetInt("building_unique_id"); // If available
+    //     // edict_t* pBuildingEdict = FindEdictFromEventData_Conceptual(event); // If available
+    //     // if (pBuildingEdict) m_pGlobalKnowledgeBase->RemoveBuilding(pBuildingEdict);
+    //     // else if (buildingUniqueId != -1) m_pGlobalKnowledgeBase->RemoveBuildingByUniqueId_Conceptual(buildingUniqueId);
+    // }
+    // Add more FF-specific events and their handling.
+}
+
+// --- End of CRCBotPlugin.cpp ---

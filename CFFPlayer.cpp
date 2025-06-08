@@ -1,229 +1,268 @@
-#include "CFFPlayer.h"
-#include "EngineInterfaces.h"
-#include "BotDefines.h"       // For conceptual constants like WEAPON_NAME_*, COND_FF_*, NETPROP_SPY_*
+#include "CFFPlayer.h" // Should be "CFFPlayerWrapper.h" after rename
+// SDK Headers (ensure paths are correct relative to your FF source tree)
+#include "public/engine/ivengineserver.h" // For g_pEngineServer (if used for ClientCommand)
+#include "game/server/extdll_fns.h"     // For GetContainingEntity() or similar EDICT_TO_HIERARCHY
+#include "game/server/util_shared.h"    // For UTIL_PlayerByIndex or similar if needed
+#include "game/server/cbase.h"          // For CBaseEntity, CBasePlayer
+#include "game/server/player.h"         // For CBasePlayer
+#include "game/server/ff/ff_player.h"   // For ::CFFPlayer
+#include "game/shared/ff_weapon_base.h" // For AMMO_ string defines and FFWeaponID enum
+#include "game/shared/ammodef.h"      // For CAmmoDef and GetAmmoDef()
+#include "game/shared/usercmd.h"
+#include "game/shared/in_buttons.h"
+#include "public/const.h"
+#include "game/shared/shareddefs.h"   // For CLASS_ and FF_TEAM_ defines
 
-// Conceptual SDK includes
-// #include "server/iplayerinfo.h"
-// #include "game/server/cbaseentity.h" // For actual CBaseEntity
-// #include "public/edict.h"
-// #include "toolframework/itoolentity.h" // For IServerTools if used for entity manipulation
+// Bot Framework Headers
+#include "FFBot_SDKDefines.h"
+// #include "EngineInterfaces.h" // If g_pEngineServer is wrapped, but typically it's global from SDK itself
 
-#include <iostream>
-#include <map>
-#include <cstring> // For strcmp
+// Assume g_pEngineServer is accessible (e.g., via extern from CRCBotPlugin.cpp or an EngineInterfaces.h)
+extern IVEngineServer* g_pEngineServer; // Make sure this is linked/available
 
-// --- Conceptual Placeholder for CUserCmd ---
-#ifndef CUSERCMD_CONCEPTUAL_DEF_CFFPLAYER_CPP
-#define CUSERCMD_CONCEPTUAL_DEF_CFFPLAYER_CPP
-struct CUserCmd { /* ... (as before, including impulse) ... */ };
-#endif
-
-// --- Conceptual Placeholder for edict_t ---
-#ifndef EDICT_T_CONCEPTUAL_INTERNAL_DEF_CFFPLAYER_CPP
-#define EDICT_T_CONCEPTUAL_INTERNAL_DEF_CFFPLAYER_CPP
-// struct edict_t { /* ... */ };
-#endif
-
-// --- Conceptual Engine/Game Interface Definitions (Placeholders) ---
-#ifndef CBASEENTITY_CONCEPTUAL_DEF_CFFPLAYER_CPP
-#define CBASEENTITY_CONCEPTUAL_DEF_CFFPLAYER_CPP
-class CBaseEntity { /* ... (as before, with GetNetProp_Conceptual, GetCondBits_Conceptual) ... */ };
-#endif
-
-// Global Interface Pointer Definitions (already in CRCBotPlugin.cpp, extern in EngineInterfaces.h)
-// For self-contained CFFPlayer.cpp test if needed, but ideally rely on CRCBotPlugin to init them.
-#ifndef CFFPLAYER_GLOBALS_DEFINED_YET_AGAIN
-#define CFFPLAYER_GLOBALS_DEFINED_YET_AGAIN
-// IVEngineServer*       g_pEngineServer = nullptr;
-// IPlayerInfoManager*   g_pPlayerInfoManager = nullptr;
-// CGlobalVarsBase*      g_pGlobals = nullptr;
-#endif
-
-
-// --- CFFPlayer Implementation ---
-
-CFFPlayer::CFFPlayer(edict_t* pEdict) : m_pEdict(pEdict),
-    m_iCurrentHealth_placeholder(100), m_iCurrentMetal_placeholder(ENGINEER_MAX_METAL), m_iActiveWeaponId_placeholder(0),
-    m_bIsCloaked_placeholder(false), m_bIsDisguised_placeholder(false),
-    m_iDisguiseTeam_placeholder(0), m_iDisguiseClass_placeholder(0), m_fCloakEnergy_placeholder(100.0f)
-{ /* ... */ }
-
-// --- Standard Getters (mostly same as Task 15/20) ---
-bool CFFPlayer::IsValid() const { return m_pEdict != nullptr; }
-bool CFFPlayer::IsAlive() const { return GetHealth() > 0; }
-Vector CFFPlayer::GetOrigin() const { return m_CurrentPosition_placeholder; }
-Vector CFFPlayer::GetVelocity() const { return Vector(); }
-Vector CFFPlayer::GetEyeAngles() const { return m_CurrentViewAngles_placeholder; }
-int CFFPlayer::GetHealth() const { return m_iCurrentHealth_placeholder; }
-int CFFPlayer::GetMaxHealth() const { return 150; }
-int CFFPlayer::GetArmor() const { return 0; }
-int CFFPlayer::GetMaxArmor() const { return 50; }
-int CFFPlayer::GetTeam() const { return 2; }
-int CFFPlayer::GetFlags() const { return FL_ONGROUND; }
-bool CFFPlayer::IsDucking() const { return (GetFlags() & FL_DUCKING) != 0; }
-bool CFFPlayer::IsOnGround() const { return (GetFlags() & FL_ONGROUND) != 0; }
-int CFFPlayer::GetAmmo(int ammoTypeIndex) const { return 20; }
-int CFFPlayer::GetActiveWeaponId_Conceptual() const { return m_iActiveWeaponId_placeholder; }
-
-bool CFFPlayer::IsWeaponActive_Conceptual(const std::string& weaponName) const {
-    // Conceptual:
-    // CBaseEntity* pEnt = GetBaseEntityFromEdict(m_pEdict);
-    // CBaseCombatWeapon* pActiveWeapon = pEnt ? pEnt->GetActiveWeapon_conceptual() : nullptr;
-    // if (pActiveWeapon) return strcmp(pActiveWeapon->GetName_conceptual(), weaponName.c_str()) == 0;
-
-    // Placeholder using mapped IDs and conceptual weapon names from BotDefines.h
-    int activeId = GetActiveWeaponId_Conceptual();
-    if (weaponName == WEAPON_NAME_INVIS_WATCH_FF && activeId == WEAPON_ID_SPY_INVIS_WATCH) return true;
-    if (weaponName == WEAPON_NAME_SAPPER_FF && activeId == WEAPON_ID_SPY_SAPPER) return true;
-    if (weaponName == WEAPON_NAME_KNIFE_FF && activeId == WEAPON_ID_SPY_KNIFE) return true;
-    if (weaponName == WEAPON_NAME_DISGUISE_KIT_FF && activeId == WEAPON_ID_SPY_DISGUISE_KIT) return true;
-    if (weaponName == WEAPON_NAME_REVOLVER_FF && activeId == WEAPON_ID_SPY_REVOLVER) return true;
-    // ... other mappings ...
-    return false;
+CFFPlayerWrapper::CFFPlayerWrapper(edict_t* pBotEdict) :
+    m_pEdict(pBotEdict),
+    m_pSDKPlayer(nullptr) {
+    UpdateSDKPlayerPtr();
 }
 
-// --- Engineer-Specific Getters (from Task 20) ---
-int CFFPlayer::GetMetalCount_Conceptual() const { return m_iCurrentMetal_placeholder; }
+void CFFPlayerWrapper::UpdateSDKPlayerPtr() {
+    if (m_pEdict) {
+        // Common Source SDK way to get CBaseEntity* from edict_t*
+        // In FF, GetContainingEntity might be used, or CBaseEntity::Instance if available and edicts map directly.
+        // CBaseEntity *pBaseEnt = GetContainingEntity(m_pEdict); // From extdll_fns.h usually
+        // For newer SDKs or specific game branches:
+        // IServerUnknown* pUnk = static_cast<IServerUnknown*>(m_pEdict->m_pUnk);
+        // CBaseEntity* pBaseEnt = pUnk ? pUnk->GetBaseEntity() : nullptr;
 
-// --- Spy-Specific Getters (Implementations) ---
-bool CFFPlayer::IsCloaked_Conceptual() const {
-    // CBaseEntity* pEnt = GetBaseEntityFromEdict(m_pEdict);
-    // return pEnt && (pEnt->GetCondBits_Conceptual() & COND_FF_CLOAKED);
-    return m_bIsCloaked_placeholder; // Use placeholder for now
-}
-bool CFFPlayer::IsDisguised_Conceptual() const {
-    // CBaseEntity* pEnt = GetBaseEntityFromEdict(m_pEdict);
-    // return pEnt && (pEnt->GetCondBits_Conceptual() & COND_FF_DISGUISED);
-    return m_bIsDisguised_placeholder;
-}
-int CFFPlayer::GetDisguiseTeam_Conceptual() const {
-    // CBaseEntity* pEnt = GetBaseEntityFromEdict(m_pEdict);
-    // return pEnt ? pEnt->GetNetProp_Conceptual<int>(NETPROP_SPY_DISGUISE_TEAM_FF, TEAM_ID_NONE) : TEAM_ID_NONE;
-    return m_iDisguiseTeam_placeholder;
-}
-int CFFPlayer::GetDisguiseClass_Conceptual() const {
-    // CBaseEntity* pEnt = GetBaseEntityFromEdict(m_pEdict);
-    // return pEnt ? pEnt->GetNetProp_Conceptual<int>(NETPROP_SPY_DISGUISE_CLASS_FF, 0 /*CLASS_NONE_FF*/) : 0;
-    return m_iDisguiseClass_placeholder;
-}
-float CFFPlayer::GetCloakEnergy_Conceptual() const {
-    // CBaseEntity* pEnt = GetBaseEntityFromEdict(m_pEdict);
-    // return pEnt ? pEnt->GetNetProp_Conceptual<float>(NETPROP_SPY_CLOAK_ENERGY_FF, 0.0f) : 0.0f;
-    return m_fCloakEnergy_placeholder;
-}
-bool CFFPlayer::CanCloak_Conceptual() const {
-    // return IsValid() && GetCloakEnergy_Conceptual() >= SPY_CLOAK_MIN_ENERGY_FF /* && appropriate_cooldown_passed */;
-    return m_fCloakEnergy_placeholder >= SPY_CLOAK_MIN_ENERGY_FF; // Simplified
-}
-bool CFFPlayer::CanDisguise_Conceptual() const {
-    // return IsValid() /* && appropriate_cooldown_passed_for_disguise_kit */;
-    return true; // Simplified
+        // Simpler conceptual placeholder if direct casting or a global map is assumed (not robust)
+        // For Fortress Forever, CFFPlayer inherits CBasePlayer.
+        // CBaseEntity::Instance(edict) is a common pattern in Source SDK.
+        // If the edict IS the player entity directly (often true for players):
+        if (m_pEdict && !m_pEdict->IsFree()) {
+             CBaseEntity* pBaseEnt = CBaseEntity::Instance(m_pEdict); // SDK function
+             if (pBaseEnt && pBaseEnt->IsPlayer()) {
+                m_pSDKPlayer = static_cast<::CFFPlayer*>(pBaseEnt);
+             } else {
+                m_pSDKPlayer = nullptr;
+             }
+        } else {
+            m_pSDKPlayer = nullptr;
+        }
+    } else {
+        m_pSDKPlayer = nullptr;
+    }
 }
 
-// --- Pyro Specific Getters (Implementations) ---
-bool CFFPlayer::IsOnFire_Conceptual() const {
-    // CBaseEntity* pEnt = GetBaseEntityFromEdict(m_pEdict); // Conceptual: Get CBaseEntity for self
-    // return pEnt && (pEnt->GetCondBits_Conceptual() & COND_FF_ONFIRE);
-    // Placeholder:
-    // For testing, let's assume there's a placeholder member or a way to toggle this.
-    // For now, returning false as no direct mechanism to set this placeholder is in CFFPlayer.
-    return false;
+bool CFFPlayerWrapper::IsValid() const {
+    // Re-check pointer validity, entity might have been removed
+    // const_cast to allow UpdateSDKPlayerPtr to modify m_pSDKPlayer
+    // const_cast<CFFPlayerWrapper*>(this)->UpdateSDKPlayerPtr();
+    return m_pSDKPlayer != nullptr && m_pEdict != nullptr && !m_pEdict->IsFree();
 }
 
-bool CFFPlayer::IsTargetOnFire_Conceptual(edict_t* pTargetEdict) const {
-    // if (!pTargetEdict) return false;
-    // CBaseEntity* pTargetEnt = GetBaseEntityFromEdict(pTargetEdict); // Conceptual
-    // return pTargetEnt && (pTargetEnt->GetCondBits_Conceptual() & COND_FF_ONFIRE);
+bool CFFPlayerWrapper::IsAlive() const {
+    return IsValid() && m_pSDKPlayer->IsAlive();
+}
+
+Vector CFFPlayerWrapper::GetOrigin() const {
+    return IsValid() ? m_pSDKPlayer->GetAbsOrigin() : Vector(0,0,0); // Assuming SDK Vector
+}
+
+Vector CFFPlayerWrapper::GetVelocity() const {
+    return IsValid() ? m_pSDKPlayer->GetAbsVelocity() : Vector(0,0,0); // Assuming SDK Vector
+}
+
+QAngle CFFPlayerWrapper::GetEyeAngles() const {
+    return IsValid() ? m_pSDKPlayer->EyeAngles() : QAngle(0,0,0); // Assuming SDK QAngle
+}
+
+int CFFPlayerWrapper::GetHealth() const {
+    return IsValid() ? m_pSDKPlayer->GetHealth() : 0;
+}
+
+int CFFPlayerWrapper::GetMaxHealth() const {
+    // For FF, max health is often tied to class data
+    // return IsValid() ? m_pSDKPlayer->GetMaxHealth() : 0; // CBasePlayer GetMaxHealth
+    return IsValid() ? m_pSDKPlayer->m_PlayerClass.GetClassData()->m_iHealth : 0; // Using FF's class data struct
+}
+
+int CFFPlayerWrapper::GetArmor() const {
+    return IsValid() ? m_pSDKPlayer->m_iArmor : 0; // Direct member access if public, or GetArmor()
+}
+
+int CFFPlayerWrapper::GetMaxArmor() const {
+    // return IsValid() ? m_pSDKPlayer->m_iMaxArmor : 0; // Or from class data
+    return IsValid() ? m_pSDKPlayer->m_PlayerClass.GetClassData()->m_iMaxArmour : 0;
+}
+
+int CFFPlayerWrapper::GetTeam() const {
+    return IsValid() ? m_pSDKPlayer->GetTeamNumber() : TEAM_UNASSIGNED; // Use SDK TEAM_UNASSIGNED
+}
+
+int CFFPlayerWrapper::GetFlags() const {
+    return IsValid() ? m_pSDKPlayer->GetFlags() : 0;
+}
+
+bool CFFPlayerWrapper::IsDucking() const {
+    return (GetFlags() & FL_DUCKING) != 0;
+}
+
+bool CFFPlayerWrapper::IsOnGround() const {
+    return (GetFlags() & FL_ONGROUND) != 0;
+}
+
+int CFFPlayerWrapper::GetAmmoByIndex(int ammoIndex) const {
+    return IsValid() ? m_pSDKPlayer->GetAmmoCount(ammoIndex) : 0;
+}
+
+int CFFPlayerWrapper::GetAmmo(const std::string& ammoName) const {
+    if (!IsValid()) return 0;
+    // CAmmoDef::GetAmmoDef() is the standard Source SDK way.
+    // FF might have its own ammo definition system or use this.
+    int ammoIndex = 0; // Placeholder for CAmmoDef::GetAmmoDef()->Index(ammoName.c_str());
+    // Need to include "shared/ammodef.h" and ensure CAmmoDef is initialized.
+    // For now, using the mapping function.
+    ammoIndex = GetAmmoIndexForName_FF(ammoName); // This needs to be implemented in FFBotUtils.cpp
+    if (ammoIndex != -1) return GetAmmoByIndex(ammoIndex);
+    return 0;
+}
+
+FF_BotPlayerClassID CFFPlayerWrapper::GetBotClassId() const {
+    if (!IsValid()) return FF_BOT_CLASS_UNKNOWN;
+    // m_pSDKPlayer->PlayerClass() might return C_PlayerClass* or similar.
+    // m_pSDKPlayer->m_PlayerClass.GetClassNum() is typical for FF.
+    return GetBotClassIDFromSlot_FF(m_pSDKPlayer->m_PlayerClass.GetClassNum());
+}
+
+std::string CFFPlayerWrapper::GetPlayerClassNameString() const {
+    if (!IsValid()) return "unknown";
+    return GetPlayerClassNameFromBotID_FF(GetBotClassId()); // Use our mapping
+}
+
+int CFFPlayerWrapper::GetSDKClassID() const {
+    return IsValid() ? m_pSDKPlayer->m_PlayerClass.GetClassNum() : CLASS_NONE; // CLASS_NONE from shareddefs.h
+}
+
+float CFFPlayerWrapper::GetPlayerMaxSpeed() const {
+    return IsValid() ? (float)m_pSDKPlayer->m_PlayerClass.GetClassData()->m_flSpeed : 0.0f; // m_flSpeed not m_iSpeed
+}
+
+int CFFPlayerWrapper::GetMetalCount() const {
+    return GetAmmo(AMMO_CELLS_NAME); // AMMO_CELLS_NAME from ff_weapon_base.h (usually "Cells")
+}
+
+bool CFFPlayerWrapper::IsCloaked() const {
+    return IsValid() && m_pSDKPlayer->IsCloaked(); // Direct SDK call
+}
+
+bool CFFPlayerWrapper::IsDisguised() const {
+    return IsValid() && m_pSDKPlayer->IsDisguised(); // Direct SDK call
+}
+
+int CFFPlayerWrapper::GetDisguiseTeam() const {
+    return IsValid() ? m_pSDKPlayer->GetDisguiseTeam() : TEAM_UNASSIGNED; // Direct SDK call
+}
+
+FF_BotPlayerClassID CFFPlayerWrapper::GetDisguiseClass() const {
+    if (!IsValid() || !m_pSDKPlayer->IsDisguised()) return FF_BOT_CLASS_UNKNOWN;
+    return GetBotClassIDFromSlot_FF(m_pSDKPlayer->GetDisguiseClass()); // Direct SDK call
+}
+
+float CFFPlayerWrapper::GetCloakEnergy() const {
+    // return IsValid() ? m_pSDKPlayer->m_flCloakEnergy : 0.0f; // Direct member if public, or a GetCloakEnergy()
+    return 0.0f; // Placeholder, depends on SDK CFFPlayer exact implementation
+}
+
+bool CFFPlayerWrapper::IsSapperActive_Conceptual() const {
+    // if (!IsValid() || !m_pSDKPlayer->GetActiveWeapon()) return false;
+    // return m_pSDKPlayer->GetActiveWeapon()->GetWeaponID() == FF_WEAPON_SAPPER; // FF_WEAPON_SAPPER from ff_weapon_base.h
     return false; // Placeholder
 }
 
-int CFFPlayer::GetAirblastAmmo_Conceptual() const {
-    // Assuming Flamethrower primary ammo is used for airblast.
-    // The ammo ID/index needs to be correctly defined in BotDefines.h (e.g., AMMO_ID_FLAMETHROWER_FF_CONCEPTUAL)
-    // return GetAmmo(AMMO_ID_FLAMETHROWER_FF_CONCEPTUAL);
-    return GetAmmo(AMMO_FLAMETHROWER_FF); // Using the alias from BotDefines.h for now
+void CFFPlayerWrapper::SetViewAngles(CUserCmd* pCmd, const QAngle& angles) {
+    if (pCmd) pCmd->viewangles = angles;
 }
 
-bool CFFPlayer::CanAirblast_Conceptual() const {
-    // if (!IsValid()) return false;
-    // Conceptual: Check if flamethrower is active, or if any weapon can airblast.
-    // For now, assume flamethrower must be active.
-    // if (!IsWeaponActive_Conceptual(WEAPON_NAME_FLAMETHROWER_FF)) return false;
-
-    // Check ammo cost
-    // return GetAirblastAmmo_Conceptual() >= AIRBLAST_AMMO_COST_FF_CONCEPTUAL;
-
-    // Also, consider game-specific airblast cooldown (might be a netprop on the weapon or player)
-    // float nextAirblastReadyTime = GetNetProp_Conceptual<float>("m_flNextAirblastTime_conceptual", 0.0f);
-    // return GetAirblastAmmo_Conceptual() >= AIRBLAST_AMMO_COST_FF_CONCEPTUAL &&
-    //        g_pGlobals->curtime >= nextAirblastReadyTime; // Conceptual g_pGlobals
-
-    // Simplified placeholder:
-    return GetAirblastAmmo_Conceptual() >= AIRBLAST_AMMO_COST_FF_CONCEPTUAL;
+void CFFPlayerWrapper::SetMovement(CUserCmd* pCmd, float forwardMove, float sideMove, float upMove) {
+    if (pCmd) {
+        pCmd->forwardmove = forwardMove;
+        pCmd->sidemove = sideMove;
+        pCmd->upmove = upMove;
+    }
 }
 
+void CFFPlayerWrapper::AddButton(CUserCmd* pCmd, int buttonFlag) {
+    if (pCmd) pCmd->buttons |= buttonFlag;
+}
 
-// --- Action Methods ---
-void CFFPlayer::SetViewAngles(CUserCmd* pCmd, const Vector& angles) { if(pCmd) pCmd->viewangles = angles; }
-void CFFPlayer::SetMovement(CUserCmd* pCmd, float fwd, float side, float up) { if(pCmd) {pCmd->forwardmove=fwd; pCmd->sidemove=side; pCmd->upmove=up;} }
-void CFFPlayer::AddButton(CUserCmd* pCmd, int btn) { if(pCmd) pCmd->buttons |= btn; }
-void CFFPlayer::RemoveButton(CUserCmd* pCmd, int btn) { if(pCmd) pCmd->buttons &= ~btn; }
-void CFFPlayer::SelectWeaponByName_Conceptual(const std::string& weaponName, CUserCmd* pCmd) { /* ... (from Task 20, using conceptual WEAPON_ID_* constants) ... */ }
-void CFFPlayer::SelectWeaponById_Conceptual(int weaponId, CUserCmd* pCmd) { if(pCmd) pCmd->weaponselect = weaponId; m_iActiveWeaponId_placeholder = weaponId; }
+void CFFPlayerWrapper::RemoveButton(CUserCmd* pCmd, int buttonFlag) {
+    if (pCmd) pCmd->buttons &= ~buttonFlag;
+}
 
+void CFFPlayerWrapper::SetImpulse(CUserCmd* pCmd, unsigned char impulse) {
+    if (pCmd) pCmd->impulse = impulse;
+}
 
-// --- Engineer-Specific Action Methods (from Task 20) ---
-void CFFPlayer::IssuePDABuildCommand_Conceptual(int buildingTypeId, int subCommand, CUserCmd* pCmd) { /* ... (from Task 20) ... */ }
-void CFFPlayer::SwingWrench_Conceptual(CUserCmd* pCmd) { if(pCmd) AddButton(pCmd, IN_ATTACK); }
-
-// --- Spy-Specific Action Methods (Implementations) ---
-void CFFPlayer::StartCloak_Conceptual(CUserCmd* pCmd) {
+void CFFPlayerWrapper::SelectWeapon(CUserCmd* pCmd, const std::string& weaponClassName) {
     if (!pCmd || !IsValid()) return;
-    // Assumes Invis Watch (e.g., WEAPON_NAME_INVIS_WATCH_FF) is the active weapon.
-    // The Spy AI (CSpyAI_FF) would be responsible for ensuring this before calling.
-    // if (IsWeaponActive_Conceptual(WEAPON_NAME_INVIS_WATCH_FF)) {
-        AddButton(pCmd, IN_ATTACK2); // Typically IN_ATTACK2 for cloak toggle for most watches
-        m_bIsCloaked_placeholder = true; // Update conceptual state for next frame's IsCloaked()
+    // This usually involves mapping weaponClassName (e.g. "ff_weapon_rocketlauncher") to an SDK weapon ID or slot
+    // int weaponSdkId = GetSDKWeaponIDFromString_FF(weaponClassName); // Implemented in FFBotUtils.cpp
+    // if (weaponSdkId != 0 /* Assuming 0 is invalid/none or use specific FF_WEAPON_NONE */ ) {
+    //    pCmd->weaponselect = weaponSdkId; // CUserCmd::weaponselect takes the weapon's entity index or a specific ID
     // } else {
-    //     std::cout << "CFFPlayer: Warning - StartCloak called but Invis Watch not active." << std::endl;
+        // Fallback: try "use weapon_classname" if direct select fails or for items not selected via weaponselect
+        // This requires g_pEngineServer to be valid.
+        // if (g_pEngineServer) {
+        //     char cmd[128];
+        //     snprintf(cmd, sizeof(cmd), "use %s", weaponClassName.c_str());
+        //     g_pEngineServer->ClientCommand(m_pEdict, cmd); // This is an engine command, not filling CUserCmd directly
+        // }
     // }
 }
 
-void CFFPlayer::StopCloak_Conceptual(CUserCmd* pCmd) {
-    if (!pCmd || !IsValid()) return;
-    // If cloak is a toggle with IN_ATTACK2 on the watch:
-    // if (IsWeaponActive_Conceptual(WEAPON_NAME_INVIS_WATCH_FF) && IsCloaked_Conceptual()) {
-        AddButton(pCmd, IN_ATTACK2); // Press again to decloak (if it's a toggle)
-        m_bIsCloaked_placeholder = false; // Update conceptual state
-    // }
-    // Some watches decloak on primary fire (IN_ATTACK) or automatically when IN_ATTACK is pressed.
-    // This simplified version assumes a toggle on IN_ATTACK2 or that the game handles decloak on next attack.
+void CFFPlayerWrapper::PrimaryAttack(CUserCmd* pCmd) {
+    AddButton(pCmd, IN_ATTACK);
 }
 
-void CFFPlayer::IssueDisguiseCommand_Conceptual(int targetTeamId_conceptual, int targetClassId_conceptual) {
-    if (!IsValid() /* || !CanDisguise_Conceptual() */ ) return;
-    // This method would queue a client command for the bot's edict.
-    // The actual command format is highly game-specific.
-    // Example: "disguise <team_id_for_engine> <class_id_for_engine>"
-    char cmd[128];
-    // snprintf(cmd, sizeof(cmd), "disguise %d %d", targetTeamId_conceptual, targetClassId_conceptual); // Conceptual command format
-    // if (g_pEngineServer && m_pEdict) {
-    //     g_pEngineServer->ClientCommand(m_pEdict, cmd); // Conceptual engine call
-    // }
-    // std::cout << "CFFPlayer: Issued conceptual ClientCommand: " << cmd << std::endl;
-
-    // Update internal placeholders after issuing command
-    m_bIsDisguised_placeholder = true;
-    m_iDisguiseTeam_placeholder = targetTeamId_conceptual;
-    m_iDisguiseClass_placeholder = targetClassId_conceptual;
+void CFFPlayerWrapper::SecondaryAttack(CUserCmd* pCmd) {
+    AddButton(pCmd, IN_ATTACK2);
 }
 
-void CFFPlayer::DeploySapper_Conceptual(CUserCmd* pCmd) {
-    if (!pCmd || !IsValid()) return;
-    // Assumes Sapper (e.g., WEAPON_NAME_SAPPER_FF) is the active weapon.
-    // The Spy AI (CSpyAI_FF) would ensure this.
-    // if (IsWeaponActive_Conceptual(WEAPON_NAME_SAPPER_FF)) {
-        AddButton(pCmd, IN_ATTACK); // Primary fire to place sapper
-    // }
-    // std::cout << "CFFPlayer: Added IN_ATTACK for sapper deployment." << std::endl;
+void CFFPlayerWrapper::BuildBuilding_Command(BuildingType_FF buildingType) {
+    if (!IsValid() || !g_pEngineServer) return; // Ensure g_pEngineServer is initialized and available
+    const char* cmdStr = nullptr;
+    switch(buildingType) {
+        case BuildingType_FF::SENTRY_GUN: cmdStr = "buildsentry"; break;
+        case BuildingType_FF::DISPENSER: cmdStr = "builddispenser"; break;
+        case BuildingType_FF::TELEPORTER_ENTRANCE: cmdStr = "buildteleentrance"; break; // Check actual FF command
+        case BuildingType_FF::TELEPORTER_EXIT: cmdStr = "buildteleexit"; break;     // Check actual FF command
+        default: break;
+    }
+    if (cmdStr) {
+        // Msg("CFFPlayerWrapper: Issuing build command: %s\n", cmdStr);
+        g_pEngineServer->ClientCommand(m_pEdict, cmdStr);
+    }
+}
+
+void CFFPlayerWrapper::DetonateBuildings_Command() {
+    if (!IsValid() || !g_pEngineServer) return;
+    // Msg("CFFPlayerWrapper: Issuing detonate buildings command.\n");
+    g_pEngineServer->ClientCommand(m_pEdict, "det_engi_buildings"); // Use actual FF console command
+}
+
+void CFFPlayerWrapper::CloakToggle_Command() {
+    if (!IsValid() || !g_pEngineServer) return;
+    // Msg("CFFPlayerWrapper: Issuing cloak toggle command (special).\n");
+    // In FF, Spy's cloak is often on the 'special' command, which maps to IN_ATTACK3 or similar logic in CFFPlayer::ItemPostFrame
+    // Or it might be a direct "cloak" command. "special" is a common way.
+    g_pEngineServer->ClientCommand(m_pEdict, "special");
+}
+
+void CFFPlayerWrapper::Disguise_Command(int ff_sdk_team_id, int ff_sdk_class_id) {
+    if (!IsValid() || !g_pEngineServer) return;
+    char cmd[64];
+    snprintf(cmd, sizeof(cmd), "disguise %d %d", ff_sdk_team_id, ff_sdk_class_id); // Use SDK TEAM_ and CLASS_ defines
+    // Msg("CFFPlayerWrapper: Issuing disguise command: %s\n", cmd);
+    g_pEngineServer->ClientCommand(m_pEdict, cmd);
 }

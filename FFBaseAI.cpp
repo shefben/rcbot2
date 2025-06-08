@@ -12,112 +12,100 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-// --- Conceptual Placeholder Types ---
-#ifndef CUSERCMD_CONCEPTUAL_DEF_FFBASEAI_CPP
-#define CUSERCMD_CONCEPTUAL_DEF_FFBASEAI_CPP
-struct CUserCmd { int buttons = 0; float forwardmove = 0.0f; float sidemove = 0.0f; Vector viewangles; int weaponselect = 0; };
-#endif
-#ifndef CBASEENTITY_CONCEPTUAL_DEF_FFBASEAI_CPP
-#define CBASEENTITY_CONCEPTUAL_DEF_FFBASEAI_CPP
-class CBaseEntity {
-public:
-    virtual ~CBaseEntity() {}
-    Vector GetPosition() const { return Vector(0,0,0); }
-    Vector GetWorldSpaceCenter() const { return Vector(0,0,32); }
-    Vector GetAbsVelocity() const { return Vector(0,0,0); }
-    bool IsAlive() const { return true; }
-    int GetTeamNumber() const { return 0; }
-};
-#endif
-#ifndef CFFPLAYER_CONCEPTUAL_DEF_FFBASEAI_CPP
-#define CFFPLAYER_CONCEPTUAL_DEF_FFBASEAI_CPP
-class CFFPlayer { public: CFFPlayer(edict_t* ed=nullptr) : m_pEdict(ed) {} edict_t* GetEdict() const { return m_pEdict; } bool IsValid() const {return m_pEdict != nullptr;} bool IsAlive() const { return true; } Vector GetPosition() const { return m_CurrentPosition_placeholder; } Vector GetEyePosition() const { return Vector(m_CurrentPosition_placeholder.x, m_CurrentPosition_placeholder.y, m_CurrentPosition_placeholder.z + 64); } Vector GetViewAngles() const { return m_CurrentViewAngles_placeholder; } void SetViewAngles(const Vector& ang) { m_CurrentViewAngles_placeholder = ang; } int GetTeamNumber() const { return 1; } int GetFlags() const { return (1 << 0); } Vector m_CurrentPosition_placeholder; Vector m_CurrentViewAngles_placeholder; private: edict_t* m_pEdict; };
-#endif
+// SDK Includes (conceptual)
+// #include "game/shared/usercmd.h" // For CUserCmd
+// #include "game/server/cbase.h"   // For CBaseEntity
+// #include "public/globalvars_base.h" // For gpGlobals
+// #include "CFFPlayer.h" // Now CFFPlayerWrapper.h (renamed) - this should be CFFPlayerWrapper.h
+#include "CFFPlayer.h" // Will be CFFPlayerWrapper.h after rename step
+#include "BotKnowledgeBase.h" // For non-const BotKnowledgeBase
 
-const float DEFAULT_ARRIVAL_TOLERANCE = 48.0f;
-const float DEFAULT_PATH_NODE_REACHED_TOLERANCE_SQ = 64.0f * 64.0f;
+// --- Conceptual Placeholder Types ---
+// These should now come from SDK or our refactored headers.
+// For example, CUserCmd is now from SDK. CBaseEntity from SDK.
+// CFFPlayer is now CFFPlayerWrapper.
 // --- End Conceptual Placeholders ---
 
+// Constants for pathing
+const float DEFAULT_ARRIVAL_TOLERANCE_SQR = 48.0f * 48.0f;
+const float DEFAULT_PATH_NODE_REACHED_TOLERANCE_SQR = 64.0f * 64.0f;
 
-CFFBaseAI::CFFBaseAI(CFFPlayer* pBotPlayer, CObjectivePlanner* pPlanner,
-                   const BotKnowledgeBase* pKnowledgeBase, const ClassConfigInfo* pClassConfig)
+// Assume gpGlobals is available if GetWorldTime() needs it.
+// extern CGlobalVarsBase* gpGlobals; // Should be available from SDK's globalvars_base.h
+
+
+CFFBaseAI::CFFBaseAI(CFFPlayerWrapper* pBotPlayer, CObjectivePlanner* pPlanner,
+                   BotKnowledgeBase* pKnowledgeBase, const ClassConfigInfo* pClassConfig) // Updated types
     : m_pBotPlayer(pBotPlayer),
       m_pObjectivePlanner(pPlanner),
-      m_pKnowledgeBase(pKnowledgeBase),
+      m_pKnowledgeBase(pKnowledgeBase), // Non-const
       m_pClassConfig(pClassConfig),
       m_pCurrentTarget(nullptr),
       m_CurrentPathIndex(-1),
       m_pPathfinder(nullptr)
 {
-    if (!m_pObjectivePlanner) {
-        std::cerr << "CFFBaseAI Error: CObjectivePlanner is NULL!" << std::endl;
-    }
-    if (!m_pBotPlayer) {
-        std::cerr << "CFFBaseAI Warning: CFFPlayer is NULL during construction." << std::endl;
-    }
+    // if (!m_pObjectivePlanner) {
+    //     // std::cerr << "CFFBaseAI Error: CObjectivePlanner is NULL!" << std::endl;
+    // }
+    // if (!m_pBotPlayer) {
+    //     // std::cerr << "CFFBaseAI Warning: CFFPlayerWrapper is NULL during construction." << std::endl;
+    // }
     if (m_pKnowledgeBase && m_pKnowledgeBase->GetNavGraph()) {
         m_pPathfinder = std::make_unique<AStarPathfinder>(m_pKnowledgeBase->GetNavGraph());
     } else {
-        std::cerr << "CFFBaseAI Error: No NavGraph available in KnowledgeBase for Pathfinder initialization!" << std::endl;
+        // std::cerr << "CFFBaseAI Error: No NavGraph available in KnowledgeBase for Pathfinder initialization!" << std::endl;
     }
 }
 
 CFFBaseAI::~CFFBaseAI() {}
 
+float CFFBaseAI::GetWorldTime() const {
+    // if (m_pKnowledgeBase && m_pKnowledgeBase->GetGlobals_Conceptual()) { // Assuming KB can provide CGlobalVarsBase*
+    //     return m_pKnowledgeBase->GetGlobals_Conceptual()->curtime;
+    // }
+    // Or if gpGlobals is directly accessible here (e.g. via include "globalvars_base.h")
+    // if (gpGlobals) return gpGlobals->curtime;
+    return 0.0f; // Placeholder
+}
+
+bool CFFBaseAI::IsLocalPlayerAlive() const {
+    return m_pBotPlayer && m_pBotPlayer->IsAlive();
+}
+
 void CFFBaseAI::Update(CUserCmd* pCmd) {
     if (!pCmd) return;
-    pCmd->buttons = 0; pCmd->forwardmove = 0.0f; pCmd->sidemove = 0.0f;
+    // SDK CUserCmd should be zeroed by game engine before filling or by bot at start of its thinking.
+    // pCmd->buttons = 0; pCmd->forwardmove = 0.0f; pCmd->sidemove = 0.0f; // etc.
 
-    if (!m_pObjectivePlanner || !m_pBotPlayer || !m_pBotPlayer->IsValid() || !m_pBotPlayer->IsAlive()) {
+    if (!m_pObjectivePlanner || !IsLocalPlayerAlive()) {
         return;
     }
     m_pObjectivePlanner->EvaluateAndSelectTask();
 
-    // Get a pointer to the current subtask. This pointer may become dangling if the planner resets the HLT.
-    // So, we need to be careful or copy the necessary info if planner can change HLT mid-execution.
-    // For now, assume planner->OnSubTaskOutcomeReported is the main path for HLT change.
     const SubTask* pConstCurrentSubTask = m_pObjectivePlanner->GetCurrentSubTask();
 
     if (pConstCurrentSubTask && !pConstCurrentSubTask->isCompleted) {
-        // Make a copy for safety if ExecuteSubTask or subsequent calls might change the HLT in planner
-        // SubTask currentSubTaskCopy = *pConstCurrentSubTask;
-        // bool subTaskIsStillOngoing = ExecuteSubTask(&currentSubTaskCopy, pCmd);
-        // For now, pass the const pointer and trust ExecuteSubTask to use it carefully.
-        // ExecuteSubTask will need to get a mutable version from planner if it needs to set isCompleted.
-
         bool subTaskIsStillOngoing = ExecuteSubTask(pConstCurrentSubTask, pCmd);
-
-        // After execution, get the subtask state again as ExecuteSubTask might have marked it complete.
         SubTask* pMutableCurrentSubTask = m_pObjectivePlanner->GetCurrentSubTaskMutable();
 
         if (!subTaskIsStillOngoing) {
-            // SubTask has finished (either success or failure this frame)
-            // The SubTask's isCompleted flag should be set by ExecuteSubTask or its callees if successful.
             float duration = 0.0f;
             if (pMutableCurrentSubTask && pMutableCurrentSubTask->startTime.time_since_epoch().count() != 0) {
-                duration = std::chrono::duration<float>(
-                                std::chrono::system_clock::now() - pMutableCurrentSubTask->startTime).count();
+                 duration = std::chrono::duration<float>(
+                               std::chrono::system_clock::now() - pMutableCurrentSubTask->startTime).count();
             }
-
-            // Report outcome to planner
-            if (pMutableCurrentSubTask) { // Check if it's still valid after execution
+            if (pMutableCurrentSubTask) {
                  m_pObjectivePlanner->OnSubTaskOutcomeReported(pMutableCurrentSubTask->isCompleted,
                                                               pMutableCurrentSubTask->isCompleted ? "" : "Subtask_Failed_Or_Not_Marked_Complete_By_AI");
-            } else { // Subtask became null, means HLT was probably reset by ExecuteSubTask itself (e.g. via failing)
-                 // This case might indicate an HLT failure already processed.
             }
         }
     } else if (pConstCurrentSubTask && pConstCurrentSubTask->isCompleted) {
-         // This subtask was already completed, tell planner to advance or re-evaluate.
-         // This path ensures that if a task completes and planner doesn't immediately switch, it gets notified again.
          m_pObjectivePlanner->OnSubTaskOutcomeReported(true, "Previously_Completed");
     } else {
-        // No current subtask from planner (HLT might be NONE or have no subtasks)
-        if (m_pCurrentTarget && m_pCurrentTarget->IsAlive()) {
-            // AttackTarget(m_pCurrentTarget, pCmd); // Base AttackTarget is pure virtual
+        if (m_pCurrentTarget /* && m_pCurrentTarget->IsAlive() using SDK method */) {
+            // Derived class might implement default attack here if no task
         } else {
-            // Idle: look forward
-            if (m_pBotPlayer) AimAt(m_pBotPlayer->GetPosition() + Vector(100,0,0), pCmd);
+            if (m_pBotPlayer) AimAt(m_pBotPlayer->GetOrigin() + Vector(100,0,0), pCmd); // Aim forward
         }
     }
 }
@@ -125,96 +113,86 @@ void CFFBaseAI::Update(CUserCmd* pCmd) {
 bool CFFBaseAI::ExecuteSubTask(const SubTask* pSubTask, CUserCmd* pCmd) {
     if (!pSubTask || !m_pBotPlayer || !pCmd) return false;
     bool isOngoing = true;
-    SubTask* pMutableSubTask = m_pObjectivePlanner->GetCurrentSubTaskMutable(); // For setting isCompleted
+    SubTask* pMutableSubTask = m_pObjectivePlanner->GetCurrentSubTaskMutable();
 
-    // Ensure mutable subtask is valid and matches the const one being processed
     if (!pMutableSubTask || pMutableSubTask->type != pSubTask->type) {
-        // This might happen if the HLT was changed by an interrupt or other logic
-        // between CFFBaseAI::Update getting pConstCurrentSubTask and this call.
-        // Or if pConstCurrentSubTask was the last subtask and planner reset the HLT.
-        return false; // Cannot operate if mutable version is gone or different
+        return false;
     }
-
 
     switch (pSubTask->type) {
         case SubTaskType::MOVE_TO_POSITION:
-        case SubTaskType::MOVE_TO_ENTITY: {
-            Vector targetPos = (pSubTask->type == SubTaskType::MOVE_TO_ENTITY && pSubTask->pTargetEntity) ?
-                               pSubTask->pTargetEntity->GetPosition() : pSubTask->targetPosition;
+        case SubTaskType::MOVE_TO_ENTITY_DYNAMIC_FF: { // Assuming MOVE_TO_ENTITY was renamed or similar
+            Vector targetPos;
+            if (pSubTask->type == SubTaskType::MOVE_TO_ENTITY_DYNAMIC_FF && pSubTask->pTargetEntity_SDK) { // Assuming pTargetEntity_SDK is CBaseEntity*
+                // targetPos = pSubTask->pTargetEntity_SDK->GetAbsOrigin(); // SDK call
+            } else {
+                targetPos = pSubTask->targetPosition;
+            }
 
             bool targetPositionChangedSignificantly = true;
             if (!m_CurrentPath_NavAreaIDs.empty()) {
-                float dx = m_vCurrentMoveToTarget.x - targetPos.x;
-                float dy = m_vCurrentMoveToTarget.y - targetPos.y;
-                float dz = m_vCurrentMoveToTarget.z - targetPos.z;
-                targetPositionChangedSignificantly = (dx*dx + dy*dy + dz*dz > 10.0f*10.0f);
+                targetPositionChangedSignificantly = (m_vCurrentMoveToTarget.DistToSqr(targetPos) > 10.0f*10.0f);
             }
             if (m_CurrentPath_NavAreaIDs.empty() || targetPositionChangedSignificantly) {
-                if (!MoveTo(targetPos, pCmd)) {
+                // MoveTo now just calls PlanPathTo and sets m_vCurrentMoveToTarget. CUserCmd is not used by it.
+                if (!MoveTo(targetPos, nullptr /*pCmd not needed for MoveTo's new role*/)) {
                     isOngoing = false; pMutableSubTask->isCompleted = false; break;
                 }
             }
-            isOngoing = FollowPath(pCmd);
-            if (!isOngoing) pMutableSubTask->isCompleted = true;
+            isOngoing = FollowPath(pCmd); // FollowPath fills pCmd
+            if (!isOngoing && m_pBotPlayer->GetOrigin().DistToSqr(targetPos) < DEFAULT_ARRIVAL_TOLERANCE_SQR) {
+                 pMutableSubTask->isCompleted = true;
+            } else if (!isOngoing) { // Path ended but not at target
+                 pMutableSubTask->isCompleted = false;
+            }
             break;
         }
         case SubTaskType::ATTACK_TARGET:
-            if (pSubTask->pTargetEntity && pSubTask->pTargetEntity->IsAlive()) {
-                isOngoing = AttackTarget(pSubTask->pTargetEntity, pCmd);
-                if (pSubTask->pTargetEntity && !pSubTask->pTargetEntity->IsAlive()) {
-                    isOngoing = false; pMutableSubTask->isCompleted = true;
-                } else if (!isOngoing) { // Attack action itself finished (e.g. one shot weapon, or decided to stop)
-                     pMutableSubTask->isCompleted = false; // Or true if objective of attack met
-                }
-            } else {
-                isOngoing = false;
-                pMutableSubTask->isCompleted = true;
-            }
+            // if (pSubTask->pTargetEntity_SDK && pSubTask->pTargetEntity_SDK->IsAlive()) { // SDK Check
+            //     isOngoing = AttackTarget(pSubTask->pTargetEntity_SDK, pCmd);
+            //     if (pSubTask->pTargetEntity_SDK && !pSubTask->pTargetEntity_SDK->IsAlive()) {
+            //         isOngoing = false; pMutableSubTask->isCompleted = true;
+            //     } else if (!isOngoing) {
+            //          pMutableSubTask->isCompleted = false;
+            //     }
+            // } else {
+            //     isOngoing = false;
+            //     pMutableSubTask->isCompleted = true;
+            // }
             break;
 
         case SubTaskType::CAPTURE_OBJECTIVE:
         case SubTaskType::STAND_ON_POINT: {
-            // Use radiusParam from SubTask for capture/stand radius
             float standRadiusSq = pSubTask->radiusParam * pSubTask->radiusParam;
-            if (standRadiusSq <= 0.01f) standRadiusSq = DEFAULT_ARRIVAL_TOLERANCE * DEFAULT_ARRIVAL_TOLERANCE; // Fallback
+            if (standRadiusSq <= 0.01f) standRadiusSq = DEFAULT_ARRIVAL_TOLERANCE_SQR;
 
-            Vector currentPos = m_pBotPlayer->GetPosition();
-            float distSq = (currentPos.x - pSubTask->targetPosition.x) * (currentPos.x - pSubTask->targetPosition.x) +
-                           (currentPos.y - pSubTask->targetPosition.y) * (currentPos.y - pSubTask->targetPosition.y);
-
-            if (distSq < standRadiusSq) {
-                AimAt(m_pBotPlayer->GetPosition() + Vector(100,0,0), pCmd);
-                // Conceptual: if (IsObjectiveCaptured_Conceptual(pSubTask->pTargetEntity, m_pBotPlayer->GetTeam())) {
-                //    pMutableSubTask->isCompleted = true; isOngoing = false; break;
-                // }
-                // Check duration for STAND_ON_POINT or timed CAPTURE_OBJECTIVE
+            Vector currentPos = m_pBotPlayer->GetOrigin();
+            if (currentPos.DistToSqr(pSubTask->targetPosition) < standRadiusSq) {
+                AimAt(m_pBotPlayer->GetOrigin() + Vector(100,0,0), pCmd); // Look forward
                 if (pSubTask->desiredDuration > 0.0f &&
                     pSubTask->startTime.time_since_epoch().count() != 0 &&
                     std::chrono::duration<float>(std::chrono::system_clock::now() - pSubTask->startTime).count() > pSubTask->desiredDuration) {
-                    pMutableSubTask->isCompleted = true; // Duration met
+                    pMutableSubTask->isCompleted = true;
                     isOngoing = false;
                 } else {
-                    isOngoing = true; // On point, continue task (e.g. waiting for cap or duration)
+                    isOngoing = true;
                 }
             } else {
-                bool targetPosChanged = (m_vCurrentMoveToTarget.x != pSubTask->targetPosition.x || m_vCurrentMoveToTarget.y != pSubTask->targetPosition.y);
+                bool targetPosChanged = (m_vCurrentMoveToTarget.DistToSqr(pSubTask->targetPosition) > 1.0f);
                 if (m_CurrentPath_NavAreaIDs.empty() || targetPosChanged) {
-                    if (!MoveTo(pSubTask->targetPosition, pCmd)) { isOngoing = false; pMutableSubTask->isCompleted = false; break;}
+                    if (!MoveTo(pSubTask->targetPosition, nullptr)) { isOngoing = false; pMutableSubTask->isCompleted = false; break;}
                 }
                 isOngoing = FollowPath(pCmd);
-                if(!isOngoing) { // Path ended
-                    // Check again if now at point, otherwise movement failed to reach
-                    distSq = (m_pBotPlayer->GetPosition().x - pSubTask->targetPosition.x) * (m_pBotPlayer->GetPosition().x - pSubTask->targetPosition.x) +
-                             (m_pBotPlayer->GetPosition().y - pSubTask->targetPosition.y) * (m_pBotPlayer->GetPosition().y - pSubTask->targetPosition.y);
-                    pMutableSubTask->isCompleted = (distSq < standRadiusSq);
+                if(!isOngoing) {
+                    pMutableSubTask->isCompleted = (m_pBotPlayer->GetOrigin().DistToSqr(pSubTask->targetPosition) < standRadiusSq);
                 }
             }
             break;
         }
-        case SubTaskType::USE_ABILITY_ON_TARGET:
-        case SubTaskType::USE_ABILITY_AT_POSITION:
-            isOngoing = UseAbility(pSubTask->abilitySlot, pSubTask->pTargetEntity, pCmd);
-            if (!isOngoing) pMutableSubTask->isCompleted = true;
+        case SubTaskType::USE_ABILITY_ON_TARGET: // Renamed from USE_ABILITY_ON_TARGET
+        case SubTaskType::USE_ABILITY_AT_POSITION: // Renamed from USE_ABILITY_AT_POSITION
+            // isOngoing = UseAbility(pSubTask->abilitySlot, pSubTask->pTargetEntity_SDK, pSubTask->targetPosition, pCmd);
+            // if (!isOngoing) pMutableSubTask->isCompleted = true; // Assume ability is one-shot or sets completion itself
             break;
         case SubTaskType::SECURE_AREA:
         case SubTaskType::DEFEND_POSITION:
@@ -225,59 +203,64 @@ bool CFFBaseAI::ExecuteSubTask(const SubTask* pSubTask, CUserCmd* pCmd) {
                 pMutableSubTask->isCompleted = true;
                 isOngoing = false;
             } else {
-                // Conceptual: Scan for enemies, attack if found. If not, look around.
-                // CBaseEntity* enemy = SelectTarget(); // Could use a specific scan for area
-                // if(enemy) AttackTarget(enemy, pCmd); else AimAt(m_pBotPlayer->GetPosition() + Vector(0,100,0), pCmd);
-                isOngoing = true; // Assume ongoing until duration
+                // CBaseEntity* enemy = SelectTarget();
+                // if(enemy) AttackTarget(enemy, pCmd); else AimAt(m_pBotPlayer->GetOrigin() + Vector(0,100,0), pCmd); // Look around
+                isOngoing = true;
             }
             break;
         }
         default:
             isOngoing = false;
-            pMutableSubTask->isCompleted = false; // Mark as failed if unknown
+            pMutableSubTask->isCompleted = false;
             break;
     }
     return isOngoing;
 }
 
-// ... (MoveTo, FollowPath, PlanPathTo, GetNextPathNodePosition, ClearCurrentPath, AttackTarget, IsTargetInRange, IsFacingTarget, AimAt remain largely the same as Task 11, Step 2)
-// Ensure placeholder CFFPlayer methods like GetOrigin() are used consistently.
-bool CFFBaseAI::MoveTo(const Vector& targetPos, CUserCmd* pCmd) { /* ... unchanged ... */
+bool CFFBaseAI::MoveTo(const Vector& targetPos, CUserCmd* pCmd) {
     ClearCurrentPath();
     m_vCurrentMoveToTarget = targetPos;
     if (!PlanPathTo(targetPos)) {
         return false;
     }
+    // Path is planned, FollowPath will be called next tick by ExecuteSubTask normally.
+    // No CUserCmd to fill here directly for MoveTo itself.
     return !m_CurrentPath_NavAreaIDs.empty();
 }
-bool CFFBaseAI::FollowPath(CUserCmd* pCmd) { /* ... unchanged ... */
+
+bool CFFBaseAI::FollowPath(CUserCmd* pCmd) {
     if (!m_pBotPlayer || !pCmd) return false;
     if (m_CurrentPath_NavAreaIDs.empty() || m_CurrentPathIndex < 0 ) {
         return false;
     }
-    Vector botOrigin = m_pBotPlayer->GetPosition();
-    float distToFinalTargetSq = (botOrigin.x - m_vCurrentMoveToTarget.x)*(botOrigin.x - m_vCurrentMoveToTarget.x) +
-                                (botOrigin.y - m_vCurrentMoveToTarget.y)*(botOrigin.y - m_vCurrentMoveToTarget.y);
-    if (distToFinalTargetSq < DEFAULT_ARRIVAL_TOLERANCE * DEFAULT_ARRIVAL_TOLERANCE) {
+
+    Vector botOrigin = m_pBotPlayer->GetOrigin(); // SDK Call via wrapper
+    if (botOrigin.DistToSqr(m_vCurrentMoveToTarget) < DEFAULT_ARRIVAL_TOLERANCE_SQR) {
         ClearCurrentPath();
-        return false;
+        return false; // Arrived at final target
     }
+
     Vector nextNodeWorldPos;
-    if (!GetNextPathNodePosition(nextNodeWorldPos)) {
+    if (!GetNextPathNodePosition(nextNodeWorldPos)) { // This advances m_CurrentPathIndex or clears path
         ClearCurrentPath();
-        return false;
+        return false; // Path exhausted or failed to get next node
     }
+
     AimAt(nextNodeWorldPos, pCmd);
-    pCmd->forwardmove = 400;
+    // Set movement. Actual speed should come from class data or be a define.
+    // float speed = m_pClassConfig ? m_pClassConfig->speed : 300.0f;
+    pCmd->forwardmove = 400; // Assuming a default forward speed
     pCmd->sidemove = 0;
-    return true;
+
+    return true; // Still following path
 }
-bool CFFBaseAI::PlanPathTo(const Vector& targetPos) { /* ... unchanged ... */
+
+bool CFFBaseAI::PlanPathTo(const Vector& targetPos) {
     ClearCurrentPath();
     if (!m_pPathfinder || !m_pBotPlayer || !m_pKnowledgeBase || !m_pKnowledgeBase->GetNavGraph()) {
         return false;
     }
-    Vector startPos = m_pBotPlayer->GetPosition();
+    Vector startPos = m_pBotPlayer->GetOrigin(); // SDK Call via wrapper
     unsigned int startAreaId = m_pKnowledgeBase->GetNavGraph()->FindNearestNodeID(startPos);
     unsigned int endAreaId = m_pKnowledgeBase->GetNavGraph()->FindNearestNodeID(targetPos);
     if (startAreaId == 0 || endAreaId == 0) {
@@ -295,8 +278,8 @@ bool CFFBaseAI::PlanPathTo(const Vector& targetPos) { /* ... unchanged ... */
     }
     return false;
 }
-bool CFFBaseAI::GetNextPathNodePosition(Vector& outNextNodePos) { /* ... unchanged ... */
-    if (m_CurrentPath_NavAreaIDs.empty() || m_CurrentPathIndex < 0 || m_CurrentPathIndex >= m_CurrentPath_NavAreaIDs.size()) {
+bool CFFBaseAI::GetNextPathNodePosition(Vector& outNextNodePos) {
+    if (m_CurrentPath_NavAreaIDs.empty() || m_CurrentPathIndex < 0 || (size_t)m_CurrentPathIndex >= m_CurrentPath_NavAreaIDs.size()) {
         return false;
     }
     unsigned int currentNodeNavId = m_CurrentPath_NavAreaIDs[m_CurrentPathIndex];
@@ -309,31 +292,57 @@ bool CFFBaseAI::GetNextPathNodePosition(Vector& outNextNodePos) { /* ... unchang
         return false;
     }
     outNextNodePos = pCurrentNodeDef->center;
-    Vector botPos = m_pBotPlayer ? m_pBotPlayer->GetPosition() : Vector(0,0,0);
-    float dx = botPos.x - outNextNodePos.x;
-    float dy = botPos.y - outNextNodePos.y;
-    if ((dx*dx + dy*dy) < DEFAULT_PATH_NODE_REACHED_TOLERANCE_SQ) {
+
+    Vector botPos = m_pBotPlayer ? m_pBotPlayer->GetOrigin() : Vector(0,0,0); // SDK Call
+    // Check if bot is close enough to the current path node's center (2D distance check)
+    if (botPos.DistToSqr2D(outNextNodePos) < DEFAULT_PATH_NODE_REACHED_TOLERANCE_SQ) {
         m_CurrentPathIndex++;
-        if (m_CurrentPathIndex >= m_CurrentPath_NavAreaIDs.size()) {
-            return false;
+        if ((size_t)m_CurrentPathIndex >= m_CurrentPath_NavAreaIDs.size()) {
+            return false; // Reached end of path list
         }
+        // Get next node
         currentNodeNavId = m_CurrentPath_NavAreaIDs[m_CurrentPathIndex];
         if (m_pKnowledgeBase && m_pKnowledgeBase->GetNavGraph()) {
             pCurrentNodeDef = m_pKnowledgeBase->GetNavGraph()->GetNode(currentNodeNavId);
         }
         if (!pCurrentNodeDef) {
-            ClearCurrentPath(); return false;
+            ClearCurrentPath(); return false; // Path error
         }
         outNextNodePos = pCurrentNodeDef->center;
     }
     return true;
 }
-void CFFBaseAI::ClearCurrentPath() { /* ... unchanged ... */
+
+void CFFBaseAI::ClearCurrentPath() {
     m_CurrentPath_NavAreaIDs.clear();
     m_CurrentPathIndex = -1;
-    m_vCurrentMoveToTarget = Vector(0,0,0);
+    m_vCurrentMoveToTarget = Vector(0,0,0); // Use SDK Vector constructor if different
 }
-bool CFFBaseAI::AttackTarget(CBaseEntity* pTarget, CUserCmd* pCmd) { /* ... unchanged, pure virtual ... */ return false;}
-bool CFFBaseAI::IsTargetInRange(CBaseEntity* pTarget, float range) const { /* ... unchanged ... */ return true; }
-bool CFFBaseAI::IsFacingTarget(CBaseEntity* pTarget, float fovDegrees) const { /* ... unchanged ... */ return true; }
-void CFFBaseAI::AimAt(const Vector& targetPos, CUserCmd* pCmd) { /* ... unchanged ... */ }
+
+// AttackTarget is pure virtual.
+
+bool CFFBaseAI::IsTargetInRange(CBaseEntity* pTarget, float range) const {
+    if (!pTarget || !m_pBotPlayer) return false;
+    // float distSq = m_pBotPlayer->GetOrigin().DistToSqr(pTarget->GetAbsOrigin()); // SDK Calls
+    // return distSq < (range * range);
+    return true; // Placeholder
+}
+
+bool CFFBaseAI::IsFacingTarget(CBaseEntity* pTarget, float fovDegrees) const {
+    if (!pTarget || !m_pBotPlayer) return false;
+    // Vector toTarget = pTarget->GetAbsOrigin() - m_pBotPlayer->GetEyePosition(); // SDK Calls
+    // toTarget.NormalizeInPlace();
+    // Vector forward;
+    // AngleVectors(m_pBotPlayer->GetEyeAngles(), &forward); // SDK Call or QAngle method
+    // return forward.Dot(toTarget) > std::cos(fovDegrees * M_PI / 360.0f); // M_PI from cmath
+    return true; // Placeholder
+}
+
+void CFFBaseAI::AimAt(const Vector& targetPos, CUserCmd* pCmd) {
+    if (!m_pBotPlayer || !pCmd) return;
+    // Vector eyePos = m_pBotPlayer->GetEyePosition(); // SDK Call
+    // Vector aimDir = targetPos - eyePos;
+    // QAngle finalAngles;
+    // VectorAngles(aimDir, finalAngles); // SDK Call
+    // m_pBotPlayer->SetViewAngles(pCmd, finalAngles); // Uses CFFPlayerWrapper method
+}

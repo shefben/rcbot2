@@ -75,13 +75,13 @@ public:
     bool LoadMapObjectiveData(lua_State* L, const char* mapName, const std::vector<std::string>& cpTableNames);
 
     void UpdateControlPointState(int cpId, int newOwnerTeam, float newCaptureProgress, bool newIsLocked);
-    void UpdateTrackedEntities(const std::vector<TrackedEntityInfo>& currentTrackedEntities, int botTeamId); // May be deprecated by UpdateTrackedPlayers_Conceptual
-    void UpdateTrackedPlayers_Conceptual(const std::vector<TrackedEntityInfo>& perceivedPlayers);     // New
-    void UpdateTrackedBuildings_Conceptual(const std::vector<BuildingInfo>& perceivedBuildings); // New
+    void UpdateTrackedEntities(const std::vector<TrackedEntityInfo>& currentTrackedEntities, int botTeamId); // May be deprecated by UpdateTrackedPlayers
+    void UpdateTrackedPlayers(const std::vector<TrackedEntityInfo>& perceivedPlayers);     // Renamed
+    void UpdateTrackedBuildings(const std::vector<BuildingInfo>& perceivedBuildings); // Renamed
     void UpdateTrackedProjectiles(const std::vector<ReflectableProjectileInfo>& currentProjectiles);
 
     // Building specific updates
-    void UpdateOrAddBuilding(const BuildingInfo& newBuildingInfo); // May be wrapped or replaced by UpdateTrackedBuildings_Conceptual
+    void UpdateOrAddBuilding(const BuildingInfo& newBuildingInfo); // May be wrapped or replaced by UpdateTrackedBuildings
     void RemoveBuilding(edict_t* pEdict); // Or by uniqueId
     void UpdateBuildingHealth(edict_t* pEdict, int newHealth, bool isStillBuilding); // Also updates isBuildingInProgress
     void UpdateBuildingSapped(edict_t* pEdict, bool isSapped);

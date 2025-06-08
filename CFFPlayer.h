@@ -1,121 +1,101 @@
-#ifndef CFF_PLAYER_H
-#define CFF_PLAYER_H
+#ifndef CFF_PLAYER_WRAPPER_H // Renamed to avoid conflict with potential SDK CFFPlayer.h
+#define CFF_PLAYER_WRAPPER_H
 
-#include "FFStateStructs.h"
-#include <string>
-// #include "FFEngineerAI.h" // Only if BuildingType_FF is needed directly by CFFPlayer methods
+// SDK Includes (conceptual paths, use actual relative paths from your source directory)
+#include "game/server/ff/ff_player.h" // For ::CFFPlayer (the SDK's player class)
+#include "game/shared/usercmd.h"      // For CUserCmd (SDK's command structure)
+#include "game/shared/in_buttons.h"   // For IN_ button flags (e.g. IN_ATTACK)
+#include "public/const.h"             // For FL_ player flags (e.g. FL_ONGROUND)
+// #include "game/server/weapon_base.h" // Or ff_weapon_base.h for CBaseCombatWeapon/CFFWeaponBase type if needed for active weapon checks
+// #include "game/shared/ff_weapon_base.h" // For FFWeaponID enum if used in SelectWeapon
+#include "game/shared/shareddefs.h"   // For TEAM_ defines (e.g. FF_TEAM_RED) and CLASS_ defines
 
-// Forward declarations
-struct edict_t;
-struct CUserCmd;
-class CBaseEntity;
-// enum class BuildingType_FF; // Forward declare if needed by a CFFPlayer method
-
-// Conceptual Player Flags & Button Flags
-#ifndef FL_ONGROUND
-#define FL_ONGROUND (1 << 0)
-#endif
-#ifndef FL_DUCKING
-#define FL_DUCKING  (1 << 1)
-#endif
-// ... (other FL_ flags if used by CFFPlayer directly) ...
-#ifndef IN_ATTACK
-#define IN_ATTACK   (1 << 0)
-#endif
-#ifndef IN_JUMP
-#define IN_JUMP     (1 << 1)
-#endif
-#ifndef IN_DUCK
-#define IN_DUCK     (1 << 2)
-#endif
-#ifndef IN_RELOAD
-#define IN_RELOAD   (1 << 3)
-#endif
-#ifndef IN_ATTACK2
-#define IN_ATTACK2  (1 << 11)
-#endif
-// ... (other IN_ flags if used by CFFPlayer directly) ...
+// Bot Framework Includes
+// Assuming FFStateStructs.h provided Vector and QAngle if SDK ones are not directly used or need wrapping.
+// If SDK provides mathlib/vector.h and mathlib/qangle.h, those are preferred.
+// For this refactor, we assume SDK types are used directly or via the includes above.
+// #include "FFStateStructs.h"      // Only if still needed for custom Vector/QAngle not from SDK
+#include "FFBot_SDKDefines.h"      // For our FF_BotPlayerClassID enum and mapping functions
+#include "FFEngineerAI.h"          // For BuildingType_FF enum (ideally this enum is in a more general file)
 
 
-class CFFPlayer {
+// Forward declare SDK's CFFPlayer if its full definition isn't needed for these declarations
+// However, since we have #include "game/server/ff/ff_player.h", it should be defined.
+// class CFFPlayer; // This would refer to the SDK's CFFPlayer
+
+class CFFPlayerWrapper { // Renamed class to avoid collision with SDK's ::CFFPlayer
 public:
-    CFFPlayer(edict_t* pEdict);
+    CFFPlayerWrapper(edict_t* pBotEdict); // Constructor takes the bot's edict
 
-    bool IsValid() const;
-    bool IsAlive() const;
+    bool IsValid() const; // Checks if m_pSDKPlayer is valid
+    bool IsAlive() const; // Uses SDK's IsAlive()
 
-    // --- Getters for Game State ---
-    Vector GetOrigin() const;
-    Vector GetVelocity() const;
-    Vector GetEyeAngles() const;
+    // --- Getters using SDK ::CFFPlayer ---
+    Vector GetOrigin() const;           // Returns SDK Vector
+    Vector GetVelocity() const;         // Returns SDK Vector
+    QAngle GetEyeAngles() const;        // Returns SDK QAngle (actual current view)
     int GetHealth() const;
     int GetMaxHealth() const;
     int GetArmor() const;
     int GetMaxArmor() const;
-    int GetTeam() const;
-    int GetFlags() const;
+    int GetTeam() const;                // Returns FF_TEAM_RED, FF_TEAM_BLUE, etc. from SDK
+    int GetFlags() const;               // Player FL_ flags from SDK
     bool IsDucking() const;
     bool IsOnGround() const;
-    int GetAmmo(int ammoTypeIndex) const;
-    int GetActiveWeaponId_Conceptual() const;
-    bool IsWeaponActive_Conceptual(const std::string& weaponName) const;
+    int GetAmmo(const std::string& ammoName) const; // Takes string like "AMMO_CELLS" (defined in ff_weapon_base.h)
+    int GetAmmoByIndex(int ammoIndex) const;       // Takes SDK ammo index (from CAmmoDef)
 
-    // --- Engineer-Specific Getters ---
-    int GetMetalCount_Conceptual() const;
+    ::CFFPlayer* GetSDKPlayer() const { return m_pSDKPlayer; } // Expose SDK player pointer
 
-    // --- Spy-Specific Getters (New) ---
-    bool IsCloaked_Conceptual() const;
-    bool IsDisguised_Conceptual() const;
-    int GetDisguiseTeam_Conceptual() const;   // Returns game-specific team ID (e.g., TEAM_RED)
-    int GetDisguiseClass_Conceptual() const; // Returns game-specific class ID (e.g., TF_CLASS_SOLDIER)
-    float GetCloakEnergy_Conceptual() const;
-    bool CanCloak_Conceptual() const;       // Checks energy, cooldowns, conditions
-    bool CanDisguise_Conceptual() const;    // Checks cooldowns, conditions
+    // FF-Specific State Getters
+    FF_BotPlayerClassID GetBotClassId() const; // Returns our internal enum, mapped from SDK class
+    std::string GetPlayerClassNameString() const; // Returns string like "soldier", "medic"
+    int GetSDKClassID() const; // Returns the raw SDK CLASS_ define (e.g., CLASS_SOLDIER)
+    float GetPlayerMaxSpeed() const; // From CFFPlayerClassInfo or ::CFFPlayer
 
-    // --- Pyro Specific Getters (conceptual) ---
-    bool IsOnFire_Conceptual() const;
-    bool IsTargetOnFire_Conceptual(edict_t* pTargetEdict) const;
-    int GetAirblastAmmo_Conceptual() const;
-    bool CanAirblast_Conceptual() const;
+    // Engineer Specific
+    int GetMetalCount() const;
+
+    // Spy Specific
+    bool IsCloaked() const;         // Uses SDK ::CFFPlayer::IsCloaked()
+    bool IsDisguised() const;       // Uses SDK ::CFFPlayer::IsDisguised()
+    int GetDisguiseTeam() const;    // Returns SDK FF_TEAM_ define
+    FF_BotPlayerClassID GetDisguiseClass() const; // Returns our internal enum, mapped from SDK disguise class
+    float GetCloakEnergy() const;   // Conceptual: ::CFFPlayer may have m_flCloakEnergy or similar
+
+    // Conceptual: Check if a specific weapon is active, e.g. Sapper
+    // bool IsWeaponActive(int ff_weapon_id_enum) const;
 
 
-    // --- Action Methods (filling UserCmd) ---
-    void SetViewAngles(CUserCmd* pCmd, const Vector& angles);
+    // --- Action Methods (filling CUserCmd or issuing ClientCommands) ---
+    void SetViewAngles(CUserCmd* pCmd, const QAngle& angles); // Uses SDK QAngle
     void SetMovement(CUserCmd* pCmd, float forwardMove, float sideMove, float upMove = 0.0f);
-    void AddButton(CUserCmd* pCmd, int buttonFlag);
-    void RemoveButton(CUserCmd* pCmd, int buttonFlag);
-    void SelectWeaponByName_Conceptual(const std::string& weaponName, CUserCmd* pCmd);
-    void SelectWeaponById_Conceptual(int weaponId, CUserCmd* pCmd);
+    void AddButton(CUserCmd* pCmd, int buttonFlag);    // Uses IN_ flags from SDK
+    void RemoveButton(CUserCmd* pCmd, int buttonFlag); // Uses IN_ flags from SDK
+    void SetImpulse(CUserCmd* pCmd, unsigned char impulse);
 
-    // --- Engineer-Specific Action Methods ---
-    // void IssuePDABuildCommand_Conceptual(BuildingType_FF buildingType, int subCommand, CUserCmd* pCmd); // BuildingType_FF needs definition
-    void IssuePDABuildCommand_Conceptual(int buildingTypeId, int subCommand, CUserCmd* pCmd); // Use int for type for now
-    void SwingWrench_Conceptual(CUserCmd* pCmd);
+    // Weapon/Tool Actions
+    void SelectWeapon(CUserCmd* pCmd, const std::string& weaponClassName); // Uses "ff_weapon_..." SDK classnames
+    void PrimaryAttack(CUserCmd* pCmd);   // Helper to add IN_ATTACK
+    void SecondaryAttack(CUserCmd* pCmd); // Helper to add IN_ATTACK2
 
-    // --- Spy-Specific Action Methods (New) ---
-    void StartCloak_Conceptual(CUserCmd* pCmd); // Assumes Invis Watch is active weapon, typically IN_ATTACK2
-    void StopCloak_Conceptual(CUserCmd* pCmd);  // If cloak is toggled by same button or different action
-    void IssueDisguiseCommand_Conceptual(int targetTeamId_conceptual, int targetClassId_conceptual); // Queues a ClientCommand
-    void DeploySapper_Conceptual(CUserCmd* pCmd); // Assumes Sapper is active weapon, typically IN_ATTACK
+    // Engineer Actions (issuing server commands via plugin to the bot's edict)
+    void BuildBuilding_Command(BuildingType_FF buildingType); // e.g., BuildingType_FF::SENTRY_GUN
+    void DetonateBuildings_Command(); // For all engineer buildings
 
-
-    edict_t* GetEdict() const { return m_pEdict; }
+    // Spy Actions (issuing server commands or CUserCmd where appropriate)
+    void CloakToggle_Command(); // Issues "special" client command for cloak
+    void Disguise_Command(int ff_sdk_team_id, int ff_sdk_class_id); // Uses FF_TEAM_ and CLASS_ defines from SDK
 
 private:
-    edict_t* m_pEdict;
+    edict_t*     m_pEdict;
+    ::CFFPlayer* m_pSDKPlayer; // Pointer to the actual game's CFFPlayer object
 
-    // Conceptual placeholders for internal state if not directly reading from engine each call
-    Vector m_CurrentPosition_placeholder;
-    Vector m_CurrentViewAngles_placeholder;
-    int m_iCurrentHealth_placeholder;
-    int m_iCurrentMetal_placeholder;
-    int m_iActiveWeaponId_placeholder;
-    // Spy conceptual state placeholders (to be replaced by engine calls)
-    bool m_bIsCloaked_placeholder;
-    bool m_bIsDisguised_placeholder;
-    int m_iDisguiseTeam_placeholder;
-    int m_iDisguiseClass_placeholder;
-    float m_fCloakEnergy_placeholder;
+    // Helper to keep m_pSDKPlayer fresh or validate it with each call or periodically
+    void UpdateSDKPlayerPtr();
+    // Note: Calling UpdateSDKPlayerPtr() in every getter can be expensive.
+    // Consider calling it once per frame or when m_pEdict might have changed.
+    // For robustness in this refactor, it might be called frequently initially.
 };
 
-#endif // CFF_PLAYER_H
+#endif // CFF_PLAYER_WRAPPER_H

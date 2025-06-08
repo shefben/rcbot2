@@ -1,13 +1,38 @@
 #include "BotKnowledgeBase.h"
 #include "FFLuaBridge.h"
-#include "EngineInterfaces.h"
-#include "FFEngineerAI.h" // For BuildingType_FF (if not moved to a more general header)
+#include "EngineInterfaces.h" // For g_pEngineNavMeshInterface (conceptual global)
+#include "FFEngineerAI.h" // For BuildingType_FF
+#include "NavSystem.h"      // For our NavAttribute enum, NavConnectionType enum
+#include "FFBot_SDKDefines.h" // For NAV_ATTR_CROUCH_SDK etc. if defined there
+
+// Conceptual SDK Nav Mesh Includes (actual paths will vary)
+// #include "game/server/nav_area.h"   // For CNavArea
+// #include "game/server/nav_mesh.h"   // For INavMesh (if g_pEngineNavMeshInterface is of this type)
+// #include "game/server/nav_node.h"   // For CNavNode (if used by CNavArea)
+// #include "game/server/nav_connect.h"// For NavConnect
+// #include "game/server/nav_ladder.h" // For CNavLadder
+
 #include <algorithm>
 #include <iostream>
 
-// --- Conceptual: Engine NavMesh Interface & Defines ---
-// (Assuming INavMesh_Conceptual and related defines are placeholders if g_pEngineNavMeshInterface is used)
-// extern INavMesh_Conceptual* g_pEngineNavMeshInterface;
+// --- Conceptual SDK Nav Mesh Interface (Placeholder if not in EngineInterfaces.h) ---
+// class CNavArea {
+// public:
+//     virtual unsigned int GetID() const = 0;
+//     virtual Vector GetCenter() const = 0; // Assuming SDK Vector is compatible
+//     virtual unsigned int GetAttributes() const = 0; // SDK's NAV_MESH_ attributes
+//     virtual const NavConnectVector* GetAdjacentAreas(NavDirType dir) const = 0; // Assuming NavConnectVector is an SDK type for std::vector<NavConnect>
+//     virtual const NavLadderConnectVector* GetLadders(NavDirType dir) const = 0; // Assuming NavLadderConnectVector for ladders
+//     // ... other CNavArea methods ...
+// };
+// class INavMesh_Conceptual { // Matches EngineInterfaces.h
+// public:
+//     virtual bool IsLoaded() = 0;
+//     virtual unsigned int GetNavAreaCount() = 0;
+//     virtual CNavArea* GetNavArea(unsigned int id, int i = 0) = 0; // GetNavAreaByID or GetNavAreaByIndex
+//     // ... other INavMesh methods
+// };
+// extern INavMesh_Conceptual* g_pEngineNavMeshInterface; // Assuming this is how we access it
 // --- End Conceptual ---
 
 
@@ -18,7 +43,77 @@ BotKnowledgeBase::BotKnowledgeBase() : m_CurrentGameMode(GameModeType_KB::UNKNOW
 void BotKnowledgeBase::CreatePlaceholderNavMesh() { /* ... (same as Task 16, Step 1) ... */ }
 
 bool BotKnowledgeBase::LoadGlobalClassConfigs(lua_State* L, const std::vector<std::string>& classConfigTableNames) { /* ... (same as Task 16, Step 1) ... */ return true;}
-bool BotKnowledgeBase::LoadNavMesh(const char* mapName) { /* ... (same as Task 16, Step 1, calls CreatePlaceholderNavMesh if needed) ... */ CreatePlaceholderNavMesh(); return true;}
+
+bool BotKnowledgeBase::LoadNavMesh(const char* mapName /*, INavMesh* pEngineNavMesh */) {
+    m_NavGraph.Clear();
+    // if (!g_pEngineNavMeshInterface /* || !g_pEngineNavMeshInterface->IsLoaded() */) {
+    //     // Warning("BotKnowledgeBase::LoadNavMesh: Engine NavMesh interface not available or not loaded for map %s. Creating placeholder.\n", mapName);
+    //     CreatePlaceholderNavMesh();
+    //     return !m_NavGraph.nodes.empty();
+    // }
+
+    // unsigned int areaCount = 0; // g_pEngineNavMeshInterface->GetNavAreaCount();
+    // if (areaCount == 0) {
+    //     // Warning("BotKnowledgeBase::LoadNavMesh: Engine NavMesh is empty for map %s. Creating placeholder.\n", mapName);
+    //     CreatePlaceholderNavMesh();
+    //     return !m_NavGraph.nodes.empty();
+    // }
+
+    // // First pass: Add all areas as nodes
+    // for (unsigned int i = 0; i < areaCount; ++i) {
+    //     // CNavArea* pSDKNavArea = g_pEngineNavMeshInterface->GetNavArea(i, 0); // Assuming GetNavArea by index
+    //     // if (pSDKNavArea) {
+    //     //     NavAreaNode botNode(pSDKNavArea->GetID());
+    //     //     botNode.center = pSDKNavArea->GetCenter(); // Assumes SDK Vector is compatible
+    //     //     botNode.attributes = 0;
+    //     //     unsigned int sdkAttrs = pSDKNavArea->GetAttributes();
+    //     //     if (sdkAttrs & NAV_MESH_CROUCH) botNode.attributes |= NavAttribute::CROUCH; // Map SDK NAV_MESH_CROUCH to our NavAttribute::CROUCH
+    //     //     if (sdkAttrs & NAV_MESH_JUMP)   botNode.attributes |= NavAttribute::JUMP;
+    //     //     if (sdkAttrs & NAV_MESH_PRECISE) botNode.attributes |= NavAttribute::PRECISE_BOTDEF; // Example mapping
+    //     //     // ... map other relevant attributes (NAV_MESH_NO_JUMP, NAV_MESH_STAND, NAV_MESH_NON_ZUP, etc.) ...
+    //     //     m_NavGraph.AddNode(botNode);
+    //     // }
+    // }
+
+    // // Second pass: Add connections
+    // for (unsigned int i = 0; i < areaCount; ++i) {
+    //     // CNavArea* pSDKNavArea = g_pEngineNavMeshInterface->GetNavArea(i, 0);
+    //     // if (pSDKNavArea) {
+    //     //     unsigned int fromAreaID = pSDKNavArea->GetID();
+    //     //     for (int dir = 0; dir < NUM_DIRECTIONS; ++dir) { // NUM_DIRECTIONS from SDK nav_defs.h (usually 4 for cardinal, 6 for hex)
+    //     //         const NavConnectVector* pSDKConnections = pSDKNavArea->GetAdjacentAreas(static_cast<NavDirType>(dir));
+    //     //         if (pSDKConnections) {
+    //     //             for (int j = 0; j < pSDKConnections->Count(); ++j) {
+    //     //                 const NavConnect& sdkConn = (*pSDKConnections)[j];
+    //     //                 if (sdkConn.area) { // Ensure target area is valid
+    //     //                     unsigned int toAreaID = sdkConn.area->GetID();
+    //     //                     // Map sdkConn.how (NavTraverseType) to our NavConnectionType
+    //     //                     NavConnectionType botConnType = NavConnectionType::WALK; // Default
+    //     //                     // if (sdkConn.how == NAV_MESH_WALK) botConnType = NavConnectionType::WALK;
+    //     //                     // else if (sdkConn.how == NAV_MESH_JUMP) botConnType = NavConnectionType::JUMP_ONEWAY; // Or JUMP if two-way handled by symmetric connections
+    //     //                     // ... other type mappings ...
+    //     //                     float cost = 1.0f; // Simplified cost, could be derived from distance or sdkConn properties
+    //     //                     m_NavGraph.AddConnection(fromAreaID, toAreaID, botConnType, cost, true /* assume twoWay for now */);
+    //     //                 }
+    //     //             }
+    //     //         }
+    //     //     }
+    //         // Handle Ladder connections similarly
+    //         // const NavLadderConnectVector* pSDKLadders = pSDKNavArea->GetLadders(CNavArea::LADDER_DOWN); // Example for ladders down
+    //         // if(pSDKLadders) { /* iterate and add ladder connections */ }
+    //         // pSDKLadders = pSDKNavArea->GetLadders(CNavArea::LADDER_UP);
+    //         // if(pSDKLadders) { /* iterate and add ladder connections */ }
+    //     // }
+    // }
+
+    // Fallback if SDK loading resulted in an empty graph
+    if (m_NavGraph.nodes.empty()) {
+        // Warning("BotKnowledgeBase::LoadNavMesh: NavMesh graph is empty after SDK processing for map %s. Creating placeholder.\n", mapName);
+        CreatePlaceholderNavMesh();
+    }
+    return !m_NavGraph.nodes.empty();
+}
+
 bool BotKnowledgeBase::LoadMapObjectiveData(lua_State* L, const char* mapName, const std::vector<std::string>& cpTableNames) { /* ... (same as Task 16, Step 1) ... */ return true;}
 void BotKnowledgeBase::UpdateControlPointState(int cpId, int newOwnerTeam, float newCaptureProgress, bool newIsLocked) { /* ... (same as Task 16, Step 1) ... */ }
 void BotKnowledgeBase::UpdateTrackedEntities(const std::vector<TrackedEntityInfo>& currentTrackedEntities, int botTeamId) { /* ... (same as Task 16, Step 1) ... */ }
@@ -204,18 +299,19 @@ std::vector<const BuildingInfo*> BotKnowledgeBase::GetOwnBuildings(int botPlayer
 // This is needed to correctly categorize players.
 // This would ideally be passed into UpdateTrackedPlayers_Conceptual or be a member of BotKnowledgeBase
 // if it's a shared KB, or obtained from the bot instance if it's a per-bot KB.
-static int g_bots_own_team_id_conceptual = 2; // Example: Bot is on RED team.
+static int g_bots_own_team_id_conceptual = 2; // Example: Bot is on RED team. This should be updated dynamically.
 
-void BotKnowledgeBase::UpdateTrackedPlayers_Conceptual(const std::vector<TrackedEntityInfo>& perceivedPlayers) {
+void BotKnowledgeBase::UpdateTrackedPlayers(const std::vector<TrackedEntityInfo>& perceivedPlayers) {
     m_TrackedEnemies.clear();
     m_TrackedAllies.clear();
 
-    // A more robust system would get the bot's actual team ID rather than using a static global.
-    // For instance, if this KB instance is tied to a specific bot, or if the team ID is passed in.
-    // For now, we use the conceptual global g_bots_own_team_id_conceptual.
+    // TODO: This g_bots_own_team_id_conceptual needs to be set dynamically based on the bot's actual team.
+    // For a global KB, it might need to know which bot is "asking" or be updated by the plugin
+    // with the local bot's team if this KB is specific to one bot.
+    // For now, using a static example value.
 
     for (const auto& playerInfo : perceivedPlayers) {
-        if (playerInfo.team == 0) { // Skip neutral or unassigned players for these lists
+        if (playerInfo.team == 0) { // Skip neutral or unassigned players (e.g. TEAM_UNASSIGNED)
             continue;
         }
 
@@ -226,13 +322,11 @@ void BotKnowledgeBase::UpdateTrackedPlayers_Conceptual(const std::vector<Tracked
             m_TrackedEnemies.push_back(playerInfo);
         }
     }
-    // More advanced: Update existing entries if possible, to preserve history or smooth data.
-    // This simple version just rebuilds the lists each time.
 }
 
-void BotKnowledgeBase::UpdateTrackedBuildings_Conceptual(const std::vector<BuildingInfo>& perceivedBuildings) {
+void BotKnowledgeBase::UpdateTrackedBuildings(const std::vector<BuildingInfo>& perceivedBuildings) {
     // Simplistic update: Overwrite the entire list.
-    // This means buildings that disappear from perception are immediately gone from KB.
+    m_TrackedBuildings = perceivedBuildings;
     // A more robust system might:
     // 1. Mark all existing m_TrackedBuildings as "not seen this frame".
     // 2. Iterate perceivedBuildings:
