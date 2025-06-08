@@ -34,7 +34,7 @@
 #define __BOT_FORTRESS_H__
 
 #include "bot_utility.h"
-
+#include "bot_ff.h"
 //#include <stack>
 
 #define TF2_ROCKETSPEED   1100
