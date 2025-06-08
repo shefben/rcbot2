@@ -93,6 +93,8 @@ public:
     float m_fNextAirblastTime; // Cooldown for Pyro airblast
     MyEHandle m_pNearestArmorItem;
     float m_fNextArmorCheckTime;
+    CHandle<CBaseEntity> m_hBuiltSentryGun;
+    float m_fNextSentryBuildTime;
 
 private: // FF Specific Helper
     const CFFPlayerClassInfo* GetClassGameData() const;
