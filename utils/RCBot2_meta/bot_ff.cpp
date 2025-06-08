@@ -42,8 +42,8 @@ CBotFF::CBotFF() : CBotFortress() {
     m_vLastPipeTrapLocation = Vector(0,0,0);
     m_iPipesToLay = 0;
     m_fNextPipeLayTime = 0.0f;
-    m_bWantsToAirblast = false;
-    m_fNextAirblastTime = 0.0f;
+    m_bWantsToAirblast = false; // For Pyro
+    m_fNextAirblastTime = 0.0f; // For Pyro
     // Initialize other FF specific variables
 }
 
@@ -56,6 +56,22 @@ void CBotFF::modThink() {
     CBotFortress::modThink(); // Call base class think
 
     // FF Specific Thinking Logic
+
+    // HWGuy Assault Cannon speed adjustment
+    // Ensure m_fIdealMoveSpeed is initialized to default for the class before this
+    TF_Class botClass_modThink = getClass(); // Assuming getClass() is correctly returning FF class mapped to TF_Class enum
+    CBotWeapon* currentWeapon_modThink = getCurrentWeapon();
+
+    if (botClass_modThink == TF_CLASS_HWGUY && currentWeapon_modThink &&
+        currentWeapon_modThink->getWeaponInfo() &&
+        strcmp(currentWeapon_modThink->getWeaponInfo()->getWeaponName(), "weapon_ff_assaultcannon") == 0 &&
+        (m_pButtons->holdingButton(IN_ATTACK) || (m_pEnemy.Get() && isVisible(m_pEnemy.Get()) && wantToShoot())) )
+    {
+        m_fIdealMoveSpeed *= 0.4f; // Reduce speed by 60% when firing/winding up Assault Cannon
+    }
+    // Note: If m_fIdealMoveSpeed is not reset elsewhere each frame, add an else to restore it.
+    // However, it's common for it to be set from playerinfo maxspeed each frame.
+
     // Example: Check if bot is VIP in Hunted mode
     if (g_pGameRules && CVAR_GET_FLOAT("mp_hunted_mode") > 0 || s_IsHuntedModeForTesting) { // s_IsHuntedModeForTesting for local tests
         // This is a simplified check. Actual VIP status might be stored in m_pPlayer or elsewhere.
@@ -175,6 +191,95 @@ void CBotFF::getTasks(unsigned int iIgnore) {
     CBotFortress::getTasks(iIgnore); // Base class tasks
 
     // FF specific tasks
+    TF_Class botClass_getTasks = getClass(); // Renamed to avoid conflict with modThink's botClass
+
+    // HWGuy tasks
+    if (botClass_getTasks == TF_CLASS_HWGUY) { // Ensure botClass_getTasks is correctly obtained for FF
+        CBotWeapon* pAssaultCannon = m_pWeapons->getWeaponByName("weapon_ff_assaultcannon");
+        if (pAssaultCannon && pAssaultCannon->hasWeapon() && !pAssaultCannon->outOfAmmo(this)) {
+            float utility = 0.7f; // Base utility for Assault Cannon
+            if (m_pEnemy.Get() && CBotGlobals::entityIsAlive(m_pEnemy.Get())) {
+                // Check for multiple enemies near the primary target
+                // Assuming CTeamFortress2Mod::getEnemyTeam can be replaced by a generic function or FF specific one later
+                // Replaced CGame::getEnemyTeam with a more plausible BotSupport::getEnemyTeam
+                int enemiesNearbyTarget = CBotGlobals::countPlayersNearOrigin(CBotGlobals::entityOrigin(m_pEnemy.Get()), 300.0f, BotSupport::getEnemyTeam(getTeam()), m_pEdict, true);
+                if (enemiesNearbyTarget > 1) {
+                    utility += 0.2f; // Bonus for multiple enemies
+                }
+                // Bonus if defending a point/flag
+                if (hasSomeConditions(CONDITION_DEFEND_POINT | CONDITION_DEFEND_FLAG)) { // Assuming these conditions are relevant
+                    utility += 0.15f;
+                }
+            } else if (hasSomeConditions(CONDITION_DEFEND_POINT | CONDITION_DEFEND_FLAG)) {
+                // Higher utility for suppressive fire if defending, even without a direct enemy atm
+                utility += 0.10f;
+            }
+            // BOT_UTIL_ATTACK is a generic utility, the weapon choice directs the specifics
+            ADD_UTILITY_WEAPON(BOT_UTIL_ATTACK, true, utility, pAssaultCannon);
+        }
+        // ... (logic for other HWGuy weapons like shotgun can follow) ...
+    }
+
+    // Pyro tasks
+    if (botClass_getTasks == TF_CLASS_PYRO) { // Assuming botClass_getTasks is correctly set for FF Pyro
+        CBotWeapon* pFlamer = m_pWeapons->getWeaponByName("weapon_ff_flamethrower");
+        CBotWeapon* pIC = m_pWeapons->getWeaponByName("weapon_ff_ic");
+        edict_t* pCurrentEnemy = m_pEnemy.Get(); // Use the member variable directly
+        bool enemyValidAndVisible = (pCurrentEnemy && CBotGlobals::entityIsAlive(pCurrentEnemy) && isVisible(pCurrentEnemy));
+        float enemyDist = enemyValidAndVisible ? distanceFrom(pCurrentEnemy) : 9999.0f;
+
+        // Airblast Logic
+        if (pFlamer && pFlamer->hasWeapon() && engine->Time() >= m_fNextAirblastTime) {
+            bool airblastConditionMet = false;
+            edict_t* airblastTarget = NULL;
+
+            // 1. Projectile Reflection (Simplified: Check m_NearestEnemyRocket, needs FF projectile detection)
+            //    This m_NearestEnemyRocket would need to be populated by FF-specific projectile detection logic, perhaps in modThink or a perception system.
+            if (m_NearestEnemyRocket.Get() && CBotGlobals::entityIsValid(m_NearestEnemyRocket.Get()) &&
+                distanceFrom(m_NearestEnemyRocket.Get()) < 250.0f && isFacingEdict(m_NearestEnemyRocket.Get(), 0.7f)) {
+                airblastConditionMet = true;
+                airblastTarget = m_NearestEnemyRocket.Get();
+            }
+            // TODO: Add detection for FF grenades/pipes that can be airblasted based on FF entity classnames/properties.
+
+            // 2. Push enemy (defensive/environmental)
+            if (!airblastConditionMet && enemyValidAndVisible && enemyDist < 150.0f) { // Short range for pushing
+                airblastConditionMet = true;
+                airblastTarget = pCurrentEnemy;
+            }
+
+            // 3. Extinguish Teammate
+            // if (!airblastConditionMet) {
+            //    edict_t* burningTeammate = findBurningTeammate(); // findBurningTeammate() needs implementation
+            //    if (burningTeammate && distanceFrom(burningTeammate) < 200.0f && isFacingEdict(burningTeammate, 0.8f)) {
+            //        airblastConditionMet = true; airblastTarget = burningTeammate;
+            //    }
+            // }
+
+            if (airblastConditionMet) {
+                // BOT_UTIL_FF_PYRO_AIRBLAST should be a defined enum
+                ADD_UTILITY_WEAPON_TARGET(BOT_UTIL_FF_PYRO_AIRBLAST, true, 0.9f, pFlamer, airblastTarget);
+            }
+        }
+
+        // Incendiary Cannon (IC) Logic
+        if (pIC && pIC->hasWeapon() && !pIC->outOfAmmo(this)) {
+            if (enemyValidAndVisible && enemyDist > 250.0f && enemyDist < 1200.0f) { // IC for mid-range
+                // BOT_UTIL_FF_PYRO_USE_IC should be a defined enum
+                ADD_UTILITY_WEAPON(BOT_UTIL_FF_PYRO_USE_IC, true, 0.75f, pIC);
+            }
+        }
+
+        // Flamethrower Primary Attack Logic
+        if (pFlamer && pFlamer->hasWeapon() && !pFlamer->outOfAmmo(this) && enemyValidAndVisible && enemyDist < 350.0f) { // FF Flamer range
+            // Don't primary fire if an airblast utility was already added for the flamer for this thinking cycle
+            if (!m_pUtil->hasUtility(BOT_UTIL_FF_PYRO_AIRBLAST)) {
+               // BOT_UTIL_ATTACK is a generic attack utility
+               ADD_UTILITY_WEAPON(BOT_UTIL_ATTACK, true, 0.8f, pFlamer); // High utility for close range
+            }
+        }
+    }
+
     // Example: Hunted Mode VIP tasks
     if (g_pGameRules && CVAR_GET_FLOAT("mp_hunted_mode") > 0 || s_IsHuntedModeForTesting) {
         if (m_bIsVIP) { // If bot is VIP
@@ -187,7 +292,32 @@ void CBotFF::getTasks(unsigned int iIgnore) {
     }
 
     // Engineer tasks
-    if (m_iPlayerClass == FF_CLASS_ENGINEER) {
+    // Using m_iPlayerClass directly as per existing style in this part of the function for FF classes
+    if (m_iPlayerClass == FF_CLASS_ENGINEER) { // Assuming m_iPlayerClass is correctly set for FF Engineer
+        // EMP Grenade Logic for Engineer
+        if (!m_bIsPrimingGrenade) { // Don't consider throwing another grenade if already priming one
+            CBotWeapon* pEMPGrenade = m_pWeapons->getWeaponByName("weapon_ff_gren_emp");
+            if (pEMPGrenade && pEMPGrenade->hasWeapon() && !pEMPGrenade->outOfAmmo(this)) {
+                edict_t* pCurrentEnemy = m_pEnemy.Get();
+                if (pCurrentEnemy && CBotGlobals::entityIsAlive(pCurrentEnemy) && isVisible(pCurrentEnemy) &&
+                    distanceFrom(pCurrentEnemy) < 1000.0f && distanceFrom(pCurrentEnemy) > 200.0f) { // Effective EMP range
+
+                    float utilityScore = 0.65f;
+                    // Potentially increase utility against certain classes if EMP is particularly effective
+                    // TF_Class enemyClass = (TF_Class)CClassInterface::getTF2Class(pCurrentEnemy); // Needs FF class detection
+                    // if (enemyClass == TF_CLASS_HWGUY || enemyClass == TF_CLASS_SPY) utilityScore += 0.1f;
+
+                    int enemiesNearbyTarget = CBotGlobals::countPlayersNearOrigin(CBotGlobals::entityOrigin(pCurrentEnemy), 250.0f, BotSupport::getEnemyTeam(getTeam()), m_pEdict, true);
+                    if (enemiesNearbyTarget > 1) {
+                        utilityScore += 0.2f; // Bonus for multiple enemies
+                    }
+
+                    // BOT_UTIL_FF_USE_GRENADE_EMP should be a defined enum
+                    ADD_UTILITY_WEAPON_TARGET(BOT_UTIL_FF_USE_GRENADE_EMP, true, utilityScore, pEMPGrenade, pCurrentEnemy);
+                }
+            }
+        }
+        // Existing Engineer Mancannon logic
         if (gpGlobals->time >= m_fNextMancannonBuildTime && !m_hBuiltMancannon) { // Check if mancannon doesn't exist or is destroyed
              // Find a suitable waypoint for mancannon
              CWaypoint* pBuildSpot =WaypointFindNearest(pev->origin, NULL, WAYPOINT_FF_BUILD_MANCANNON); // Assuming such a flag exists
@@ -198,7 +328,7 @@ void CBotFF::getTasks(unsigned int iIgnore) {
     }
 
     // Demoman tasks
-    if (m_iPlayerClass == FF_CLASS_DEMOMAN) {
+    if (botClass_getTasks == FF_CLASS_DEMOMAN) { // Used botClass_getTasks for consistency
         CBotWeapon* pPipeLauncher = getWeapon(WEAPON_FF_PIPEBOMBLAUNCHER);
         if (pPipeLauncher && pPipeLauncher->canUse()) {
             if (!m_bHasActivePipes || m_iPipesToLay > 0) { // If no active trap or wants to lay more
@@ -216,7 +346,7 @@ void CBotFF::getTasks(unsigned int iIgnore) {
     }
 
     // Spy tasks
-    if (m_iPlayerClass == FF_CLASS_SPY) {
+    if (botClass_getTasks == FF_CLASS_SPY) { // Used botClass_getTasks for consistency
         CBotWeapon* pTranqGun = getWeapon(WEAPON_FF_TRANQGUN);
         if (pTranqGun && pTranqGun->canUse() && m_pCurrentEnemy && FVisible(m_pCurrentEnemy,edict())) {
             if ((m_pCurrentEnemy->v.origin - pev->origin).Length() < pTranqGun->getMaxDistance()) {
@@ -226,7 +356,7 @@ void CBotFF::getTasks(unsigned int iIgnore) {
     }
 
     // Scout tasks
-    if (m_iPlayerClass == FF_CLASS_SCOUT) {
+    if (botClass_getTasks == FF_CLASS_SCOUT) { // Used botClass_getTasks for consistency
         CBotWeapon* pCaltrops = getWeapon(WEAPON_FF_GREN_CALTROP); // Assuming caltrops are a weapon
         if (pCaltrops && pCaltrops->canUse()) {
             // Use caltrops defensively or in chokepoints
@@ -245,7 +375,7 @@ void CBotFF::getTasks(unsigned int iIgnore) {
     }
 
     // Pyro tasks
-    if (m_iPlayerClass == FF_CLASS_PYRO) {
+    if (botClass_getTasks == FF_CLASS_PYRO) { // Used botClass_getTasks for consistency
         CBotWeapon* pIC = getWeapon(WEAPON_FF_IC); // Incendiary Cannon
         if (pIC && pIC->canUse() && m_pCurrentEnemy) {
             if (FVisible(m_pCurrentEnemy, edict()) && (m_pCurrentEnemy->v.origin - pev->origin).Length() < pIC->getMaxDistance()) {
@@ -259,6 +389,8 @@ void CBotFF::getTasks(unsigned int iIgnore) {
     }
 
     // Grenade throwing tasks (generic for all classes that can use them)
+    // Note: TF_Class is used in CBotFortress, FF classes need mapping or direct use of m_iPlayerClass
+    // For this section, assuming m_iPlayerClass holds the direct FF class enum
     // This is a simplified example. Actual grenade throwing is more complex.
     const char* grenTypes[] = { "weapon_ff_gren_std", "weapon_ff_gren_conc", "weapon_ff_gren_nail", "weapon_ff_gren_mirv", "weapon_ff_gren_emp", "weapon_ff_gren_gas", "weapon_ff_gren_caltrop"};
     int grenUtils[] = {BOT_UTIL_FF_USE_GRENADE_STD, BOT_UTIL_FF_USE_GRENADE_CONC, BOT_UTIL_FF_USE_GRENADE_NAIL, BOT_UTIL_FF_USE_GRENADE_MIRV, BOT_UTIL_FF_USE_GRENADE_EMP, BOT_UTIL_FF_USE_GRENADE_GAS, BOT_UTIL_FF_USE_GRENADE_CALTROP};
@@ -391,19 +523,41 @@ bool CBotFF::executeAction(CBotUtility *util) {
             }
             break;
         case BOT_UTIL_FF_PYRO_AIRBLAST:
-             // This utility might be triggered by getTasks to generally be ready for airblast
-             // The actual airblast action (deflect/extinguish) is often reactive in modThink
-             // or handleAttack. If a specific target is passed (e.g. projectile), schedule it.
-             if (util->m_pVoidData) { // If a target for airblast is provided
-                 setSchedule(new CSchedFFPyroAirblast(this, (edict_t*)util->m_pVoidData));
-             } else { // Generic airblast readiness / defensive airblast
-                 setSchedule(new CSchedFFPyroAirblast(this));
-             }
-             return true;
+            if (util->getWeaponChoice() && util->getWeaponChoice()->getWeaponInfo()->isWeaponName("weapon_ff_flamethrower")) {
+                m_bWantsToAirblast = true;
+                // The actual airblast IN_ATTACK2 will be triggered in handleAttack.
+                // We still might want to "attack" the target (e.g. a rocket) to ensure the bot faces it.
+                edict_t* airblastTarget = util->getTaskEdictTarget();
+                if (airblastTarget) {
+                    m_pSchedules->add(new CBotAttackSched(airblastTarget, 0.1f)); // Short schedule to face target
+                } else { // If no specific target (e.g. defensive airblast), just ensure state is set
+                    m_pSchedules->add(new CBotSchedule()); // Dummy schedule to process m_bWantsToAirblast
+                }
+                return true;
+            }
+            break;
+
         case BOT_UTIL_FF_PYRO_USE_IC:
-            if (m_pCurrentEnemy) {
-                 setAttackTarget(m_pCurrentEnemy, BOT_UTIL_FF_PYRO_USE_IC); // Use base attack
-                 return true;
+            if (util->getWeaponChoice() && util->getWeaponChoice()->getWeaponInfo()->isWeaponName("weapon_ff_ic")) {
+                if (m_pEnemy.Get() && CBotGlobals::entityIsAlive(m_pEnemy.Get())) {
+                    m_pSchedules->add(new CBotAttackSched(m_pEnemy.Get())); // Standard attack schedule
+                    return true;
+                }
+            }
+            break;
+        case BOT_UTIL_FF_USE_GRENADE_EMP: // Use actual enum value
+            {
+                CBotWeapon* pEmpGrenadeWeapon = util->getWeaponChoice();
+                edict_t* pTargetEnemy = util->getTaskEdictTarget(); // Target enemy passed from getTasks
+
+                if (pEmpGrenadeWeapon && pEmpGrenadeWeapon->getWeaponInfo() &&
+                    pTargetEnemy && CBotGlobals::entityIsAlive(pTargetEnemy)) {
+
+                    Vector targetPos = CBotGlobals::entityOrigin(pTargetEnemy);
+                    float primeTime = 1.0f; // Standard prime time for EMP, adjust if needed
+                    m_pSchedules->add(new CSchedFFPrimeThrowGrenade(targetPos, pEmpGrenadeWeapon, primeTime));
+                    return true;
+                }
             }
             break;
         case BOT_UTIL_MEDIC_HEAL: // Overriding base medic heal for FF specific
@@ -450,6 +604,18 @@ bool CBotFF::handleAttack(CBotWeapon *pWeapon, edict_t *pEnemy) {
     if (!pWeapon || !pEnemy) return false;
 
     // FF Specific Attack Logic
+    // Pyro Airblast Handling
+    if (pWeapon && pWeapon->getWeaponInfo() &&
+        strcmp(pWeapon->getWeaponInfo()->getWeaponName(), "weapon_ff_flamethrower") == 0) {
+        if (m_bWantsToAirblast && engine->Time() >= m_fNextAirblastTime) { // Check cooldown
+            secondaryAttack();
+            m_bWantsToAirblast = false;
+            m_fNextAirblastTime = engine->Time() + 0.75f; // Airblast cooldown
+            m_pAttackingEnemy.Set(pEnemy);
+            return true; // Airblast handled
+        }
+        // If not airblasting, normal flamethrower logic (hold attack) will be handled by base or subsequent logic
+    }
     // Example: Demoman pipebomb launcher secondary fire (detonation)
     if (pWeapon->m_iWeaponID == WEAPON_FF_PIPEBOMBLAUNCHER) {
         if (m_bHasActivePipes && /* conditions to detonate */ true) {
