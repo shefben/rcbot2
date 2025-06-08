@@ -145,6 +145,43 @@ public: // CClassInterface Overrides
     virtual bool IsPlayerBuilding() const;
     virtual bool IsPlayerPrimingGrenade() const;
 };
+
+// Hunted Mode Tasks & Schedules
+class CTaskFFFindEscapeRoute : public CBotTask {
+public:
+    CTaskFFFindEscapeRoute();
+    virtual void init(CBot* pBot) override;
+    virtual void execute(CBot* pBot) override;
+    virtual bool isTaskComplete(CBot* pBot) override;
+    virtual const char* getTaskName() override;
+private:
+    bool m_bRouteFound;
+};
+
+class CSchedFFHuntedVIPEscape : public CBotSchedule {
+public:
+    CSchedFFHuntedVIPEscape(CBotFF* pBot);
+    virtual const char* getScheduleName() override;
+};
+
+class CTaskFFStayNearVIP : public CBotTask {
+public:
+    CTaskFFStayNearVIP(float fFollowDistance = 400.0f);
+    virtual void init(CBot* pBot) override;
+    virtual void execute(CBot* pBot) override;
+    virtual bool isTaskComplete(CBot* pBot) override;
+    virtual const char* getTaskName() override;
+private:
+    float m_fFollowDistance;
+    float m_fNextRepathTime;
+};
+
+class CSchedFFHuntedProtectVIP : public CBotSchedule {
+public:
+    CSchedFFHuntedProtectVIP(CBotFF* pBot);
+    virtual const char* getScheduleName() override;
+};
+
 class CTaskFFPrimeGrenade : public CBotTask {
 public:
 	CTaskFFPrimeGrenade(const Vector &vTargetPos, float fDuration);

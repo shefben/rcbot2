@@ -11,20 +11,47 @@
 #include "../../bot_task.h"
 #include "../../bot_schedule.h"
 #include "../../bot_weapon_defs.h"
+#include "../../bot_game.h" // For BotSupport
+#include "../../player.h" // For CBasePlayer for iteration
 
 void CBotFF::getDemomanTasks(unsigned int iIgnore) {
-    // We can assume this function is only called if the class is Demoman.
     CBotWeapon* pPipeLauncher = getWeapon(WEAPON_FF_PIPEBOMBLAUNCHER);
     if (pPipeLauncher && pPipeLauncher->canUse()) {
+        // Pipe Laying Logic
         if (!m_bHasActivePipes || m_iPipesToLay > 0) {
-             CWaypoint* pTrapSpot = WaypointFindNearest(pev->origin, NULL, WAYPOINT_FLAG_CHOKEPOINT);
+             CWaypoint* pTrapSpot = WaypointFindNearest(pev->origin, NULL, WAYPOINT_FLAG_CHOKEPOINT); // Example flag
              if (pTrapSpot) {
                 addUtility(BOT_UTIL_FF_DEMO_LAY_PIPE_TRAP, BOT_UTIL_FF_DEMO_LAY_PIPE_TRAP, 50, (void*)pTrapSpot);
              }
         }
-       if (m_bHasActivePipes) {
-            addUtility(BOT_UTIL_FF_DEMO_DETONATE_PIPES, BOT_UTIL_FF_DEMO_DETONATE_PIPES, 55);
-       }
+
+        // Pipe Detonation Logic
+        if (m_bHasActivePipes) {
+            bool bEnemyNearPipes = false;
+            edict_t* pTargetEnemyForDetonation = nullptr;
+            if (m_vLastPipeTrapLocation != vec3_origin) {
+                for (int i = 1; i <= gpGlobals->maxClients; i++) {
+                    CBasePlayer *pPlayer = (CBasePlayer*)UTIL_PlayerByIndex(i);
+                    if (pPlayer && pPlayer->IsPlayer() && pPlayer->IsAlive() && isEnemy(ENT(pPlayer->pev))) {
+                        if ((pPlayer->pev->origin - m_vLastPipeTrapLocation).Length() < 250.0f) { // Radius for detonation
+                            bEnemyNearPipes = true;
+                            pTargetEnemyForDetonation = ENT(pPlayer->pev);
+                            break;
+                        }
+                    }
+                }
+            }
+            if (bEnemyNearPipes) {
+                float distToTrapSqr = (m_vLastPipeTrapLocation - pev->origin).LengthSqr();
+                if (distToTrapSqr > (200.0f * 200.0f) || m_iHealth > 75) {
+                    ADD_UTILITY_TARGET(BOT_UTIL_FF_DEMO_DETONATE_PIPES, true, 80, getWeapon(WEAPON_FF_PIPEBOMBLAUNCHER), pTargetEnemyForDetonation);
+                }
+            }
+            // Optional: Detonate old pipes (currently commented out)
+            // else if (gpGlobals->time > m_fNextPipeLayTime + 10.0f && m_iPipesToLay == 0) {
+            //    ADD_UTILITY(BOT_UTIL_FF_DEMO_DETONATE_PIPES, true, 20);
+            // }
+        }
     }
 }
 
@@ -46,7 +73,7 @@ bool CBotFF::executeDemomanAction(CBotUtility *util) {
             }
             break;
         default:
-            return false; // Not a demoman-specific action handled here
+            return false;
     }
     return false;
 }
@@ -62,7 +89,7 @@ void CTaskFFDemoLaySinglePipe::execute(CBot* pBot) {
         pFFBot->pev->button |= IN_ATTACK;
         m_bFired = true;
         pFFBot->m_bHasActivePipes = true;
-        pFFBot->m_vLastPipeTrapLocation = m_vTargetPos;
+        // pFFBot->m_vLastPipeTrapLocation = m_vTargetPos; // Removed: Trap location set by schedule
         pFFBot->m_fNextPipeLayTime = gpGlobals->time + 0.8f;
     }
 }
@@ -93,6 +120,7 @@ const char* CTaskFFDemoDetonatePipes::getTaskName() { return "TaskFFDemoDetonate
 CSchedFFDemoLayPipeTrap::CSchedFFDemoLayPipeTrap(CBotFF* pBot, CWaypoint* pTrapSpotWpt, int numPipes) :
     CBotSchedule(SCHED_FF_DEMO_LAY_PIPE_TRAP, BOT_UTIL_FF_DEMO_LAY_PIPE_TRAP, PRIORITY_NORMAL) {
     if (pTrapSpotWpt) {
+        pBot->m_vLastPipeTrapLocation = pTrapSpotWpt->m_vOrigin; // Set center of trap
         pBot->m_iPipesToLay = numPipes;
         addTask(new CTaskMoveTo(pTrapSpotWpt->m_vOrigin, BOT_UTIL_FF_DEMO_LAY_PIPE_TRAP, 0.5f));
         for (int i=0; i < numPipes; ++i) {
