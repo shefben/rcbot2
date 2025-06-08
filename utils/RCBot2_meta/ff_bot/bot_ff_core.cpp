@@ -390,10 +390,8 @@ const char* CSchedFFPrimeThrowGrenade::getScheduleName() { return "SchedFFPrimeT
 // Medic specific tasks/schedules moved to bot_ff_medic.cpp
 // Sniper specific tasks/schedules moved to bot_ff_sniper.cpp
 
-// Placeholder define for utility - this should go into bot_const.h eventually
-#define BOT_UTIL_FF_GET_ARMOR 10019 // Ensure this ID is unique (Using a new ID from the original plan)
-
 // Implementations of CClassInterface methods have been moved to utils/RCBot2_meta/ff_bot/bot_ff_class_interface.cpp
+// BOT_UTIL_FF_GET_ARMOR is now defined in bot_utility.h as part of eBotAction enum.
 
 // Define conceptual constant, ideally this would be in a shared constants header
 const float BOT_MAX_PATH_LOOKAHEAD_VIP_ESCAPE = 300.0f;

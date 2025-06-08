@@ -8,57 +8,34 @@ class CBotWeapon;
 class CWaypoint;
 class CBotUtility;
 
-// Placeholder defines for FF specific enums
-// IMPORTANT: These MUST be replaced with actual enum values from bot_const.h / bot_schedule.h
-#define BOT_UTIL_FF_USE_GRENADE_STD 10001
-#define BOT_UTIL_FF_USE_GRENADE_CONC 10002
-#define BOT_UTIL_FF_USE_GRENADE_NAIL 10003
-#define BOT_UTIL_FF_USE_GRENADE_MIRV 10004
-#define BOT_UTIL_FF_USE_GRENADE_EMP 10005
-#define BOT_UTIL_FF_USE_GRENADE_GAS 10006
-#define BOT_UTIL_FF_USE_GRENADE_CALTROP 10007
-#define BOT_UTIL_FF_CONC_JUMP_MOBILITY 10008
-#define BOT_UTIL_FF_HUNTED_VIP_ESCAPE 10009
-#define BOT_UTIL_FF_HUNTED_KILL_VIP 10010
-#define BOT_UTIL_FF_HUNTED_PROTECT_VIP 10011
-#define BOT_UTIL_FF_ENGRI_BUILD_MANCANNON 10012
-#define BOT_UTIL_FF_DEMO_LAY_PIPE_TRAP 10013
-#define BOT_UTIL_FF_SPY_USE_TRANQ 10014
-#define BOT_UTIL_FF_SCOUT_USE_CALTROPS 10015
-#define BOT_UTIL_FF_PYRO_AIRBLAST 10016
-#define BOT_UTIL_FF_PYRO_USE_IC 10017
-#define BOT_UTIL_FF_DEMO_DETONATE_PIPES 10018
+// NOTE: FF specific utility and schedule enums are now formally defined in
+// bot_utility.h (as part of eBotAction) and bot_schedule.h (as part of eBotSchedule).
+// The old #define placeholders have been removed from this file.
+
+// Fallback defines for base game utilities/schedules might still be needed if they
+// are not universally available or if FF uses a different set.
 #ifndef BOT_UTIL_ATTACK
-#define BOT_UTIL_ATTACK 70
+#define BOT_UTIL_ATTACK 70 // Example value, confirm from base
 #endif
 #ifndef BOT_UTIL_ROAM
-#define BOT_UTIL_ROAM 21
+#define BOT_UTIL_ROAM 21 // Example value, confirm from base
 #endif
 #ifndef BOT_UTIL_MEDIC_HEAL
-#define BOT_UTIL_MEDIC_HEAL 34
+#define BOT_UTIL_MEDIC_HEAL 34 // Example value, confirm from base
 #endif
 #ifndef BOT_UTIL_SNIPE
-#define BOT_UTIL_SNIPE 20
+#define BOT_UTIL_SNIPE 20 // Example value, confirm from base
 #endif
 
-#define SCHED_FF_PRIME_THROW_GRENADE 10201
-#define SCHED_FF_CONC_JUMP_SELF 10202
-#define SCHED_FF_HUNTED_ESCAPE 10203
-#define SCHED_FF_HUNTED_GUARD_VIP 10204
-#define SCHED_FF_ENGRI_BUILD_MANCANNON 10205
-#define SCHED_FF_DEMO_LAY_PIPE_TRAP 10206
-#define SCHED_FF_MEDIC_HEAL_TEAMMATE 10207
-#define SCHED_FF_SNIPE_ATTACK 10208
-#define SCHED_FF_DEMO_DETONATE_PIPES 10209
-#define SCHED_FF_PYRO_AIRBLAST_DEFEND 10210
-#define SCHED_FF_PYRO_EXTINGUISH_TEAMMATE 10211
 #ifndef SCHED_HEAL
-#define SCHED_HEAL 11
+#define SCHED_HEAL 11 // Example value, confirm from base
 #endif
 #ifndef SCHED_SNIPE
-#define SCHED_SNIPE 10
+#define SCHED_SNIPE 10 // Example value, confirm from base
 #endif
 
+// This specific buildable ID should be moved to a game-specific const file (e.g. game_ff.h or similar)
+// or used as a direct integer literal if it maps to an engine 'build' command ID.
 #define FF_ENGIBUILD_MANCANNON 1
 
 class CBotFF : public CBotFortress {
