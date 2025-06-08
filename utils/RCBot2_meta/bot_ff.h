@@ -91,6 +91,8 @@ public:
     float m_fNextPipeLayTime;
     bool m_bWantsToAirblast; // For Pyro airblast
     float m_fNextAirblastTime; // Cooldown for Pyro airblast
+    MyEHandle m_pNearestArmorItem;
+    float m_fNextArmorCheckTime;
 };
 class CTaskFFPrimeGrenade : public CBotTask {
 public:

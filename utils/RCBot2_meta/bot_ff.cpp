@@ -44,6 +44,8 @@ CBotFF::CBotFF() : CBotFortress() {
     m_fNextPipeLayTime = 0.0f;
     m_bWantsToAirblast = false; // For Pyro
     m_fNextAirblastTime = 0.0f; // For Pyro
+    m_pNearestArmorItem.Set(NULL);
+    m_fNextArmorCheckTime = 0.0f;
     // Initialize other FF specific variables
 }
 
@@ -186,6 +188,36 @@ bool CBotFF::isEnemy(edict_t *pEdict, bool bCheckWeapons) {
     return CBotFortress::isEnemy(pEdict, bCheckWeapons); // Fallback to base class
 }
 
+// Modified setVisible to include armor detection
+// Assuming CBotFF does not have its own setVisible yet, so we define it.
+// If it did, we'd merge this logic.
+bool CBotFF::setVisible(edict_t *pEntity, bool bVisible) {
+    bool bBaseVisible = CBotFortress::setVisible(pEntity, bVisible); // Call base
+
+    if (bVisible && pEntity && !pEntity->IsFree()) {
+        const char* pszClassname = pEntity->GetClassName();
+        // Assuming common FF armor classnames - these need verification
+        if (strcmp(pszClassname, "item_armor_shard") == 0 ||
+            strcmp(pszClassname, "item_armor_small") == 0 ||
+            strcmp(pszClassname, "item_armor_medium") == 0 ||
+            strcmp(pszClassname, "item_armor_large") == 0 ||
+            strcmp(pszClassname, "item_ff_armor_shard") == 0 ||
+            strcmp(pszClassname, "item_ff_armor_small") == 0 ||
+            strcmp(pszClassname, "item_ff_armor_medium") == 0 ||
+            strcmp(pszClassname, "item_ff_armor_large") == 0) {
+
+            if (!m_pNearestArmorItem.Get() ||
+                (distanceFrom(pEntity) < distanceFrom(m_pNearestArmorItem.Get()))) {
+                m_pNearestArmorItem.Set(pEntity);
+            }
+        }
+    } else if (!bVisible && pEntity == m_pNearestArmorItem.Get()) {
+        m_pNearestArmorItem.Set(NULL); // Clear if it becomes invisible
+    }
+    return bBaseVisible;
+}
+
+
 // getTasks: FF specific tasks
 void CBotFF::getTasks(unsigned int iIgnore) {
     CBotFortress::getTasks(iIgnore); // Base class tasks
@@ -317,13 +349,16 @@ void CBotFF::getTasks(unsigned int iIgnore) {
                 }
             }
         }
-        // Existing Engineer Mancannon logic
-        if (gpGlobals->time >= m_fNextMancannonBuildTime && !m_hBuiltMancannon) { // Check if mancannon doesn't exist or is destroyed
-             // Find a suitable waypoint for mancannon
-             CWaypoint* pBuildSpot =WaypointFindNearest(pev->origin, NULL, WAYPOINT_FF_BUILD_MANCANNON); // Assuming such a flag exists
-             if (pBuildSpot) {
-                addUtility(BOT_UTIL_FF_ENGRI_BUILD_MANCANNON, BOT_UTIL_FF_ENGRI_BUILD_MANCANNON, 60, (void*)pBuildSpot);
-             }
+        // Refined Engineer Mancannon logic
+        if (engine->Time() >= m_fNextMancannonBuildTime && !m_hBuiltMancannon.Get()) { // Check cooldown and if bot already has one
+            // W_FL_FF_MANCANNON_SPOT is a conceptual waypoint flag
+            CWaypoint* pBuildSpot = CWaypoints::randomWaypointGoal(CWaypointTypes::W_FL_FF_MANCANNON_SPOT, getTeam(), 0, true, this);
+            if (pBuildSpot) {
+                // Check if a friendly mancannon is already very close to this spot by this bot (already handled by m_hBuiltMancannon check)
+                // or could iterate all friendly mancannons if a global list existed.
+                // For now, simply checking if this bot's mancannon isn't already there is sufficient.
+                ADD_UTILITY_DATA(BOT_UTIL_FF_ENGRI_BUILD_MANCANNON, true, 0.7f, CWaypoints::getWaypointIndex(pBuildSpot));
+            }
         }
     }
 
@@ -392,6 +427,24 @@ void CBotFF::getTasks(unsigned int iIgnore) {
     // Note: TF_Class is used in CBotFortress, FF classes need mapping or direct use of m_iPlayerClass
     // For this section, assuming m_iPlayerClass holds the direct FF class enum
     // This is a simplified example. Actual grenade throwing is more complex.
+
+    // Armor pickup logic
+    if (engine->Time() >= m_fNextArmorCheckTime) {
+        int currentArmor = CClassInterface::getPlayerArmor(m_pEdict);
+        int maxArmor = 100; // TODO: CClassInterface::getPlayerMaxArmor(m_pEdict) or FF default
+
+        if (currentArmor < maxArmor * 0.8f || currentArmor < 75) {
+            if (m_pNearestArmorItem.Get() && CBotGlobals::entityIsValid(m_pNearestArmorItem.Get()) && isVisible(m_pNearestArmorItem.Get())) {
+                float distToArmor = distanceFrom(m_pNearestArmorItem.Get());
+                if (distToArmor < 1500.0f) {
+                    float utility = 0.5f + (1.0f - (float)currentArmor / maxArmor) * 0.3f;
+                    ADD_UTILITY_TARGET(BOT_UTIL_FF_GET_ARMOR, true, utility, m_pNearestArmorItem.Get());
+                }
+            }
+        }
+        m_fNextArmorCheckTime = engine->Time() + 0.5f;
+    }
+
     const char* grenTypes[] = { "weapon_ff_gren_std", "weapon_ff_gren_conc", "weapon_ff_gren_nail", "weapon_ff_gren_mirv", "weapon_ff_gren_emp", "weapon_ff_gren_gas", "weapon_ff_gren_caltrop"};
     int grenUtils[] = {BOT_UTIL_FF_USE_GRENADE_STD, BOT_UTIL_FF_USE_GRENADE_CONC, BOT_UTIL_FF_USE_GRENADE_NAIL, BOT_UTIL_FF_USE_GRENADE_MIRV, BOT_UTIL_FF_USE_GRENADE_EMP, BOT_UTIL_FF_USE_GRENADE_GAS, BOT_UTIL_FF_USE_GRENADE_CALTROP};
 
@@ -545,6 +598,26 @@ bool CBotFF::executeAction(CBotUtility *util) {
                 }
             }
             break;
+        case BOT_UTIL_FF_PYRO_AIRBLAST:
+            if (util->getWeaponChoice() && util->getWeaponChoice()->getWeaponInfo()->isWeaponName("weapon_ff_flamethrower")) {
+                m_bWantsToAirblast = true;
+                edict_t* airblastTarget = util->getTaskEdictTarget();
+
+                // Use the new CSchedFFPyroAirblast
+                CBotSchedule* pAirblastSchedule = new CSchedFFPyroAirblast(this, airblastTarget);
+                m_pSchedules->add(pAirblastSchedule);
+                return true;
+            }
+            break;
+
+        case BOT_UTIL_FF_PYRO_USE_IC:
+            if (util->getWeaponChoice() && util->getWeaponChoice()->getWeaponInfo()->isWeaponName("weapon_ff_ic")) {
+                if (m_pEnemy.Get() && CBotGlobals::entityIsAlive(m_pEnemy.Get())) {
+                    m_pSchedules->add(new CBotAttackSched(m_pEnemy.Get()));
+                    return true;
+                }
+            }
+            break;
         case BOT_UTIL_FF_USE_GRENADE_EMP: // Use actual enum value
             {
                 CBotWeapon* pEmpGrenadeWeapon = util->getWeaponChoice();
@@ -556,6 +629,15 @@ bool CBotFF::executeAction(CBotUtility *util) {
                     Vector targetPos = CBotGlobals::entityOrigin(pTargetEnemy);
                     float primeTime = 1.0f; // Standard prime time for EMP, adjust if needed
                     m_pSchedules->add(new CSchedFFPrimeThrowGrenade(targetPos, pEmpGrenadeWeapon, primeTime));
+                    return true;
+                }
+            }
+            break;
+        case BOT_UTIL_FF_GET_ARMOR:
+            {
+                edict_t* pArmorItem = util->getTaskEdictTarget();
+                if (pArmorItem && CBotGlobals::entityIsValid(pArmorItem)) {
+                    m_pSchedules->add(new CBotPickupSched(pArmorItem));
                     return true;
                 }
             }
@@ -605,6 +687,7 @@ bool CBotFF::handleAttack(CBotWeapon *pWeapon, edict_t *pEnemy) {
 
     // FF Specific Attack Logic
     // Pyro Airblast Handling
+    // This logic was already present from a previous step, ensure it's correct and integrated.
     if (pWeapon && pWeapon->getWeaponInfo() &&
         strcmp(pWeapon->getWeaponInfo()->getWeaponName(), "weapon_ff_flamethrower") == 0) {
         if (m_bWantsToAirblast && engine->Time() >= m_fNextAirblastTime) { // Check cooldown
@@ -1159,3 +1242,64 @@ const char* CSchedFFPyroAirblast::getScheduleName() { return "SchedFFPyroAirblas
 // are placeholders and need to be defined according to Fortress Forever's actual implementation.
 // The existence of files like "game_ff.h" is assumed for such constants.
 // Placeholder BOT_UTIL_ and SCHED_ values also need to be integrated with bot_const.h/bot_schedule.h.
+
+// Placeholder define for utility - this should go into bot_const.h eventually
+#define BOT_UTIL_FF_GET_ARMOR 10019 // Ensure this ID is unique (Using a new ID from the original plan)
+
+// CTaskFFPyroAirblast
+CTaskFFPyroAirblast::CTaskFFPyroAirblast(edict_t* pTarget) : m_hTargetEntity(pTarget) {
+    setTaskName("TaskFFPyroAirblast"); // Set a name for debugging
+    m_bTaskComplete = false; // Initialize completion status
+}
+void CTaskFFPyroAirblast::init(CBot* pBot) {
+    CBotTask::init(pBot); // Call base class init
+    // If target wasn't passed in constructor but is available from schedule data
+    if (!m_hTargetEntity.Get() && m_pTaskDataTargetEdict) {
+        m_hTargetEntity.Set(m_pTaskDataTargetEdict);
+    }
+}
+void CTaskFFPyroAirblast::execute(CBot* pBot) {
+    CBotFF* pFFBot = static_cast<CBotFF*>(pBot);
+    if (!pFFBot) {
+        failTask("Bot pointer is null"); // Use failTask for consistency
+        m_bTaskComplete = true;
+        return;
+    }
+
+    // The actual IN_ATTACK2 is now expected to be done by handleAttack when m_bWantsToAirblast is true.
+    // This task mainly ensures the bot is oriented if there's a target.
+    edict_t* pTarget = m_hTargetEntity.Get();
+    if (pTarget && CBotGlobals::entityIsValid(pTarget) && (CBotGlobals::entityIsAlive(pTarget) || !(pTarget->v.flags & FL_ONGROUND)))) { // Also aim at projectiles not on ground
+        pFFBot->setLookAt(pTarget);
+        pFFBot->setLookAtTask(LOOK_EDICT_PRIORITY);
+    } else {
+        pFFBot->setLookAtTask(LOOK_NONE);
+    }
+
+    // This task signals the intent to airblast for handleAttack.
+    // It completes quickly, letting handleAttack perform the action based on m_bWantsToAirblast.
+    // If m_bWantsToAirblast is not set by executeAction, it should be set here.
+    pFFBot->m_bWantsToAirblast = true;
+
+    setTaskStatus(TASK_COMPLETE);
+    m_bTaskComplete = true;
+}
+// isTaskComplete is inherited, or can be overridden if specific logic is needed beyond m_bTaskComplete
+// bool CTaskFFPyroAirblast::isTaskComplete(CBot* pBot) { return m_bTaskComplete; }
+// getTaskName is inherited
+
+// CSchedFFPyroAirblast
+CSchedFFPyroAirblast::CSchedFFPyroAirblast(CBotFF* pBot, edict_t* pTarget) {
+    setID(SCHED_FF_PYRO_AIRBLAST_DEFEND);
+    setScheduleName("SchedFFPyroAirblast"); // Set name for debugging
+    if (!pBot) { failSchedule(); return; } // Use failSchedule
+
+    CBotWeapon* pFlamer = pBot->getWeapons()->getWeaponByName("weapon_ff_flamethrower");
+    if (!pFlamer || !pFlamer->hasWeapon() || !pFlamer->getWeaponInfo()) {
+        failSchedule(); // Use failSchedule
+        return;
+    }
+    addTask(new CSelectWeaponTask(pFlamer->getWeaponInfo()));
+    addTask(new CTaskFFPyroAirblast(pTarget)); // This task will signal handleAttack
+}
+// getScheduleName is inherited
