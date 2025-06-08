@@ -8,6 +8,10 @@
 #include "bot_waypoint.h"
 
 #include "game_ff.h" // For FF specific game constants / enums (assuming this exists)
+#include "game_shared/ff/ff_playerclass_parse.h" // For CFFPlayerClassInfo
+#include "bot_const.h" // For FF_CLASS_ enums (assuming they are moved here or accessible)
+#include "bot_weapon_defs.h" // For g_weaponDefs
+
 // If game_ff.h doesn't exist, you might need to include the base game.h or specific headers for entity properties
 
 // Link to engine functions
@@ -1270,7 +1274,183 @@ const char* CSchedFFPyroAirblast::getScheduleName() { return "SchedFFPyroAirblas
 // Placeholder define for utility - this should go into bot_const.h eventually
 #define BOT_UTIL_FF_GET_ARMOR 10019 // Ensure this ID is unique (Using a new ID from the original plan)
 
+
+const CFFPlayerClassInfo* CBotFF::GetClassGameData() const {
+    if (!m_pEdict) return nullptr;
+
+    // This m_iBotClass needs to be the FF_ClassID enum type, not TF_ClassID from base.
+    // Assuming m_iBotClass is correctly populated with FF_ClassID during bot creation/class selection.
+    FF_ClassID currentClass = (FF_ClassID)m_iBotClass;
+    const char* className = nullptr;
+
+    switch (currentClass) {
+        case FF_CLASS_SCOUT:    className = "ff_playerclass_scout"; break;
+        case FF_CLASS_SNIPER:   className = "ff_playerclass_sniper"; break;
+        case FF_CLASS_SOLDIER:  className = "ff_playerclass_soldier"; break;
+        case FF_CLASS_DEMOMAN:  className = "ff_playerclass_demoman"; break;
+        case FF_CLASS_MEDIC:    className = "ff_playerclass_medic"; break;
+        case FF_CLASS_HWGUY:    className = "ff_playerclass_hwguy"; break;
+        case FF_CLASS_PYRO:     className = "ff_playerclass_pyro"; break;
+        case FF_CLASS_SPY:      className = "ff_playerclass_spy"; break;
+        case FF_CLASS_ENGINEER: className = "ff_playerclass_engineer"; break;
+        case FF_CLASS_CIVILIAN: className = "ff_playerclass_civilian"; break;
+        default: return nullptr;
+    }
+
+    if (!className) return nullptr;
+
+    int handle = LookupPlayerClassInfoSlot(className);
+    if (handle == -1) return nullptr;
+
+    return GetFilePlayerClassInfoFromHandle(handle);
+}
+
+int CBotFF::GetMaxHP() const {
+    const CFFPlayerClassInfo* pCD = GetClassGameData();
+    return pCD ? pCD->m_iHealth : 100; // Default 100 if data not found
+}
+
+int CBotFF::GetMaxAP() const {
+    const CFFPlayerClassInfo* pCD = GetClassGameData();
+    return pCD ? pCD->m_iMaxArmour : 0; // Default 0 if data not found
+}
+
+float CBotFF::GetMaxSpeed() const {
+    const CFFPlayerClassInfo* pCD = GetClassGameData();
+    return pCD ? (float)pCD->m_iSpeed : 320.0f; // Default 320 if data not found
+}
+
+weapon_t CBotFF::GetWeaponByIndex(int index) const {
+    const CFFPlayerClassInfo* pCD = GetClassGameData();
+    if (!pCD || index < 0 || index >= pCD->m_iNumWeapons) return WEAPON_NONE; // WEAPON_NONE or 0
+    return g_weaponDefs.getWeaponID(pCD->m_aWeapons[index]);
+}
+
+weapon_t CBotFF::GetGrenade1WeaponID() const {
+    const CFFPlayerClassInfo* pCD = GetClassGameData();
+    if (!pCD || strcmp(pCD->m_szPrimaryClassName, "None") == 0) return WEAPON_NONE;
+    return g_weaponDefs.getWeaponID(pCD->m_szPrimaryClassName);
+}
+
+weapon_t CBotFF::GetGrenade2WeaponID() const {
+    const CFFPlayerClassInfo* pCD = GetClassGameData();
+    if (!pCD || strcmp(pCD->m_szSecondaryClassName, "None") == 0) return WEAPON_NONE;
+    return g_weaponDefs.getWeaponID(pCD->m_szSecondaryClassName);
+}
+
+int CBotFF::GetMaxGren1() const {
+    const CFFPlayerClassInfo* pCD = GetClassGameData();
+    return pCD ? pCD->m_iPrimaryMax : 0;
+}
+
+int CBotFF::GetMaxGren2() const {
+    const CFFPlayerClassInfo* pCD = GetClassGameData();
+    return pCD ? pCD->m_iSecondaryMax : 0;
+}
+
+int CBotFF::GetInitialGren1() const {
+    const CFFPlayerClassInfo* pCD = GetClassGameData();
+    return pCD ? pCD->m_iPrimaryInitial : 0;
+}
+
+int CBotFF::GetInitialGren2() const {
+    const CFFPlayerClassInfo* pCD = GetClassGameData();
+    return pCD ? pCD->m_iSecondaryInitial : 0;
+}
+
+int CBotFF::GetMaxAmmo(int ammoIndex) const {
+    const CFFPlayerClassInfo* pCD = GetClassGameData();
+    if (!pCD) return 0;
+
+    // These ammo indices (m_iAmmoShells, etc.) are member variables of CBot (or CBotFortress)
+    // and should correspond to the game's internal ammo type indices.
+    // The CFFPlayerClassInfo struct uses its own names (m_iMaxShells, etc.)
+    if (ammoIndex == m_iAmmoShells) return pCD->m_iMaxShells;
+    if (ammoIndex == m_iAmmoNails) return pCD->m_iMaxNails;
+    if (ammoIndex == m_iAmmoCells) return pCD->m_iMaxCells;
+    if (ammoIndex == m_iAmmoRockets) return pCD->m_iMaxRockets;
+    if (ammoIndex == m_iAmmoDetpack) return pCD->m_iMaxDetpack; // Assuming m_iAmmoDetpack matches Detpack ammo index
+    // FF specific - if m_iAmmoMancannon is defined for Mancannon builder ammo type
+    // if (ammoIndex == m_iAmmoMancannon) return pCD->m_iMaxManCannon; // This field might not exist directly for all classes
+
+    // Fallback for other ammo types if not directly mapped above, or if they are not class-specific
+    // This might require looking up a global ammo definition if not in CFFPlayerClassInfo
+    return CBotFortress::GetMaxAmmo(ammoIndex); // Or a more generic lookup
+}
+
+
 // CTaskFFPyroAirblast
+// (Assuming CPlayer is base for CFFPlayer or self can be cast)
+#define self ( (CFFPlayer*)m_pPlayer ) // Macro for convenience if direct CFFPlayer access is needed and safe
+
+int CBotFF::GetCurrentHP() const {
+    if (!self) return 0;
+    return self->GetHealth(); // Standard CBasePlayer method
+}
+
+int CBotFF::GetCurrentAP() const {
+    if (!self) return 0;
+    return self->pev->armorvalue; // Standard CBasePlayer access
+}
+
+float CBotFF::GetCurrentSpeed() const {
+    if (!self) return 0.0f;
+    return self->pev->velocity.Length2D(); // Standard CBasePlayer access
+}
+
+int CBotFF::GetAmmoCount(int ammoIndex) const {
+    if (!self) return 0;
+    return self->m_rgAmmo[ammoIndex]; // Standard CBasePlayer access
+}
+
+int CBotFF::GetGrenade1Count() const {
+    if (!self) return 0;
+    // Assuming CFFPlayer specific member m_iPrimaryAmmo or similar for primary grenades
+    // and that GetGrenade1WeaponID() returns the weapon for which this ammo is relevant.
+    // This might need a more robust way if ammo types are not directly tied to grenade slots.
+    // For now, using the direct member access as hinted by the prompt's example.
+    // This requires self to be safely castable to CFFPlayer and m_iPrimary to be the count.
+    return self->m_iPrimary;
+}
+
+int CBotFF::GetGrenade2Count() const {
+    if (!self) return 0;
+    // Similar assumption as GetGrenade1Count for m_iSecondaryAmmo or m_iSecondary
+    return self->m_iSecondary;
+}
+
+bool CBotFF::IsPlayerCloaked() const {
+    if (!self) return false;
+    FF_ClassID currentClass = CClassInterface::getFFClass(self->edict());
+    if (currentClass != FF_CLASS_SPY) return false;
+    // Assuming CFFPlayer has an IsCloaked() method or a flag like m_bCloaked
+    return self->IsCloaked(); // This method needs to exist on CFFPlayer or its hierarchy
+}
+
+int CBotFF::GetPlayerJetpackFuel() const {
+    if (!self) return 0;
+    FF_ClassID currentClass = CClassInterface::getFFClass(self->edict());
+    if (currentClass != FF_CLASS_PYRO) return 0;
+    // Assuming CFFPlayer has m_iJetpackFuel or an accessor
+    return self->m_iJetpackFuel; // This member needs to exist on CFFPlayer
+}
+
+bool CBotFF::IsPlayerBuilding() const {
+    if (!self) return false;
+    FF_ClassID currentClass = CClassInterface::getFFClass(self->edict());
+    if (currentClass != FF_CLASS_ENGINEER) return false;
+    // Assuming CFFPlayer has an IsBuilding() method or a flag like m_bIsBuilding
+    return self->IsBuilding(); // This method needs to exist on CFFPlayer or its hierarchy
+}
+
+bool CBotFF::IsPlayerPrimingGrenade() const {
+    if (!self) return false;
+    // Assuming CFFPlayer has an IsGrenadePrimed() method or a flag like m_bIsPrimingGrenade
+    return self->IsGrenadePrimed(); // This method needs to exist on CFFPlayer or its hierarchy
+}
+
+#undef self // Undefine the macro to avoid conflicts elsewhere
+
 CTaskFFPyroAirblast::CTaskFFPyroAirblast(edict_t* pTarget) : m_hTargetEntity(pTarget) {
     setTaskName("TaskFFPyroAirblast"); // Set a name for debugging
     m_bTaskComplete = false; // Initialize completion status

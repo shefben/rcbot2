@@ -93,6 +93,34 @@ public:
     float m_fNextAirblastTime; // Cooldown for Pyro airblast
     MyEHandle m_pNearestArmorItem;
     float m_fNextArmorCheckTime;
+
+private: // FF Specific Helper
+    const CFFPlayerClassInfo* GetClassGameData() const;
+
+public: // CClassInterface Overrides
+    virtual int GetMaxHP() const override;
+    virtual int GetMaxAP() const override;
+    virtual float GetMaxSpeed() const override;
+    virtual weapon_t GetWeaponByIndex(int index) const override;
+    virtual weapon_t GetGrenade1WeaponID() const override;
+    virtual weapon_t GetGrenade2WeaponID() const override;
+    virtual int GetMaxGren1() const override;
+    virtual int GetMaxGren2() const override;
+    virtual int GetInitialGren1() const override;
+    virtual int GetInitialGren2() const override;
+    virtual int GetMaxAmmo(int ammoIndex) const override;
+
+    // Dynamic State Accessors
+    virtual int GetCurrentHP() const override;
+    virtual int GetCurrentAP() const override;
+    virtual float GetCurrentSpeed() const override;
+    virtual int GetAmmoCount(int ammoIndex) const override;
+    virtual int GetGrenade1Count() const override;
+    virtual int GetGrenade2Count() const override;
+    virtual bool IsPlayerCloaked() const;
+    virtual int GetPlayerJetpackFuel() const;
+    virtual bool IsPlayerBuilding() const;
+    virtual bool IsPlayerPrimingGrenade() const;
 };
 class CTaskFFPrimeGrenade : public CBotTask {
 public:
