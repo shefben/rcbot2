@@ -153,18 +153,21 @@ class MMSConfig(object):
     if sdk_list[0] == '':
       sdk_list = []
 
-    for sdk_name in PossibleSDKs:
-      sdk = PossibleSDKs[sdk_name]
-      if sdk.shouldBuild(builder.target, self.archs):
-        root = builder.options.hl2sdk_root or os.environ.get('HL2SDK_ROOT', '/opt/hl2sdk')
-        sdk_path = checkout_branch(sdk.name)      # puts repo on correct branch
-        if sdk_path is None:
-          if use_all or sdk_name in sdk_list:
-            raise Exception('Could not find a valid path for {0}'.format(sdk.envvar))
+    for sdk_name, sdk in PossibleSDKs.items():
+      if not sdk.shouldBuild(builder.target, self.archs):
+        continue
+
+      # Keep the original selection logic
+      if builder.options.sdks not in ('all', 'present', ''):
+        sdk_list = builder.options.sdks.split(',')
+        if sdk_name not in sdk_list:
           continue
-        if use_all or use_present or sdk_name in sdk_list:
-          sdk.path = sdk_path
-          self.sdks[sdk_name] = sdk
+
+      # ??? only now do the checkout ???
+      sdk_path = checkout_branch(sdk.name)      # branch is guaranteed needed
+      sdk.path = sdk_path
+      self.sdks[sdk_name] = sdk
+
 
     if len(self.sdks) < 1 and len(sdk_list):
       raise Exception('No SDKs were found that build on {0}-{1}, nothing to do.'.format(
