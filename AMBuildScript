@@ -14,14 +14,23 @@ proj_c_flags_dbg = [
   '-ggdb3',
 ]
 
-import os, sys
-# --- top of AMBuildScript (after imports) ----------------------
-import subprocess
+import subprocess, os, sys, re   # make sure subprocess is imported
 
 def checkout_branch(branch):
   root = os.environ.get('HL2SDK_ROOT', '/opt/hl2sdk')
-  subprocess.check_call(['git', '-C', root, 'switch', '--quiet', '--detach', branch])
+  # fetch branch if missing in the shallow clone
+  try:
+    subprocess.check_call(
+            ['git', '-C', root, 'switch', '--quiet', '--detach', branch],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+  except subprocess.CalledProcessError:
+    subprocess.check_call(
+            ['git', '-C', root, 'fetch', '--depth', '1', 'origin', branch],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.check_call(
+            ['git', '-C', root, 'switch', '--quiet', '--detach', branch])
   return root
+
 # ---------------------------------------------------------------
 class SDK(object):
   def __init__(self, sdk, ext, aDef, name, platform, dir):
@@ -139,7 +148,7 @@ class MMSConfig(object):
     import re
     with open(os.path.join(builder.sourcePath, 'product.version'), 'r') as fp:
       productContents = fp.read()
-    m = re.match('(\d+)\.(\d+)\.(\d+).*', productContents)
+    m = re.match(r'(\d+)\.(\d+)\.(\d+).*', productContents)
     if m == None:
       self.productVersion = '1.0.0'
     else:
@@ -157,17 +166,12 @@ class MMSConfig(object):
       if not sdk.shouldBuild(builder.target, self.archs):
         continue
 
-      # Keep the original selection logic
-      if builder.options.sdks not in ('all', 'present', ''):
-        sdk_list = builder.options.sdks.split(',')
-        if sdk_name not in sdk_list:
-          continue
+      wanted = builder.options.sdks.split(',') if builder.options.sdks else []
+      if wanted and sdk_name not in wanted:
+        continue                   # skip un-requested engines
 
-      # ??? only now do the checkout ???
-      sdk_path = checkout_branch(sdk.name)      # branch is guaranteed needed
-      sdk.path = sdk_path
+      sdk.path = checkout_branch(sdk.name)
       self.sdks[sdk_name] = sdk
-
 
     if len(self.sdks) < 1 and len(sdk_list):
       raise Exception('No SDKs were found that build on {0}-{1}, nothing to do.'.format(
