@@ -36,6 +36,8 @@
 #include "bot_navigator.h"
 #include "bot_kv.h"
 
+#include "rcbot/logging.h"
+
 std::vector <CBotProfile*> CBotProfiles :: m_Profiles;
 CBotProfile *CBotProfiles :: m_pDefaultProfile = NULL;
 
@@ -116,7 +118,7 @@ void CBotProfiles :: setupProfiles ()
 		sprintf(szId,"%d",iId);
 		CBotGlobals::buildFileName(filename,szId,BOT_PROFILE_FOLDER,BOT_CONFIG_EXTENSION);
 
-		FILE *fp = CBotGlobals::openFile(filename,"r");
+		std::fstream fp = CBotGlobals::openFile(filename, std::fstream::in);
 
 		if ( fp )
 		{
@@ -124,7 +126,7 @@ void CBotProfiles :: setupProfiles ()
 			CBotProfile read = *m_pDefaultProfile;
 			CRCBotKeyValueList kvl;
 
-			CBotGlobals::botMessage(NULL,0,"Reading bot profile \"%s\"",filename);
+			logger->Log(LogLevel::INFO, "Reading bot profile \"%s\"", filename);
 
 			kvl.parseFile(fp);
 
@@ -144,8 +146,8 @@ void CBotProfiles :: setupProfiles ()
 				// *someone* wrote a broken bot profile generator.
 				// most of the profiles did not actually have working aim skill values
 				// we'll go ahead and allow it, but I have to express my displeasure about the matter in some way
-				CBotGlobals::botMessage(NULL, 0,
-						"Warning: Incorrect option 'aimskill' on bot profile \"%s\". "
+				logger->Log(LogLevel::WARN,
+						"Incorrect option 'aimskill' on bot profile \"%s\". "
 						"Did you mean 'aim_skill'?", filename);
 				read.m_fAimSkill = flWholeValuePercent / 100.0f;
 			}
@@ -157,13 +159,11 @@ void CBotProfiles :: setupProfiles ()
 			kvl.getInt("class", &read.m_iClass);
 
 			m_Profiles.push_back(new CBotProfile(read));
-
-			fclose(fp);
 		}
 		else
 		{
 			bDone = true;
-			CBotGlobals::botMessage(NULL,0,"Bot profile \"%s\" not found",filename);
+			logger->Log(LogLevel::DEBUG, "Bot profile \"%s\" not found", filename);
 		}
 
 		iId ++;
@@ -174,7 +174,7 @@ void CBotProfiles :: setupProfiles ()
 CBotProfile *CBotProfiles :: getDefaultProfile ()
 {
 	if ( m_pDefaultProfile == NULL )
-		CBotGlobals::botMessage(NULL,1,"Error, default profile is NULL (Caused by memory problem, bad initialisation or overwrite) Exiting..");
+		logger->Log(LogLevel::FATAL, "Default profile is NULL (Caused by memory problem, bad initialisation or overwrite) Exiting..");
 
 	return m_pDefaultProfile;
 }

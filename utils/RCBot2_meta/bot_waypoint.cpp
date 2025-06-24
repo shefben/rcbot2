@@ -55,6 +55,7 @@
 #include "bot_fortress.h"
 #include "bot_wpt_dist.h"
 
+#include "rcbot/logging.h"
 
 #include <vector>    //bir3yk
 #include <algorithm>
@@ -121,31 +122,30 @@ bool CWaypointNavigator :: beliefLoad ( )
 
 	CBotGlobals::buildFileName(filename,mapname,BOT_WAYPOINT_FOLDER,"rcb",true);
 
-   FILE *bfp =  CBotGlobals::openFile(filename,"rb");
+	std::fstream bfp = CBotGlobals::openFile(filename, std::fstream::in | std::fstream::binary);
 
-   if ( bfp == NULL )
-   {
-	   Msg(" *** Can't open Waypoint belief array for reading!\n");
-	   return false;
-   }
+	if ( !bfp )
+	{
+		logger->Log(LogLevel::ERROR, "Can't open Waypoint belief array for reading!");
+		return false;
+	}
 
-   fseek (bfp, 0, SEEK_END); // seek at end
+   bfp.seekg(0, std::fstream::end); // seek at end
 
-   iSize = ftell(bfp); // get file size
+   iSize = bfp.tellg(); // get file size
    iDesiredSize = CWaypoints::numWaypoints()*sizeof(unsigned short int);
 
    // size not right, return false to re workout table
    if ( iSize != iDesiredSize )
    {
-	   fclose(bfp);
 	   return false;
    }
 
-   fseek (bfp, 0, SEEK_SET); // seek at start
+   bfp.seekg(0, std::fstream::beg); // seek at start
 
    memset(filebelief,0,sizeof(unsigned short int)*CWaypoints::MAX_WAYPOINTS);
 
-   fread(filebelief,sizeof(unsigned short int),CWaypoints::numWaypoints(),bfp);
+   bfp.read(reinterpret_cast<char*>(filebelief), sizeof(unsigned short int) * CWaypoints::numWaypoints());
 
    // convert from short int to float
    
@@ -156,8 +156,6 @@ bool CWaypointNavigator :: beliefLoad ( )
    {
 	   m_fBelief[i] = (((float)filebelief[i])/32767) * MAX_BELIEF;
    }
-
-   fclose(bfp);
 
    return true;
 }
@@ -183,40 +181,34 @@ bool CWaypointNavigator :: beliefSave ( bool bOverride )
    sprintf(mapname,"%s%d",CBotGlobals::getMapName(),m_iBeliefTeam);
    CBotGlobals::buildFileName(filename,mapname,BOT_WAYPOINT_FOLDER,"rcb",true);
 
-   FILE *bfp = CBotGlobals::openFile(filename,"rb");
+   std::fstream bfp = CBotGlobals::openFile(filename, std::fstream::in | std::fstream::binary);
 
-   if ( bfp != NULL )
+   if ( bfp )
    {
-	   fseek (bfp, 0, SEEK_END); // seek at end
+	   bfp.seekg(0, std::fstream::end); // seek at end
 
-	   iSize = ftell(bfp); // get file size
+	   iSize = bfp.tellg(); // get file size
 	   iDesiredSize = CWaypoints::numWaypoints()*sizeof(unsigned short int);
 	    
 	   // size not right, return false to re workout table
-	   if ( iSize != iDesiredSize )
+	   if ( iSize == iDesiredSize )
 	   {
-		   fclose(bfp);
-	   }
-	   else
-	   {
-		   fseek (bfp, 0, SEEK_SET); // seek at start
+		   bfp.seekg(0, std::fstream::beg); // seek at start
 
 		   if ( bfp )
-				fread(filebelief,sizeof(unsigned short int),CWaypoints::numWaypoints(),bfp);
-
-		   fclose(bfp);
+				bfp.read(reinterpret_cast<char*>(filebelief), sizeof(unsigned short int) * CWaypoints::numWaypoints());
 	   }
    }
 
-   bfp =  CBotGlobals::openFile(filename,"wb");
+   bfp = CBotGlobals::openFile(filename, std::fstream::out | std::fstream::binary);
 
-   if ( bfp == NULL )
-   {
-	   m_bLoadBelief = true;
-	   m_iBeliefTeam = m_pBot->getTeam();
-	   Msg(" *** Can't open Waypoint Belief array for writing!\n");
-	   return false;
-   }
+	if ( !bfp )
+	{
+		m_bLoadBelief = true;
+		m_iBeliefTeam = m_pBot->getTeam();
+		logger->Log(LogLevel::ERROR, "Can't open Waypoint Belief array for writing!");
+		return false;
+	}
 
    // convert from short int to float
    
@@ -228,11 +220,9 @@ bool CWaypointNavigator :: beliefSave ( bool bOverride )
 	   filebelief[i] = (filebelief[i]/2) + ((unsigned short int)((m_fBelief[i]/MAX_BELIEF) * 16383)); 
    }
 
-   fseek (bfp, 0, SEEK_SET); // seek at start
+   bfp.seekg(0, std::fstream::beg); // seek at start
 
-   fwrite(filebelief,sizeof(unsigned short int),num,bfp);
-
-   fclose(bfp);
+   bfp.write(reinterpret_cast<char*>(filebelief), sizeof(unsigned short int) * num);
 
    // new team -- load belief 
     m_iBeliefTeam = m_pBot->getTeam();
@@ -1401,8 +1391,10 @@ void CWaypointNavigator :: updatePosition ()
 
 				if ( pWaypoint )
 				{
+					//caxanga334: Original code subtracted an int from Vector, SDK 2013 doesn't like that
+					//The waypoint height is probably the Z axis, so I created a Vector with 0 for xy and waypoint height for z
 					if ( iWaypointFlagsPrev & CWaypointTypes::W_FL_TELEPORT_CHEAT )
-						CBotGlobals::teleportPlayer(m_pBot->getEdict(),pWaypoint->getOrigin()-(CWaypoint::WAYPOINT_HEIGHT/2));
+						CBotGlobals::teleportPlayer(m_pBot->getEdict(),pWaypoint->getOrigin()-Vector(0,0,(CWaypoint::WAYPOINT_HEIGHT/2)));
 				}
 				if ( m_iCurrentWaypoint != -1 )
 				{ // random point, but more chance of choosing the most dangerous point
@@ -1769,9 +1761,9 @@ bool CWaypoints :: save ( bool bVisiblityMade, edict_t *pPlayer, const char *psz
 
 	CBotGlobals::buildFileName(filename,CBotGlobals::getMapName(),BOT_WAYPOINT_FOLDER,BOT_WAYPOINT_EXTENSION,true);
 
-	FILE *bfp = CBotGlobals::openFile(filename,"wb");
+	std::fstream bfp = CBotGlobals::openFile(filename, std::fstream::out | std::fstream::binary);
 
-	if ( bfp == NULL )
+	if ( !bfp )
 	{
 		return false; // give up
 	}
@@ -1838,8 +1830,8 @@ bool CWaypoints :: save ( bool bVisiblityMade, edict_t *pPlayer, const char *psz
 	strcpy(header.szMapName,CBotGlobals::getMapName());
 	//////////////////////////////////////////////
 
-	fwrite(&header,sizeof(CWaypointHeader),1,bfp);
-	fwrite(&authorinfo,sizeof(CWaypointAuthorInfo),1,bfp);
+	bfp.write(reinterpret_cast<char*>(&header), sizeof(CWaypointHeader));
+	bfp.write(reinterpret_cast<char*>(&authorinfo), sizeof(CWaypointAuthorInfo));
 
 	for ( int i = 0; i < iSize; i ++ )
 	{
@@ -1849,7 +1841,7 @@ bool CWaypoints :: save ( bool bVisiblityMade, edict_t *pPlayer, const char *psz
 		pWpt->save(bfp);
 	}
 
-	fclose(bfp);
+	bfp.close();
 
 	//CWaypointDistances::reset();
 
@@ -1871,9 +1863,9 @@ bool CWaypoints :: load (const char *szMapName)
 	else
 		CBotGlobals::buildFileName(filename,szMapName,BOT_WAYPOINT_FOLDER,BOT_WAYPOINT_EXTENSION,true);
 
-	FILE *bfp = CBotGlobals::openFile(filename,"rb");
+	std::fstream bfp = CBotGlobals::openFile(filename, std::fstream::in | std::fstream::binary);
 
-	if ( bfp == NULL )
+	if ( !bfp )
 	{
 		return false; // give up
 	}
@@ -1887,18 +1879,16 @@ bool CWaypoints :: load (const char *szMapName)
 	// read header
 	// -----------
 
-	fread(&header,sizeof(CWaypointHeader),1,bfp);
+	bfp.read(reinterpret_cast<char*>(&header), sizeof(CWaypointHeader));
 
 	if ( !FStrEq(header.szFileType,BOT_WAYPOINT_FILE_TYPE) )
 	{
-		CBotGlobals::botMessage(NULL,0,"Error loading waypoints: File type mismatch");
-		fclose(bfp);
+		logger->Log(LogLevel::ERROR, "Error loading waypoints: File type mismatch");
 		return false;
 	}
 	if ( header.iVersion > WAYPOINT_VERSION )
 	{
-		CBotGlobals::botMessage(NULL,0,"Error loading waypoints: Waypoint version too new");
-		fclose(bfp);
+		logger->Log(LogLevel::ERROR, "Error loading waypoints: Waypoint version too new");
 		return false;
 	}
 
@@ -1906,22 +1896,20 @@ bool CWaypoints :: load (const char *szMapName)
 	{
 		if ( !FStrEq(header.szMapName,szMapName) )
 		{
-			CBotGlobals::botMessage(NULL,0,"Error loading waypoints: Map name mismatch");
-			fclose(bfp);
+			logger->Log(LogLevel::ERROR, "Error loading waypoints: Map name mismatch");
 			return false;
 		}
 	}
 	else if ( !FStrEq(header.szMapName,CBotGlobals::getMapName()) )
 	{
-		CBotGlobals::botMessage(NULL,0,"Error loading waypoints: Map name mismatch");
-		fclose(bfp);
+		logger->Log(LogLevel::ERROR, "Error loading waypoints: Map name mismatch");
 		return false;
 	}
 
 	if ( header.iVersion > 3 )
 	{
 		// load author information
-		fread(&authorinfo,sizeof(CWaypointAuthorInfo),1,bfp);
+		bfp.read(reinterpret_cast<char*>(&authorinfo), sizeof(CWaypointAuthorInfo));
 
 		sprintf(m_szWelcomeMessage,"Waypoints by %s",authorinfo.szAuthor);
 
@@ -1953,7 +1941,7 @@ bool CWaypoints :: load (const char *szMapName)
 	{
 		CWaypoint *pWpt = &m_theWaypoints[i];		
 
-		pWpt->load(bfp,header.iVersion);
+		pWpt->load(bfp, header.iVersion);
 
 		if ( pWpt->isUsed() ) // not a deleted waypoint
 		{
@@ -1962,12 +1950,12 @@ bool CWaypoints :: load (const char *szMapName)
 		}
 	}
 
-	fclose(bfp);
+	bfp.close();
 
 	m_pVisibilityTable->setWorkVisiblity(bWorkVisibility);
 
 	if ( bWorkVisibility ) // say a message
-		Msg(" *** No waypoint visibility file ***\n *** Working out waypoint visibility information... ***\n");
+		logger->Log(LogLevel::INFO, "No waypoint visibility file -- working out waypoint visibility information...");
 
 	// if we're loading from another map just do this again!
 	if ( szMapName == NULL )
@@ -1998,62 +1986,62 @@ void CWaypoint :: init ()
 	m_fCheckReachableTime = 0;
 }
 
-void CWaypoint :: save ( FILE *bfp )
+void CWaypoint :: save (std::fstream &bfp )
 {
-	fwrite(&m_vOrigin,sizeof(Vector),1,bfp);
+	bfp.write(reinterpret_cast<char*>(&m_vOrigin), sizeof(Vector));
 	// aim of vector (used with certain waypoint types)
-	fwrite(&m_iAimYaw,sizeof(int),1,bfp);
-	fwrite(&m_iFlags,sizeof(int),1,bfp);
+	bfp.write(reinterpret_cast<char*>(&m_iAimYaw), sizeof(int));
+	bfp.write(reinterpret_cast<char*>(&m_iFlags), sizeof(int));
 	// not deleted
-	fwrite(&m_bUsed,sizeof(bool),1,bfp);
+	bfp.write(reinterpret_cast<char*>(&m_bUsed), sizeof(bool));
 
 	int iPaths = numPaths();
-	fwrite(&iPaths,sizeof(int),1,bfp);
+	bfp.write(reinterpret_cast<char*>(&iPaths), sizeof(int));
 
 	for ( int n = 0; n < iPaths; n ++ )
 	{			
 		int iPath = getPath(n);
-		fwrite(&iPath,sizeof(int),1,bfp);		
+		bfp.write(reinterpret_cast<char*>(&iPath), sizeof(int));
 	}
 
 	if ( CWaypoints::WAYPOINT_VERSION >= 2 )
 	{
-		fwrite(&m_iArea,sizeof(int),1,bfp);
+		bfp.write(reinterpret_cast<char*>(&m_iArea), sizeof(int));
 	}
 
 	if ( CWaypoints::WAYPOINT_VERSION >= 3 ) 
 	{
-		fwrite(&m_fRadius,sizeof(float),1,bfp);
+		bfp.write(reinterpret_cast<char*>(&m_fRadius), sizeof(float));
 	}
 }
 
-void CWaypoint :: load ( FILE *bfp, int iVersion )
+void CWaypoint :: load (std::fstream &bfp, int iVersion )
 {
 	int iPaths;
 
-	fread(&m_vOrigin,sizeof(Vector),1,bfp);
+	bfp.read(reinterpret_cast<char*>(&m_vOrigin), sizeof(Vector));
 	// aim of vector (used with certain waypoint types)
-	fread(&m_iAimYaw,sizeof(int),1,bfp);
-	fread(&m_iFlags,sizeof(int),1,bfp);
+	bfp.read(reinterpret_cast<char*>(&m_iAimYaw), sizeof(int));
+	bfp.read(reinterpret_cast<char*>(&m_iFlags), sizeof(int));
 	// not deleted
-	fread(&m_bUsed,sizeof(bool),1,bfp);	
-	fread(&iPaths,sizeof(int),1,bfp);
+	bfp.read(reinterpret_cast<char*>(&m_bUsed), sizeof(bool));
+	bfp.read(reinterpret_cast<char*>(&iPaths), sizeof(int));
 
 	for ( int n = 0; n < iPaths; n ++ )
 	{		
 		int iPath;
-		fread(&iPath,sizeof(int),1,bfp);
+		bfp.read(reinterpret_cast<char*>(&iPath), sizeof(int));
 		addPathTo(iPath);
 	}
 
 	if ( iVersion >= 2 )
 	{
-		fread(&m_iArea,sizeof(int),1,bfp);
+		bfp.read(reinterpret_cast<char*>(&m_iArea), sizeof(int));
 	}
 
 	if ( iVersion >= 3 ) 
 	{
-		fread(&m_fRadius,sizeof(float),1,bfp);
+		bfp.read(reinterpret_cast<char*>(&m_fRadius),sizeof(float));
 	}
 }
 
@@ -2435,7 +2423,7 @@ int CWaypoints :: addWaypoint ( edict_t *pPlayer, Vector vOrigin, int iFlags, bo
 
 	if ( iIndex == -1 )	
 	{
-		Msg("Waypoints full!");
+		logger->Log(LogLevel::ERROR, "Waypoints full!");
 		return -1;
 	}
 

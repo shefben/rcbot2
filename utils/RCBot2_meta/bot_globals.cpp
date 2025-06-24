@@ -29,15 +29,6 @@
  *
  */
 
-#ifndef __linux__
-// for file stuff
-#include <windows.h>
-#define WIN32_LEAN_AND_MEAN
-
-#include <conio.h>
-
-#endif
-
 #include "bot.h"
 #include "bot_cvars.h"
 #include "bot_globals.h"
@@ -48,12 +39,19 @@
 
 #include "ndebugoverlay.h"
 
+#include "rcbot/logging.h"
+
 #ifndef __linux__
 #include <direct.h> // for mkdir
 #include <sys/stat.h>
 #else
 #include <fcntl.h>
 #include <sys/stat.h>
+#endif
+
+//caxanga334: SDK 2013 contains macros for std::min and std::max which causes errors when compiling
+#if SOURCE_ENGINE == SE_SDK2013 || SOURCE_ENGINE == SE_BMS
+#include "valve_minmax_off.h"
 #endif
 
 extern IServerGameEnts *servergameents;
@@ -200,16 +198,16 @@ void CBotGlobals::readRCBotFolder()
 		const char *szRCBotFolder = mainkv->GetString("rcbot2path");
 
 		if (szRCBotFolder && *szRCBotFolder) {
-			CBotGlobals::botMessage(NULL, 0, "RCBot Folder -> trying %s", szRCBotFolder);
+			logger->Log(LogLevel::INFO, "RCBot Folder -> trying %s", szRCBotFolder);
 
 			if (!dirExists(szRCBotFolder)) {
 				snprintf(folder, sizeof(folder), "%s/%s", CBotGlobals::modFolder(), szRCBotFolder);
 
 				szRCBotFolder = CStrings::getString(folder);
-				CBotGlobals::botMessage(NULL, 0, "RCBot Folder -> trying %s", szRCBotFolder);
+				logger->Log(LogLevel::INFO, "RCBot Folder -> trying %s", szRCBotFolder);
 
 				if (!dirExists(szRCBotFolder)) {
-					CBotGlobals::botMessage(NULL, 0, "RCBot Folder -> not found ...");
+					logger->Log(LogLevel::ERROR, "RCBot Folder -> not found ...");
 				}
 			}
 
@@ -543,8 +541,7 @@ bool CBotGlobals :: gameStart ()
 	}
 	else
 	{
-		Msg("[BOT ERROR] Mod not found. Please edit the bot_mods.ini in the bot config folder\n\ngamedir = %s\n",m_szModFolder);
-
+		logger->Log(LogLevel::ERROR, "Mod not found. Please edit the bot_mods.ini in the bot config folder (gamedir = %s)",m_szModFolder);
 		return false;
 	}
 }
@@ -818,18 +815,12 @@ bool CBotGlobals :: walkableFromTo (edict_t *pPlayer, Vector v_src, Vector v_des
 	//return true;
 }
 
-#ifdef _LINUX
-// kludge for linux
-using std::min;
-using std::max;
-#endif
-
 bool CBotGlobals :: boundingBoxTouch2d ( 
 										const Vector2D &a1, const Vector2D &a2,
 										const Vector2D &bmins, const Vector2D &bmaxs )
 {
-	Vector2D amins = Vector2D(min(a1.x,a2.x),min(a1.y,a2.y));
-	Vector2D amaxs = Vector2D(max(a1.x,a2.x),max(a1.y,a2.y));
+	Vector2D amins = Vector2D(std::min(a1.x, a2.x), std::min(a1.y, a2.y));
+	Vector2D amaxs = Vector2D(std::max(a1.x, a2.x), std::max(a1.y, a2.y));
 
 	return (((bmins.x >= amins.x) && (bmins.y >= amins.y)) && ((bmins.x <= amaxs.x) && (bmins.y <= amaxs.y)) ||
 		((bmaxs.x >= amins.x) && (bmaxs.y >= amins.y)) && ((bmaxs.x <= amaxs.x) && (bmaxs.y <= amaxs.y)));
@@ -839,12 +830,13 @@ bool CBotGlobals :: boundingBoxTouch3d (
 										const Vector &a1, const Vector &a2,
 										const Vector &bmins, const Vector &bmaxs )
 {
-	Vector amins = Vector(min(a1.x,a2.x),min(a1.y,a2.y),min(a1.z,a2.z));
-	Vector amaxs = Vector(max(a1.x,a2.x),max(a1.y,a2.y),max(a1.z,a2.z));
+	Vector amins = Vector(std::min(a1.x, a2.x), std::min(a1.y, a2.y), std::min(a1.z, a2.z));
+	Vector amaxs = Vector(std::max(a1.x, a2.x), std::max(a1.y, a2.y), std::max(a1.z, a2.z));
 
 	return (((bmins.x >= amins.x) && (bmins.y >= amins.y) && (bmins.z >= amins.z)) && ((bmins.x <= amaxs.x) && (bmins.y <= amaxs.y) && (bmins.z <= amaxs.z)) ||
 		    ((bmaxs.x >= amins.x) && (bmaxs.y >= amins.y) && (bmaxs.z >= amins.z)) && ((bmaxs.x <= amaxs.x) && (bmaxs.y <= amaxs.y) && (bmaxs.z <= amaxs.z)));	
 }
+
 bool CBotGlobals :: onOppositeSides2d (
 		const Vector2D &amins, const Vector2D &amaxs,
 		const Vector2D &bmins, const Vector2D &bmaxs )
@@ -926,7 +918,7 @@ void CBotGlobals :: botMessage ( edict_t *pEntity, int iErr, const char *fmt, ..
 	}
 }
 
-bool CBotGlobals :: makeFolders ( char *szFile )
+bool CBotGlobals :: makeFolders (const char *szFile)
 {
 #ifndef __linux__
 	char *delimiter = "\\";
@@ -961,12 +953,12 @@ bool CBotGlobals :: makeFolders ( char *szFile )
         mkdir(szFolderName);
 #else
 		if ( mkdir(szFolderName, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == 0 ) {
-			botMessage(NULL,0,"Trying to create folder '%s' successful",szFolderName);
+			logger->Log(LogLevel::INFO, "Trying to create folder '%s' successful", szFolderName);
 		} else {
 			if (dirExists(szFolderName)) {
-				botMessage(NULL,0,"Folder '%s' already exists", szFolderName);
+				logger->Log(LogLevel::DEBUG, "Folder '%s' already exists", szFolderName);
 			} else {
-				botMessage(NULL,0,"Trying to create folder '%s' failed",szFolderName);
+				logger->Log(LogLevel::ERROR, "Trying to create folder '%s' failed", szFolderName);
 			}
 		}
 #endif   
@@ -999,21 +991,24 @@ Vector CBotGlobals:: getVelocity ( edict_t *pPlayer )
 	return Vector(0,0,0);
 }
 
-FILE *CBotGlobals :: openFile ( char *szFile, char *szMode )
+std::fstream CBotGlobals :: openFile (const char *szFile, std::ios_base::openmode mode)
 {
-	FILE *fp = fopen(szFile,szMode);
+	std::fstream fp;
+	fp.open(szFile, mode);
 
-	if ( fp == NULL )
+	if (!fp)
 	{
-		botMessage ( NULL, 0, "file not found/opening error '%s' mode %s", szFile, szMode );
+		logger->Log(LogLevel::INFO, "file not found/opening error '%s' mode %d", szFile, mode);
 
 		makeFolders(szFile);
 
 		// try again
-		fp = fopen(szFile,szMode);
+		fp.open(szFile, mode);
 
-		if ( fp == NULL )
-			botMessage ( NULL, 0, "failed to make folders for %s",szFile);
+		if (!fp)
+			logger->Log(LogLevel::ERROR, "failed to make folders for %s", szFile);
+	} else {
+		logger->Log(LogLevel::INFO, "Opened file '%s' mode %d", szFile, mode);
 	}
 
 	return fp;

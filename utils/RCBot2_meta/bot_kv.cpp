@@ -2,7 +2,9 @@
 #include "bot_kv.h"
 #include "bot_globals.h"
 
-void CRCBotKeyValueList :: parseFile ( FILE *fp )
+#include "rcbot/logging.h"
+
+void CRCBotKeyValueList :: parseFile (std::fstream &fp)
 {
 	char buffer[2*(RCBOT_MAX_KV_LEN)];
 	char szKey[RCBOT_MAX_KV_LEN];
@@ -18,7 +20,7 @@ void CRCBotKeyValueList :: parseFile ( FILE *fp )
 	iLine = 0;
 
 	// parse profile ini
-	while ( fgets(buffer,255,fp) != NULL )
+	while (fp.getline(buffer, 255))
 	{
 		iLine++;
 
@@ -69,7 +71,7 @@ void CRCBotKeyValueList :: parseFile ( FILE *fp )
 		szKey[iKi] = 0;
 		szValue[iVi] = 0;
 
-		CBotGlobals::botMessage(NULL,0,"m_KVs.push_back(%s,%s)",szKey, szValue);
+		logger->Log(LogLevel::TRACE, "m_KVs.push_back(%s,%s)", szKey, szValue);
 
 		m_KVs.push_back(new CRCBotKeyValue(szKey,szValue));
 

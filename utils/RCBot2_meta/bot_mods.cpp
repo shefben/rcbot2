@@ -46,6 +46,8 @@
 #include "bot_waypoint_locations.h"
 #include "bot_perceptron.h"
 
+#include "rcbot/logging.h"
+
 std::vector<edict_wpt_pair_t> CHalfLifeDeathmatchMod::m_LiftWaypoints;
 
 void CBotMods :: parseFile ()
@@ -63,23 +65,17 @@ void CBotMods :: parseFile ()
 
 	CBotGlobals::buildFileName(buffer,BOT_MOD_FILE,BOT_CONFIG_FOLDER,BOT_CONFIG_EXTENSION);
 
-	FILE *fp = CBotGlobals::openFile(buffer,"r");
+	std::fstream fp = CBotGlobals::openFile(buffer, std::fstream::in);
 
 	CBotMod *curmod = NULL;
 
 	if ( !fp )
 	{
-		createFile();
-		fp = CBotGlobals::openFile(buffer,"r");
-	}
-
-	if ( !fp )
-	{
-		// ERROR!
+		logger->Log(LogLevel::ERROR, "Failed to open file '%s' for reading", buffer);
 		return;
 	}
 
-	while ( fgets(buffer,1023,fp) != NULL )
+	while (fp.getline(buffer, 1023))
 	{
 		if ( buffer[0] == '#' )
 			continue;
@@ -226,89 +222,12 @@ void CBotMods :: parseFile ()
 		curmod->setup(gamefolder, modtype, bottype, weaponlist);
 		m_Mods.push_back(curmod);
 	}
-
-	fclose(fp);
-}
-
-void CBotMods :: createFile ()
-{
-	char filename[1024];
-
-	CBotGlobals::buildFileName(filename,BOT_MOD_FILE,BOT_CONFIG_FOLDER,BOT_CONFIG_EXTENSION);
-
-	FILE *fp = CBotGlobals::openFile(filename,"w");
-
-	CBotGlobals::botMessage(NULL,0,"Making a %s.%s file for you... Edit it in '%s'",BOT_MOD_FILE,BOT_CONFIG_EXTENSION,filename);
-
-	if ( fp )
-	{
-		fprintf(fp,"# EXAMPLE MOD FILE");
-		fprintf(fp,"# valid mod types\n");
-		fprintf(fp,"# ---------------\n");
-		fprintf(fp,"# CSS\n");
-		fprintf(fp,"# TF2\n");
-		fprintf(fp,"# HL2DM\n");
-		fprintf(fp,"# HL1DM\n");
-		fprintf(fp,"# FF\n");
-		fprintf(fp,"# SVENCOOP2\n");
-		fprintf(fp,"# TIMCOOP\n");
-		fprintf(fp,"# NS2\n");
-		fprintf(fp,"# DOD (day of defeat source)\n");
-		fprintf(fp,"#\n");
-		fprintf(fp,"# valid bot types\n");
-		fprintf(fp,"# ---------------\n");
-		fprintf(fp,"# CSS\n");
-		fprintf(fp,"# TF2\n");
-		fprintf(fp,"# HL2DM\n");
-		fprintf(fp,"# HL1DM\n");
-		fprintf(fp,"# FF\n");
-		fprintf(fp,"# COOP\n");
-		fprintf(fp,"# ZOMBIE\n");
-		fprintf(fp,"# DOD\n");
-		fprintf(fp,"#\n");
-		fprintf(fp, "# weaponlists are changeable in config / weapons.ini\n");
-		fprintf(fp,"#\n");
-		fprintf(fp,"#mod = CSS\n");
-		fprintf(fp,"#steamdir = counter-strike source\n");
-		fprintf(fp,"#gamedir = cstrike\n");
-		fprintf(fp,"#bot = CSS\n");
-		fprintf(fp,"#\n");
-		fprintf(fp,"#mod = TF2\n");
-		fprintf(fp,"#steamdir = teamfortress 2\n");
-		fprintf(fp,"#gamedir = tf\n");
-		fprintf(fp,"#bot = TF2\n");
-		fprintf(fp,"#\n");
-		fprintf(fp,"#mod = FF\n");
-		fprintf(fp,"#steamdir = sourcemods\n");
-		fprintf(fp,"#gamedir = ff\n");
-		fprintf(fp,"#bot = FF\n");
-		fprintf(fp,"#\n");
-		fprintf(fp,"#mod = HL2DM\n");
-		fprintf(fp,"#steamdir = half-life 2 deathmatch\n");
-		fprintf(fp,"#gamedir = hl2mp\n");
-		fprintf(fp,"#bot = HL2DM\n");
-		fprintf(fp,"#\n");
-		fprintf(fp,"#mod = HL1DM\n");
-		fprintf(fp,"#steamdir = half-life 1 deathmatch\n");
-		fprintf(fp,"#gamedir = hl1dm\n");
-		fprintf(fp,"#bot = HL1DM\n");
-		fprintf(fp,"#\n");
-		fprintf(fp,"mod = DOD\n");
-		fprintf(fp,"steamdir = orangebox\n");
-		fprintf(fp,"gamedir = dod\n");
-		fprintf(fp,"bot = DOD\n");
-		fprintf(fp, "weaponlist = DOD\n");
-		fprintf(fp,"#\n");
-
-		fclose(fp);
-	}
-	else
-		CBotGlobals::botMessage(NULL,0,"Error! Couldn't create config file %s",filename);
 }
 
 void CBotMods :: readMods()
 {
 	// TODO improve game detection
+	// caxanga334: Better game detection required if we want to support multiple mods on the same engine (IE: SDK 2013)
 	#if SOURCE_ENGINE == SE_TF2
 		m_Mods.push_back(new CTeamFortress2Mod());
 	#elif SOURCE_ENGINE == SE_DODS
@@ -317,6 +236,8 @@ void CBotMods :: readMods()
 		m_Mods.push_back(new CCounterStrikeSourceMod());
 	#elif SOURCE_ENGINE == SE_HL2DM
 		m_Mods.push_back(new CHalfLifeDeathmatchMod());
+	#elif SOURCE_ENGINE == SE_SDK2013
+		m_Mods.push_back(new CSynergyMod());
 	#else
 
 		m_Mods.push_back(new CFortressForeverMod());
@@ -384,13 +305,13 @@ CBotMod *CBotMods :: getMod ( char *szModFolder )
 	{
 		if ( m_Mods[i]->isModFolder(szModFolder) )
 		{
-			CBotGlobals::botMessage(NULL,1,"HL2 MOD ID %d (Game Folder = %s) FOUND",m_Mods[i]->getModId(), szModFolder);
+			logger->Log(LogLevel::INFO, "HL2 MOD ID %d (Game Folder = %s) FOUND", m_Mods[i]->getModId(), szModFolder);
 
 			return m_Mods[i];
 		}
 	}
 
-	CBotGlobals::botMessage(NULL,1,"HL2 MODIFICATION \"%s\" NOT FOUND, EXITING... see bot_mods.ini in bot config folder", szModFolder);
+	logger->Log(LogLevel::FATAL, "HL2 MODIFICATION \"%s\" NOT FOUND, EXITING... see bot_mods.ini in bot config folder", szModFolder);
 
 	return NULL;
 }
