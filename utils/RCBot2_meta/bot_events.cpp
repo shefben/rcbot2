@@ -41,6 +41,7 @@
 #include "bot_fortress.h"
 #include "bot_dod_bot.h"
 #include "bot_weapons.h"
+#include "ff_flag_tracker.h"
 #include "bot_getprop.h"
 #include "bot_dod_bot.h"
 #include "bot_squads.h"
@@ -1019,6 +1020,49 @@ void CFlagEvent :: execute ( IBotEventInterface *pEvent )
 void CFlagCaptured :: execute ( IBotEventInterface *pEvent )
 {
 
+}
+
+void CFFFlagPickupEvent :: execute ( IBotEventInterface *pEvent )
+{
+    const char *eventname = pEvent->getString("eventname", "");
+
+    if ( strcmp(eventname, "flag_pickup") )
+            return;
+
+    int userid = pEvent->getInt("userid2", 0);
+
+    if ( userid > 0 )
+    {
+            edict_t *pPlayer = INDEXENT(userid);
+            int team = CClassInterface::getTeam(pPlayer);
+            g_FFFlagTracker.FlagPickedUp(team, userid);
+    }
+}
+
+void CFFFlagReturnEvent :: execute ( IBotEventInterface *pEvent )
+{
+    const char *eventname = pEvent->getString("eventname", "");
+    if ( strcmp(eventname, "flag_returned") )
+            return;
+    const char *flag = pEvent->getString("flag_name", "");
+    int team = FF_TEAM_BLUE;
+    if (strstr(flag, "red")) team = FF_TEAM_RED;
+    else if (strstr(flag, "yellow")) team = FF_TEAM_YELLOW;
+    else if (strstr(flag, "green")) team = FF_TEAM_GREEN;
+    g_FFFlagTracker.FlagReturned(team);
+}
+
+void CFFFlagCaptureEvent :: execute ( IBotEventInterface *pEvent )
+{
+    const char *eventname = pEvent->getString("eventname", "");
+    if ( strcmp(eventname, "flag_capture") )
+            return;
+    const char *flag = pEvent->getString("flag_name", "");
+    int team = FF_TEAM_BLUE;
+    if (strstr(flag, "red")) team = FF_TEAM_RED;
+    else if (strstr(flag, "yellow")) team = FF_TEAM_YELLOW;
+    else if (strstr(flag, "green")) team = FF_TEAM_GREEN;
+    g_FFFlagTracker.FlagCaptured(team);
 }
 /////////////////////////////////////////////////
 void CDODPointCaptured :: execute ( IBotEventInterface *pEvent )

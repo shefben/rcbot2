@@ -86,10 +86,12 @@ const char *szSchedules[SCHED_MAX+1] =
 	"SCHED_CROUCH_AND_HIDE",	
 	"SCHED_DEPLOY_MACHINE_GUN",
 	"SCHED_ATTACK_SENTRY_GUN",
-	"SCHED_RETURN_TO_INTEL",
-	"SCHED_INVESTIGATE_HIDE",
-	"SCHED_TAUNT",
-	"SCHED_MAX"
+        "SCHED_RETURN_TO_INTEL",
+        "SCHED_INVESTIGATE_HIDE",
+        "SCHED_TAUNT",
+        "SCHED_FF_CAPTURE_FLAG",
+        "SCHED_FF_DEFEND_FLAG",
+        "SCHED_MAX"
 };
 ////////////////////// unused
 CBotTF2DemoPipeEnemySched :: CBotTF2DemoPipeEnemySched ( CBotWeapon *pLauncher, Vector vStand, edict_t *pEnemy )

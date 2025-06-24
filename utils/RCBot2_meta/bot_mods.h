@@ -668,12 +668,27 @@ public:
 class CFortressForeverMod : public CBotMod
 {
 public:
-	CFortressForeverMod()
-	{
-		setup("FortressForever", MOD_FF, BOTTYPE_FF, "FF");
-	}
-private:
+        CFortressForeverMod()
+        {
+                setup("FortressForever", MOD_FF, BOTTYPE_FF, "FF");
+        }
 
+        const char *ModID();
+
+        void initMod();
+        void mapInit();
+        void modFrame();
+        static FFMapMode GetMode() { return m_Mode; }
+
+        static void AssignSquadsFF();
+
+private:
+        static FFMapMode m_Mode;
+        static void ModeAI_CTF();
+        static void ModeAI_VIP();
+        static void ModeAI_AD();
+        static void ModeAI_TC();
+        static void ModeAI_Invade();
 };
 
 class CHLDMSourceMod : public CBotMod
