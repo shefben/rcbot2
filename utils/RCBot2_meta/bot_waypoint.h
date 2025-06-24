@@ -170,9 +170,18 @@ public:
 	static const int W_FL_FALL           = (1 << 25);
 	static const int W_FL_BREAKABLE      = (1 << 26);
 	static const int W_FL_SPRINT         = (1 << 27);
-	static const int W_FL_TELEPORT_CHEAT = (1 << 28); // teleports bots to the next waypoint (cheat)
-	static const int W_FL_OWNER_ONLY     = (1 << 29); // Only owners of this area can use the waypoint
-	//static const int W_FL_ATTACKPOINT = (1 << 30); // Tactical waypoint -- each squad will go to different attack points and signal others to go
+        static const int W_FL_TELEPORT_CHEAT = (1 << 28); // teleports bots to the next waypoint (cheat)
+        static const int W_FL_OWNER_ONLY     = (1 << 29); // Only owners of this area can use the waypoint
+        //static const int W_FL_ATTACKPOINT = (1 << 30); // Tactical waypoint -- each squad will go to different attack points and signal others to go
+
+        // Fortress Forever specific waypoint ids
+        enum EWaypointFF
+        {
+                W_FF_FLAG = 128,
+                W_FF_CAP,
+                W_FF_POINT,
+                W_FF_MAX
+        };
 
 	static void setup ();
 

@@ -191,8 +191,42 @@ enum
 	DOD_WEAPON_FRAG_GER, 
 	DOD_WEAPON_SMOKE_US,
 	DOD_WEAPON_SMOKE_GER,
-	DOD_WEAPON_BOMB,
-	DOD_WEAPON_MAX
+        DOD_WEAPON_BOMB,
+        DOD_WEAPON_MAX
+};
+
+enum
+{
+        FF_WEAPON_NONE = 0,
+        FF_WEAPON_CROWBAR,
+        FF_WEAPON_KNIFE,
+        FF_WEAPON_MEDKIT,
+        FF_WEAPON_SPANNER,
+        FF_WEAPON_UMBRELLA,
+        FF_WEAPON_SHOTGUN,
+        FF_WEAPON_SUPERSHOTGUN,
+        FF_WEAPON_NAILGUN,
+        FF_WEAPON_SUPERNAILGUN,
+        FF_WEAPON_GRENADELAUNCHER,
+        FF_WEAPON_PIPELAUNCHER,
+        FF_WEAPON_AUTORIFLE,
+        FF_WEAPON_SNIPERRIFLE,
+        FF_WEAPON_FLAMETHROWER,
+        FF_WEAPON_IC,
+        FF_WEAPON_RAILGUN,
+        FF_WEAPON_JUMPGUN,
+        FF_WEAPON_TRANQUILISER,
+        FF_WEAPON_ASSAULTCANNON,
+        FF_WEAPON_RPG,
+        FF_WEAPON_TOMMYGUN,
+        FF_WEAPON_CUBEMAP,
+        FF_WEAPON_DEPLOYDISPENSER,
+        FF_WEAPON_DEPLOYSENTRYGUN,
+        FF_WEAPON_DEPLOYDETPACK,
+        FF_WEAPON_DEPLOYMANCANNON,
+        FF_WEAPON_DEPLOYJUMPPAD,
+        FF_WEAPON_FLAG,
+        FF_WEAPON_MAX
 };
 
 
@@ -221,6 +255,11 @@ enum
 extern WeaponsData_t TF2Weaps[];
 extern WeaponsData_t HL2DMWeaps[];
 extern WeaponsData_t DODWeaps[];
+extern WeaponsData_t FFWeaps[];
+void RegisterFFWeapons();
+int FireFlamethrower(CBot *bot);
+int LaunchDetpack(CBot *bot);
+int NailgunBurst(CBot *bot);
 
 class CWeapon
 {
