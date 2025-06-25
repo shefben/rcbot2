@@ -36,6 +36,8 @@
 #include "bot_globals.h"
 #include <stdio.h>
 
+#include "rcbot/logging.h"
+
 /*unsigned char *CWaypointVisibilityTable :: m_VisTable = NULL;
 bool CWaypointVisibilityTable :: bWorkVisibility = false;
 int CWaypointVisibilityTable :: iCurFrom = 0;
@@ -66,7 +68,7 @@ void CWaypointVisibilityTable :: workVisibility ()
 
 					if ( m_iPrevPercent != percent )
 					{
-						Msg(" *** working out visibility %d percent***\n",percent);
+						logger->Log(LogLevel::INFO, "Working out visibility... %d%%", percent);
 						m_fNextShowMessageTime = engine->Time() + 2.5f;
 						m_iPrevPercent = percent;
 					}
@@ -82,7 +84,7 @@ void CWaypointVisibilityTable :: workVisibility ()
 	if ( iCurFrom == iSize )
 	{
 		// finished
-		Msg(" *** finished working out visibility ***\n");
+		logger->Log(LogLevel::INFO, "Finished working out visibility. Saving...");
 		/////////////////////////////
 		// for "concurrent" reading of 
 		// visibility throughout frames
@@ -94,10 +96,10 @@ void CWaypointVisibilityTable :: workVisibility ()
 		if ( SaveToFile() )
 		{
 			CWaypoints::save(true);
-			Msg(" *** saving waypoints with visibility information ***\n");
+			logger->Log(LogLevel::INFO, "Saved waypoints with visibility information");
 		}
 		else
-			Msg(" *** error, couldn't save waypoints with visibility information ***\n");
+			logger->Log(LogLevel::ERROR, "Couldn't save waypoints with visibility information");
 		////////////////////////////
 	}
 }
@@ -152,29 +154,27 @@ void CWaypointVisibilityTable :: WorkOutVisibilityTable ()
 
 bool CWaypointVisibilityTable :: SaveToFile ( void )
 {
-    char filename[1024];
+	char filename[1024];
 	wpt_vis_header_t header;
 
 	CBotGlobals::buildFileName(filename,CBotGlobals::getMapName(),BOT_WAYPOINT_FOLDER,"rcv",true);
 
-	FILE *bfp = CBotGlobals::openFile(filename,"wb");
+	std::fstream bfp = CBotGlobals::openFile(filename, std::fstream::out | std::fstream::binary);
 
-   if ( bfp == NULL )
-   {
-	   CBotGlobals::botMessage(NULL,0,"Can't open Waypoint Visibility table for writing!");
-	   return false;
-   }
+	if ( !bfp )
+	{
+		logger->Log(LogLevel::ERROR, "Can't open Waypoint Visibility table for writing!");
+		return false;
+	}
 
 	header.numwaypoints = CWaypoints::numWaypoints();
 	strncpy(header.szMapName,CBotGlobals::getMapName(),63);
 	header.waypoint_version = CWaypoints::WAYPOINT_VERSION;
 
-	fwrite(&header,sizeof(wpt_vis_header_t),1,bfp);
-	fwrite(m_VisTable,sizeof(byte),g_iMaxVisibilityByte,bfp);
+	bfp.write(reinterpret_cast<char*>(&header), sizeof(wpt_vis_header_t));
+	bfp.write(reinterpret_cast<char*>(m_VisTable), sizeof(byte) * g_iMaxVisibilityByte);
 
-   fclose(bfp);
-
-   return true;
+	return true;
 }
 
 bool CWaypointVisibilityTable :: ReadFromFile ( int numwaypoints )
@@ -185,15 +185,15 @@ bool CWaypointVisibilityTable :: ReadFromFile ( int numwaypoints )
 
 	CBotGlobals::buildFileName(filename,CBotGlobals::getMapName(),BOT_WAYPOINT_FOLDER,"rcv",true);
 
-   FILE *bfp =  CBotGlobals::openFile(filename,"rb");
+	std::fstream bfp = CBotGlobals::openFile(filename, std::fstream::in | std::fstream::binary);
 
-   if ( bfp == NULL )
-   {
-	   Msg(" *** Can't open Waypoint Visibility table for reading!\n");
-	   return false;
-   }
+	if ( !bfp )
+	{
+		logger->Log(LogLevel::ERROR, "Can't open Waypoint Visibility table for reading!");
+		return false;
+	}
 
-   fread(&header,sizeof(wpt_vis_header_t),1,bfp);
+	bfp.read(reinterpret_cast<char*>(&header), sizeof(wpt_vis_header_t));
 
    if ( header.numwaypoints != numwaypoints )
 	   return false;
@@ -202,9 +202,7 @@ bool CWaypointVisibilityTable :: ReadFromFile ( int numwaypoints )
    if ( strncmp(header.szMapName,CBotGlobals::getMapName(),63) )
 	   return false;
 
-   fread(m_VisTable,sizeof(byte),g_iMaxVisibilityByte,bfp);
-
-   fclose(bfp);
+	bfp.read(reinterpret_cast<char*>(m_VisTable), sizeof(byte) * g_iMaxVisibilityByte);
 
    return true;
 }

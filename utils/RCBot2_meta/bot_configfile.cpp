@@ -33,6 +33,8 @@
 #include "bot_globals.h"
 #include "bot_configfile.h"
 
+#include "rcbot/logging.h"
+
 std::vector <char *> CBotConfigFile::m_Commands;
 unsigned int CBotConfigFile::m_iCmd = 0; // current command (time delayed)
 float CBotConfigFile::m_fNextCommandTime = 0.0f;
@@ -49,35 +51,35 @@ void CBotConfigFile :: load ()
 
 	CBotGlobals::buildFileName(filename,"config",BOT_CONFIG_FOLDER,BOT_CONFIG_EXTENSION);
 
-	FILE *fp = CBotGlobals::openFile(filename,"r");
+	std::fstream fp = CBotGlobals::openFile(filename, std::fstream::in);
 
 	if ( !fp )
 	{
-		CBotGlobals::botMessage(NULL,0,"config file not found");
+		logger->Log(LogLevel::WARN, "config file not found");
 		return;
 	}
 
-	while ( fgets(line,255,fp) != NULL )
+	while (fp.getline(line,255))
 	{
 		if ( line[0] == '#' )
 			continue;
 
 		size_t len = strlen(line);
 
-		if (line[len-1] == '\n') {
+		if (len && line[len-1] == '\n') {
 			line[--len] = '\0';
 		}
 
-		if (line[len-1] == '\r') {
+		if (len && line[len-1] == '\r') {
 			line[--len] = '\0';
 		}
 
-		CBotGlobals::botMessage(NULL, 0, line);
+		if (!len)
+			continue;
+
+		logger->Log(LogLevel::TRACE, "Config entry '%s' read", line);
 		m_Commands.push_back(CStrings::getString(line));
 	}
-
-	fclose(fp);
-
 }
 
 void CBotConfigFile :: doNextCommand ()
@@ -89,7 +91,7 @@ void CBotConfigFile :: doNextCommand ()
 		snprintf(cmd, sizeof(cmd), "%s\n", m_Commands[m_iCmd]);
 		engine->ServerCommand(cmd);
 
-		CBotGlobals::botMessage(NULL,0,"Bot Command '%s' executed",m_Commands[m_iCmd]);
+		logger->Log(LogLevel::TRACE, "Bot Command '%s' executed", m_Commands[m_iCmd]);
 		m_iCmd ++;
 		m_fNextCommandTime = engine->Time() + 0.1f;
 	}
@@ -104,7 +106,7 @@ void CBotConfigFile :: executeCommands ()
 		snprintf(cmd, sizeof(cmd), "%s\n", m_Commands[m_iCmd]);
 		engine->ServerCommand(cmd);
 
-		CBotGlobals::botMessage(NULL,0,"Bot Command '%s' executed",m_Commands[m_iCmd]);
+		logger->Log(LogLevel::TRACE, "Bot Command '%s' executed", m_Commands[m_iCmd]);
 		m_iCmd ++;
 	}
 
@@ -145,7 +147,6 @@ void CRCBotTF2UtilFile :: loadConfig()
 	 char szFullFilename[512];
 	 char szFilename[64];
 	 char line[256];
-	 FILE *fp;
 
 	 init();
 
@@ -161,13 +162,13 @@ void CRCBotTF2UtilFile :: loadConfig()
 		}
 
 		CBotGlobals::buildFileName(szFullFilename,szFilename,BOT_CONFIG_FOLDER);
-		fp = CBotGlobals::openFile(szFullFilename,"r");
+		std::fstream fp = CBotGlobals::openFile(szFullFilename, std::fstream::in);
 
 		if ( fp )
 		{
 			eBotAction iUtil = (eBotAction)0;
 
-			while ( fgets(line,255,fp) != NULL )
+			while (fp.getline(line, 255))
 			{
 				float iClassList[TF_CLASS_MAX][2];
 				char utiltype[64];
@@ -206,8 +207,6 @@ void CRCBotTF2UtilFile :: loadConfig()
 
 				}
 			}
-
-			fclose(fp);
 		}
 	 }
 

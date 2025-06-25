@@ -33,6 +33,8 @@
 #include "bot_accessclient.h"
 #include "bot_globals.h"
 
+#include "rcbot/logging.h"
+
 #include <vector>
 ///////////
 
@@ -53,13 +55,13 @@ bool CAccessClient :: forBot ()
 
 bool CAccessClient :: isForSteamId ( const char *szSteamId )
 {
-	CBotGlobals::botMessage(NULL, 0, "AccessClient: '%s','%s'", m_szSteamId, szSteamId);
+	logger->Log(LogLevel::DEBUG, "AccessClient: '%s','%s'", m_szSteamId, szSteamId);
 	return FStrEq(m_szSteamId,szSteamId);
 }
 
-void CAccessClient :: save ( FILE *fp )
+void CAccessClient :: save ( std::fstream &fp )
 {
-	fprintf(fp,"\"%s\":%d\n",m_szSteamId,m_iAccessLevel);
+	fp << '"' << m_szSteamId << '"' << ":" << m_iAccessLevel << "\n";
 }
 
 void CAccessClient :: giveAccessToClient ( CClient *pClient )
@@ -68,7 +70,7 @@ void CAccessClient :: giveAccessToClient ( CClient *pClient )
 	if ( !forBot() )
 		CBotGlobals::botMessage(pClient->getPlayer(),0,"%s authenticated for bot commands",pClient->getName());
 	// notify server
-	CBotGlobals::botMessage(NULL,0,"%s authenticated for bot commands",pClient->getName());
+	logger->Log(LogLevel::INFO, "%s authenticated for bot commands", pClient->getName());
 
 	pClient->setAccessLevel(m_iAccessLevel);
 }
@@ -83,7 +85,7 @@ void CAccessClients :: showUsers ( edict_t *pEntity )
 	CBotGlobals::botMessage(pEntity,0,"showing users...");
 
 	if ( m_Clients.empty() )
-		CBotGlobals::botMessage(NULL,0,"showUsers() : No users to show");
+		logger->Log(LogLevel::DEBUG, "showUsers() : No users to show");
 
 	for ( unsigned int i = 0; i < m_Clients.size(); i ++ )
 	{
@@ -97,35 +99,6 @@ void CAccessClients :: showUsers ( edict_t *pEntity )
 			CBotGlobals::botMessage(pEntity,0,"[ID: %s]/[AL: %d]\n",pPlayer->getSteamID(),pPlayer->getAccessLevel());
 
 	}	
-}
-
-void CAccessClients :: createFile ()
-{
-	char filename[1024];
-	
-	CBotGlobals::buildFileName(filename,BOT_ACCESS_CLIENT_FILE,BOT_CONFIG_FOLDER,BOT_CONFIG_EXTENSION);
-
-	FILE *fp = CBotGlobals::openFile(filename,"w");
-
-	CBotGlobals::botMessage(NULL,0,"Making an accessclients.ini file for you... Edit it in %s",filename);
-
-	if ( fp )
-	{
-		fprintf(fp,"# format is ");
-		fprintf(fp,"# \"<STEAM ID>\" <access level>\n");
-		fprintf(fp,"# see http://rcbot.bots-united.com/accesslev.htm for access\n");
-		fprintf(fp,"# levels\n");
-		fprintf(fp,"#\n");
-		fprintf(fp,"# example:\n");
-		fprintf(fp,"#\n");
-		fprintf(fp,"# \"STEAM_0:123456789\" 63\n");
-		fprintf(fp,"# don't put one of '#' these before a line you want to be read \n");
-		fprintf(fp,"# by the bot!\n");
-		fprintf(fp,"# \n");
-		fclose(fp);
-	}
-	else
-		CBotGlobals::botMessage(NULL,0,"Error! Couldn't create config file %s",filename);
 }
 
 void CAccessClients :: freeMemory ()
@@ -145,7 +118,7 @@ void CAccessClients :: load ()
 	
 	CBotGlobals::buildFileName(filename,BOT_ACCESS_CLIENT_FILE,BOT_CONFIG_FOLDER,BOT_CONFIG_EXTENSION);
 
-	FILE *fp = CBotGlobals::openFile(filename,"r");
+	std::fstream fp = CBotGlobals::openFile(filename, std::fstream::in);
 
 	if ( fp )
 	{
@@ -160,7 +133,7 @@ void CAccessClients :: load ()
 
 		int iLine = 0;
 
-		while ( fgets(buffer,255,fp) != NULL )
+		while (fp.getline(buffer,255))
 		{
 			iLine++;
 
@@ -197,7 +170,7 @@ void CAccessClients :: load ()
 
 			if ( i == len )
 			{
-				CBotGlobals::botMessage(NULL,0,"line %d invalid in access client config, missing access level",iLine);
+				logger->Log(LogLevel::WARN, "line %d invalid in access client config, missing access level", iLine);
 				continue; // invalid
 			}
 
@@ -206,22 +179,20 @@ void CAccessClients :: load ()
 			// invalid
 			if ( (szSteamId[0] == 0) || (szSteamId[0] == ' ' ) )
 			{
-				CBotGlobals::botMessage(NULL,0,"line %d invalid in access client config, steam id invalid",iLine);
+				logger->Log(LogLevel::WARN, "line %d invalid in access client config, steam id invalid", iLine);
 				continue;
 			}
 			if ( iAccess == 0 )
 			{
-				CBotGlobals::botMessage(NULL,0,"line %d invalid in access client config, access level can't be 0",iLine);
+				logger->Log(LogLevel::WARN, "line %d invalid in access client config, access level can't be 0", iLine);
 				continue;
 			}
 
 			m_Clients.push_back(new CAccessClient(szSteamId,iAccess));
 		}
-
-		fclose(fp);
 	}
 	else
-		CAccessClients :: createFile();
+		logger->Log(LogLevel::ERROR, "Failed to open file '%s' for reading", filename);
 }
 
 void CAccessClients :: save ()
@@ -230,7 +201,7 @@ void CAccessClients :: save ()
 	
 	CBotGlobals::buildFileName(filename,BOT_ACCESS_CLIENT_FILE,BOT_CONFIG_FOLDER,BOT_CONFIG_EXTENSION);
 
-	FILE *fp = CBotGlobals::openFile(filename,"w");
+	std::fstream fp = CBotGlobals::openFile(filename, std::fstream::out);
 
 	if ( fp )
 	{
@@ -238,8 +209,10 @@ void CAccessClients :: save ()
 		{
 			m_Clients[i]->save(fp);
 		}
-
-		fclose(fp);
+	}
+	else
+	{
+		logger->Log(LogLevel::ERROR, "Failed to open file '%s' for writing", filename);
 	}
 }
 

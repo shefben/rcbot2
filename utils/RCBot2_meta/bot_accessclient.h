@@ -45,7 +45,7 @@ public:
 
 	void giveAccessToClient ( CClient *pClient );
 
-	void save ( FILE *fp );
+	void save (std::fstream &fp);
 
 	bool forBot ();
 
@@ -69,8 +69,6 @@ public:
 	static void save ();
 
 	static void checkClientAccess ( CClient *pClient );
-
-	static void createFile (); // create file if it doesn't exist (and mention of creation etc)
 private:
 	static std::vector<CAccessClient*> m_Clients;
 };

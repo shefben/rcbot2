@@ -57,22 +57,25 @@ sourceFiles = [
   "utils/RCBot2_meta/bot_zombie.cpp",
   "utils/RCBot2_meta/bot_sigscan.cpp",
   "utils/RCBot2_meta/bot_cvars.cpp",
-  "utils/RCBot2_meta/bot_plugin_meta.cpp"
+  "utils/RCBot2_meta/bot_plugin_meta.cpp",
+  
+  "rcbot/logging.cpp",
 ]
 
-include_paths = []
+include_paths = [
+  os.path.join(builder.currentSourcePath, 'utils', 'RCBot2_meta'),
+]
 
 compiler_defines = []
 
 # Build with SourceMod extension support if --sm-path was specified
 if builder.options.sm_path:
-  include_paths = [
+  include_paths += [
     os.path.join(builder.options.sm_path, 'sourcepawn', 'include'),
     os.path.join(builder.options.sm_path, 'public', 'amtl'),
     os.path.join(builder.options.sm_path, 'public', 'amtl', 'amtl'),
     os.path.join(builder.options.sm_path, 'public'),
     os.path.join(builder.currentSourcePath, 'sm_ext'),
-    os.path.join(builder.currentSourcePath, 'utils', 'RCBot2_meta'),
   ]
 
   sourceFiles += [
@@ -154,12 +157,25 @@ for sdk_name in MMS.sdks:
       else:
         lib_folder = os.path.join(sdk.path, 'lib', 'mac')
 
+    if sdk.name in ['css', 'hl2dm', 'dods', 'sdk2013', 'bms', 'tf2', 'l4d', 'nucleardawn', 'l4d2']:
+      if builder.target.platform in ['linux', 'mac']:
+        cxx.defines += ['NO_HOOK_MALLOC', 'NO_MALLOC_OVERRIDE']
+
     if builder.target.platform in ['linux', 'mac']:
       ## RCBot2: link other dependencies
+      if sdk.name in ['sdk2013', 'bms']:
+        cxx.postlink += [
+          cxx.Dep(os.path.join(lib_folder, 'mathlib.a')),
+          cxx.Dep(os.path.join(lib_folder, 'tier2.a')),
+          cxx.Dep(os.path.join(lib_folder, 'tier3.a')),
+        ]
+      else:
+        cxx.postlink += [
+          cxx.Dep(os.path.join(lib_folder, 'mathlib_i486.a')),
+          cxx.Dep(os.path.join(lib_folder, 'tier2_i486.a')),
+          cxx.Dep(os.path.join(lib_folder, 'tier3_i486.a')),
+        ]
       cxx.postlink += [
-        cxx.Dep(os.path.join(lib_folder, 'mathlib_i486.a')),
-        cxx.Dep(os.path.join(lib_folder, 'tier2_i486.a')),
-        cxx.Dep(os.path.join(lib_folder, 'tier3_i486.a')),
         'libvstdlib_srv.so',
         '-lm',
         '-ldl',

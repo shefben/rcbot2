@@ -17,7 +17,8 @@ general RCBot2 support.
 ## Changes from upstream
 
 - Build process uses [AMBuild][] instead of `make` or Visual Studio.  This removes the need for
-Valve's cross platform make conversion tool.
+Valve's cross platform make conversion tool, and is what AlliedModders uses to build
+Metamod:Source and SourceMod.
 - The plugin has been split into SDK-specific builds to ensure proper compatibility, using the
 same loader shim SourceMod uses to load mod-specific builds.
 	- This means all mod-specific changes are provided in the upstream SDK repository, instead
@@ -35,7 +36,7 @@ plugins (namely [tf2attributes][] and [TF2Items][], where the implementation was
 are better-suited and maintained to handle that stuff; this plugin should only deal with bots
 themselves.
 - The Metamod:Source plugin can now optionally expose natives to SourceMod, adding some
-functionality to control the RCBot2 plugin from SourcePawn.
+functionality to access certain functionality of the RCBot2 plugin via SourceMod plugins.
 
 [AMBuild]: https://wiki.alliedmods.net/AMBuild
 [tf2attributes]: https://github.com/FlaminSarge/tf2attributes
@@ -46,26 +47,32 @@ functionality to control the RCBot2 plugin from SourcePawn.
 1. [Install MetaMod:Source][].
 2. Build the RCBot2 package, or [download the most recent automated build][autobuild].
     - For the latter, `package.tar.gz` is the Linux build; `package.zip` is the Windows build.
-    - The automated build uses Ubuntu 18.04 LTS as the Linux build runner &mdash; RCBot2 will
-    fail to load on older Linux distributions with the error
-    `` version `GLIBC_2.27' not found ``.
+    - Automated builds are compiled with support for SourceMod native bindings.
+    - The automated build uses Ubuntu 20.04 LTS as the Linux build runner &mdash; RCBot2 will
+    fail to load on older Linux distributions with an error resembling
+    `` version `GLIBC_2.xx' not found ``.
+    - If you get something like `` version `GLIBC_3.4.20' not found `` instead, your game likely
+    has an outdated bundled copy.  Please refer to [these instructions][bundled-glibc] to
+    resolve the issue.
     - Regardless of how you get a build, it does not include things like the waypointing guide,
     hookinfo updater, and waypoints themselves.  You can download those from the
     [official release thread][].  Waypoints are also available at [this page][waypoints].
 3. Extract the package into your game directory, similar to the process of installing MM:S.
-4. Start the server.
+4. Start the server or game client.
 5. To verify that the installation was successful, type `rcbotd` in your server console or RCON.
 You should see multiple lines starting with "[RCBot]".
+    - If you are running this plugin in client mode, use `rcbot` instead.
 
 If you are working with SourceMod interop, you will also need [SourceMod PR#1053][pr] for
 plugins to recognize that the natives are available.  The pull request was merged in SourceMod
-build 1.11.0.6466.
+build 1.11.0.6466, so at this point any stable version will do.
 
 [Install MetaMod:Source]: https://wiki.alliedmods.net/Installing_Metamod:Source
 [official release thread]: http://rcbot.bots-united.com/forums/index.php?showtopic=1994
 [waypoints]: http://rcbot.bots-united.com/waypoints.php
 [pr]: https://github.com/alliedmodders/sourcemod/pull/1053
 [autobuild]: https://github.com/nosoop/rcbot2/releases
+[bundled-glibc]: https://wiki.alliedmods.net/User:Nosoop/Guide/Game_Server_Configuration#Linux_extension_failing_to_load_on_outdated_GLIBCXX_.2A_version
 
 ## Building
 
@@ -84,8 +91,8 @@ working repository.  This will create a repository with the earliest commit at
 2. Create a `build/` subdirectory, then run `configure.py`.
 	- The project requires C++11 support.  It was previously confirmed to compile on
 	GCC 5.4 (Ubuntu 16.04 LTS) and on MSVC 1900.
-	- I use the following options (where `${MOD}` is only TF2):
-	`python ../configure.py -s ${MOD} --mms_path ${MMS_PATH} --hl2sdk-root ${HL2SDK_ROOT}`
+	- `configure.py` can be run with the following settings:
+	`python ../configure.py -s present --mms_path ${MMS_PATH} --hl2sdk-root ${HL2SDK_ROOT}`
 	- Specifying an `--sm-path` argument enables linking to SourceMod.  This does not mean
 	SourceMod needs to be installed for RCBot2 to run.
 	- Note that the automatic versioning system requires an installation of `git` and a
@@ -94,3 +101,15 @@ working repository.  This will create a repository with the earliest commit at
 in `build/package`.
 
 [Building SourceMod]: https://wiki.alliedmods.net/Building_SourceMod
+
+## License
+
+RCBot2 is released under the [GNU Affero General Public License][].  Among other things, this
+means that any modifications you make to RCBot2 must have the sources available under the same
+license to players on your server.
+
+Additionally, `rcbot/logging.{h,cpp}` is released separately under the
+[BSD Zero Clause License][].
+
+[GNU Affero General Public License]: https://spdx.org/licenses/AGPL-3.0-only.html
+[BSD Zero Clause License]: https://spdx.org/licenses/0BSD.html
