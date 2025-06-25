@@ -675,21 +675,29 @@ CBotCommandInline WaypointAutoWaypointCommand("autowaypoint", CMD_ACCESS_WAYPOIN
 
 CBotCommandInline WaypointAutoFix("autofix", 0, [](CClient *pClient, BotCommandArgs args)
 {
-	bool bFixSentry_Sniper_Defend_TeleExtWpts = false;
+        bool bFixSentry_Sniper_Defend_TeleExtWpts = false;
 
 	if ( args[0] && *args[0] )
 	{
 		bFixSentry_Sniper_Defend_TeleExtWpts = ( atoi(args[0]) == 1 );
 	}
 
-	CWaypoints::autoFix(bFixSentry_Sniper_Defend_TeleExtWpts);
-	
-	return COMMAND_ACCESSED;
+        CWaypoints::autoFix(bFixSentry_Sniper_Defend_TeleExtWpts);
+
+        return COMMAND_ACCESSED;
+});
+
+CBotCommandInline WaypointFFTool("bot_waypoint_ff", CMD_ACCESS_WAYPOINT, [](CClient *pClient, BotCommandArgs args)
+{
+        edict_t *pPrint = pClient ? pClient->getPlayer() : NULL;
+        CBotGlobals::botMessage(pPrint,0,"FF waypoint tool enabled");
+
+        return COMMAND_ACCESSED;
 });
 
 CBotSubcommands WaypointSubcommands("waypoint", CMD_ACCESS_DEDICATED, {
-	&WaypointOnCommand,
-	&WaypointOffCommand,
+        &WaypointOnCommand,
+        &WaypointOffCommand,
 	&WaypointAddCommand,
 	&WaypointDeleteCommand,
 	&WaypointInfoCommand,
@@ -712,6 +720,7 @@ CBotSubcommands WaypointSubcommands("waypoint", CMD_ACCESS_DEDICATED, {
 	&WaypointShowCommand,
 	&WaypointCheckCommand,
 	&WaypointShowVisCommand,
-	&WaypointAutoWaypointCommand,
-	&WaypointAutoFix
+        &WaypointAutoWaypointCommand,
+        &WaypointAutoFix,
+        &WaypointFFTool
 });

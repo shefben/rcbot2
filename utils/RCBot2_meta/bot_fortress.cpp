@@ -2302,23 +2302,19 @@ void CBotTF2 :: engiBuildSuccess ( eEngiBuild iBuilding, int index )
 
 bool CBotTF2 :: hasEngineerBuilt ( eEngiBuild iBuilding )
 {
-	switch ( iBuilding )
-	{
-	case ENGI_SENTRY:
-		return m_pSentryGun!=NULL; // TODO
-		break;
-	case ENGI_DISP:
-		return m_pDispenser!=NULL; // TODO
-		break;
-	case ENGI_ENTRANCE:
-		return m_pTeleEntrance!=NULL; // TODO
-		break;
-	case ENGI_EXIT:
-		return m_pTeleExit!=NULL; // TODO
-		break;
-	}	
+        switch ( iBuilding )
+        {
+        case ENGI_SENTRY:
+                return m_pSentryGun!=NULL;
+        case ENGI_DISP:
+                return m_pDispenser!=NULL;
+        case ENGI_ENTRANCE:
+                return m_pTeleEntrance!=NULL;
+        case ENGI_EXIT:
+                return m_pTeleExit!=NULL;
+        }
 
-	return false;
+        return false;
 }
 
 // ENEMY Flag dropped

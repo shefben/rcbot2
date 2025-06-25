@@ -3,3 +3,12 @@ build/
 
 # SourceMod compiled plugins
 *.smx
+
+# Python cache
+__pycache__/
+
+# Doxygen output
+docs/ff_api/
+
+# Test map binaries
+tests/maps/*.bsp

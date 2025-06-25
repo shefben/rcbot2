@@ -537,13 +537,49 @@ public:
 class CFlagCaptured : public CBotEvent
 {
 public:
-	CFlagCaptured()
-	{
-		setType("ctf_flag_captured");
-		setMod(MOD_TF2);
-	}
+        CFlagCaptured()
+        {
+                setType("ctf_flag_captured");
+                setMod(MOD_TF2);
+        }
 
-	void execute ( IBotEventInterface *pEvent );
+        void execute ( IBotEventInterface *pEvent );
+};
+
+class CFFFlagPickupEvent : public CBotEvent
+{
+public:
+        CFFFlagPickupEvent()
+        {
+                setType("luaevent");
+                setMod(MOD_FF);
+        }
+
+        void execute ( IBotEventInterface *pEvent );
+};
+
+class CFFFlagReturnEvent : public CBotEvent
+{
+public:
+        CFFFlagReturnEvent()
+        {
+                setType("luaevent");
+                setMod(MOD_FF);
+        }
+
+        void execute ( IBotEventInterface *pEvent );
+};
+
+class CFFFlagCaptureEvent : public CBotEvent
+{
+public:
+        CFFFlagCaptureEvent()
+        {
+                setType("luaevent");
+                setMod(MOD_FF);
+        }
+
+        void execute ( IBotEventInterface *pEvent );
 };
 
 	/*

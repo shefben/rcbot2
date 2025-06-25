@@ -91,11 +91,13 @@ typedef enum
 	SCHED_CROUCH_AND_HIDE,
 	SCHED_DEPLOY_MACHINE_GUN,
 	SCHED_ATTACK_SENTRY_GUN,
-	SCHED_RETURN_TO_INTEL,
-	SCHED_INVESTIGATE_HIDE,
-	SCHED_TAUNT,
-	SCHED_MAX
-	//SCHED_HIDE_FROM_ENEMY
+        SCHED_RETURN_TO_INTEL,
+        SCHED_INVESTIGATE_HIDE,
+        SCHED_TAUNT,
+        SCHED_FF_CAPTURE_FLAG,
+        SCHED_FF_DEFEND_FLAG,
+        SCHED_MAX
+        //SCHED_HIDE_FROM_ENEMY
 }eBotSchedule;
 
 class CBotSchedule
@@ -638,14 +640,28 @@ public:
 class CDeployMachineGunSched : public CBotSchedule
 {
 public:
-	// iWaypoint = the waypoint number the bot will go to (to nest)
-	// if iWaypoint is -1 it will find a random, suitable nest
-	CDeployMachineGunSched ( CBotWeapon *pWeapon, CWaypoint *pWaypoint, Vector vEnemy );
+        // iWaypoint = the waypoint number the bot will go to (to nest)
+        // if iWaypoint is -1 it will find a random, suitable nest
+        CDeployMachineGunSched ( CBotWeapon *pWeapon, CWaypoint *pWaypoint, Vector vEnemy );
 
-	void init ()
-	{
-		setID(SCHED_DEPLOY_MACHINE_GUN);
-	}
+        void init ()
+        {
+                setID(SCHED_DEPLOY_MACHINE_GUN);
+        }
+};
+
+class CBotFFCaptureFlagSched : public CBotSchedule
+{
+public:
+        CBotFFCaptureFlagSched(Vector vOrigin, int enemyTeam);
+        void init();
+};
+
+class CBotFFDefendFlagSched : public CBotSchedule
+{
+public:
+        CBotFFDefendFlagSched(int wpt, int team);
+        void init();
 };
 
 
