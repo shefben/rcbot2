@@ -78,6 +78,7 @@
 #define FILENAME_1_6_HL2DM			PLATFORM_ARCH_FOLDER "rcbot.2.hl2dm" PLATFORM_EXT
 #define FILENAME_1_6_DODS			PLATFORM_ARCH_FOLDER "rcbot.2.dods" PLATFORM_EXT
 #define FILENAME_1_6_SDK2013		PLATFORM_ARCH_FOLDER "rcbot.2.sdk2013" PLATFORM_EXT
+#define FILENAME_1_6_FF                        PLATFORM_ARCH_FOLDER "rcbot.2.ff" PLATFORM_EXT
 #define FILENAME_1_6_TF2			PLATFORM_ARCH_FOLDER "rcbot.2.tf2" PLATFORM_EXT
 #define FILENAME_1_6_ND				PLATFORM_ARCH_FOLDER "rcbot.2.nd" PLATFORM_EXT
 #define FILENAME_1_6_BLADE			PLATFORM_ARCH_FOLDER "rcbot.2.blade" PLATFORM_EXT
@@ -282,11 +283,19 @@ DLL_EXPORT METAMOD_PLUGIN *CreateInterface_MMS(const MetamodVersionInfo *mvi, co
 			filename = FILENAME_1_6_DODS;
 			break;
 		}
-	case SOURCE_ENGINE_SDK2013:
-		{
-			filename = FILENAME_1_6_SDK2013;
-			break;
-		}
+       case SOURCE_ENGINE_SDK2013:
+               {
+                       const char *gamedir = mvi->GetGameDir();
+                       if (strcmp(gamedir, "FortressForever2013") == 0 || strcmp(gamedir, "FortressForever") == 0)
+                       {
+                               filename = FILENAME_1_6_FF;
+                       }
+                       else
+                       {
+                               filename = FILENAME_1_6_SDK2013;
+                       }
+                       break;
+               }
 	case SOURCE_ENGINE_BMS:
 		{
 			filename = FILENAME_1_6_BMS;
