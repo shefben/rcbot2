@@ -1,0 +1,6 @@
+# Missing Fortress Forever constants
+
+The following enums were found in the Fortress Forever source but are not yet defined in `bot_ff.h`:
+
+- `FF_WEAPON_DEPLOY_JUMPPAD` – weapon for placing jump pads (Omni-Bot `TF_WP_DEPLOY_JUMPPAD`).
+- `FF_WEAPON_FLAG` – carried when a player picks up the CTF flag.

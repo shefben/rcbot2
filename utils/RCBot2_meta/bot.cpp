@@ -66,6 +66,7 @@
 #include "bot_hldm_bot.h"
 #include "bot_hl1dmsrc_bot.h"
 #include "bot_fortress.h"
+#include "bot_ff.h"
 #include "bot_visibles.h"
 #include "bot_weapons.h"
 #include "bot_profile.h"
@@ -3195,9 +3196,9 @@ void CBots :: init ()
 			m_Bots[i] = new CBotTF2();//MAX_PLAYERS];
 			//CBotGlobals::setEventVersion(2);
 			break;
-		case BOTTYPE_FF:
-			m_Bots[i] = new CBotFF();
-			break;
+               case BOTTYPE_FF:
+                       m_Bots[i] = new CBotFortressForever();
+                       break;
 		case BOTTYPE_ZOMBIE:
 			m_Bots[i] = new CBotZombie();
 			break;
