@@ -2,6 +2,7 @@
 #include "locomotion_ff.h"
 #include "ff_flag_tracker.h"
 #include "bot_ff.h"
+#include "bot_getprop.h"
 #include "bot_globals.h"
 #include "bot_task.h"
 
