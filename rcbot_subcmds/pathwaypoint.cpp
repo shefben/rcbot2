@@ -27,7 +27,13 @@
  *    you do not wish to do so, delete this exception statement from your
  *    version.
  *
- */
+*/
+
+#include "bot.h"
+#include "bot_commands.h"
+#include "bot_client.h"
+#include "bot_waypoint.h"
+#include "bot_globals.h"
 
 CBotCommandInline PathWaypointOnCommand("on", CMD_ACCESS_WAYPOINT, [](CClient *pClient, BotCommandArgs args)
 {

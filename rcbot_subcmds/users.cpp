@@ -26,7 +26,12 @@
  *    to your version of the file, but you are not obligated to do so.  If
  *    you do not wish to do so, delete this exception statement from your
  *    version.
- */
+*/
+
+#include "bot_commands.h"
+#include "bot_client.h"
+#include "bot_accessclient.h"
+#include "bot_globals.h"
 
 CBotCommandInline ShowUsersCommand("show", CMD_ACCESS_USERS | CMD_ACCESS_DEDICATED, [](CClient *pClient, BotCommandArgs args)
 {

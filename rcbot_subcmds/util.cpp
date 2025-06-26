@@ -26,7 +26,13 @@
  *    to your version of the file, but you are not obligated to do so.  If
  *    you do not wish to do so, delete this exception statement from your
  *    version.
- */
+*/
+
+#include "bot.h"
+#include "bot_commands.h"
+#include "bot_client.h"
+#include "bot_getprop.h"
+#include "bot_globals.h"
 
 CBotCommandInline SearchCommand("search", CMD_ACCESS_UTIL, [](CClient *pClient, BotCommandArgs args)
 {
