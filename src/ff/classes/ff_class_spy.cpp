@@ -1,6 +1,7 @@
 #include "ff_class_spy.h"
 #include "bot_ff.h"
 #include "engy/building_manager.h"
+#include "bot_globals.h"
 
 extern float g_ff_test_time;
 

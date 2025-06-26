@@ -1,5 +1,6 @@
 #include "ff_class_pyro.h"
 #include "bot_ff.h"
+#include "bot_globals.h"
 
 extern float g_ff_test_time;
 

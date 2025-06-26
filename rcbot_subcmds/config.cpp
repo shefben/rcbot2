@@ -27,7 +27,12 @@
  *    you do not wish to do so, delete this exception statement from your
  *    version.
  *
- */
+*/
+
+#include "bot.h"
+#include "bot_commands.h"
+#include "bot_client.h"
+#include "bot_globals.h"
 
 CBotCommandInline GameEventVersion("event_version", CMD_ACCESS_CONFIG, [](CClient *pClient, BotCommandArgs args)
 {

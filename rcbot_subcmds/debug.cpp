@@ -27,7 +27,15 @@
  *    you do not wish to do so, delete this exception statement from your
  *    version.
  *
- */
+*/
+
+#include "bot.h"
+#include "bot_commands.h"
+#include "bot_client.h"
+#include "bot_waypoint.h"
+#include "bot_task.h"
+#include "bot_getprop.h"
+#include "bot_globals.h"
 
 CBotCommandInline DebugGameEventCommand("gameevent", CMD_ACCESS_DEBUG, [](CClient *pClient, BotCommandArgs args)
 {

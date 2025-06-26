@@ -1,6 +1,7 @@
 #include "ff_class_soldier.h"
 #include "bot_ff.h"
 #include "in_buttons.h"
+#include "bot_globals.h"
 
 extern float g_ff_test_time;
 
